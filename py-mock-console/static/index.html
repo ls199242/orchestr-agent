@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OrchestrAgent 交互与配置控制台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    [x-cloak] { display: none !important; }
+    pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans" x-data="appData()" x-init="init()">
+
+  <!-- 顶部导航栏 -->
+  <header class="bg-slate-800/90 border-b border-slate-700 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+          <i class="fa-solid fa-diagram-project text-white text-lg"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg leading-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-300 via-purple-200 to-pink-300">
+            OrchestrAgent Console
+          </h1>
+          <p class="text-xs text-slate-400">Mock Data Center & Interactive Controller</p>
+        </div>
+      </div>
+
+      <!-- 导航标签 -->
+      <nav class="flex space-x-2 bg-slate-900/60 p-1.5 rounded-xl border border-slate-700/60">
+        <button @click="activeTab = 'controller'" :class="activeTab === 'controller' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'" class="px-4 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-2">
+          <i class="fa-solid fa-play text-xs"></i>
+          <span>联调</span>
+        </button>
+        <button @click="activeTab = 'config'" :class="activeTab === 'config' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'" class="px-4 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-2">
+          <i class="fa-solid fa-database text-xs"></i>
+          <span>配置</span>
+        </button>
+        <button @click="activeTab = 'java'" :class="activeTab === 'java' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'" class="px-4 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-2">
+          <i class="fa-solid fa-microchip text-xs"></i>
+          <span>内存</span>
+        </button>
+        <button @click="activeTab = 'logs'; if (!logEventSource) initLogStream();" :class="activeTab === 'logs' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'" class="px-4 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-2">
+          <i class="fa-solid fa-terminal text-xs"></i>
+          <span>日志</span>
+        </button>
+      </nav>
+
+      <!-- Java 后台状态小徽标 -->
+      <div class="flex items-center space-x-2 text-xs">
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border"
+              :class="javaHealthy ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'">
+          <span class="w-1.5 h-1.5 rounded-full mr-1.5" :class="javaHealthy ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'"></span>
+          <span x-text="javaHealthy ? 'Java: 8080 在线' : 'Java: 离线或未启动'"></span>
+        </span>
+        <button @click="checkJavaStatus()" class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-700 transition" title="刷新状态">
+          <i class="fa-solid fa-rotate-right" :class="refreshing ? 'fa-spin' : ''"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主体内容区域 -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- ============================================== -->
+    <!-- Tab 1: Controller 联调交互中心 -->
+    <!-- ============================================== -->
+    <div x-show="activeTab === 'controller'" class="space-y-6">
+      <!-- 次级子 Tab 切换 -->
+      <div class="flex border-b border-slate-700 pb-3 items-center justify-between">
+        <div class="flex space-x-4">
+          <button @click="ctlSubTab = 'chat'" :class="ctlSubTab === 'chat' ? 'border-b-2 border-indigo-500 text-indigo-400 font-semibold' : 'text-slate-400 hover:text-slate-200'" class="pb-2 px-1 text-sm flex items-center space-x-2 transition">
+            <i class="fa-regular fa-comments"></i>
+            <span>1. SSE 流式会话 (POST /chat)</span>
+          </button>
+          <button @click="ctlSubTab = 'testInvoke'" :class="ctlSubTab === 'testInvoke' ? 'border-b-2 border-indigo-500 text-indigo-400 font-semibold' : 'text-slate-400 hover:text-slate-200'" class="pb-2 px-1 text-sm flex items-center space-x-2 transition">
+            <i class="fa-solid fa-bolt"></i>
+            <span>2. 同步全流程测试 (POST /testInvoke)</span>
+          </button>
+          <button @click="ctlSubTab = 'invoke'" :class="ctlSubTab === 'invoke' ? 'border-b-2 border-indigo-500 text-indigo-400 font-semibold' : 'text-slate-400 hover:text-slate-200'" class="pb-2 px-1 text-sm flex items-center space-x-2 transition">
+            <i class="fa-solid fa-rocket"></i>
+            <span>3. 异步流程启动 (POST /invoke)</span>
+          </button>
+        </div>
+
+        <div class="text-xs text-slate-400">
+          目标服务: <code class="bg-slate-800 px-2 py-0.5 rounded text-indigo-300">http://127.0.0.1:8080/api/agent/*</code>
+        </div>
+      </div>
+
+      <!-- 1.1 SSE 流式会话 Chat -->
+      <div x-show="ctlSubTab === 'chat'" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- 左侧参数表单 -->
+        <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5 space-y-4 shadow-xl">
+          <h3 class="font-semibold text-slate-200 flex items-center space-x-2">
+            <i class="fa-solid fa-sliders text-indigo-400"></i>
+            <span>流式会话参数配置</span>
+          </h3>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">选择编排策略 (strategyId)</label>
+            <select x-model="chatForm.strategyId" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+              <template x-for="s in (configs.strategies || [])" :key="s.strategyId">
+                <option :value="s.strategyId" x-text="s.name + ' (' + s.strategyId + ')'"></option>
+              </template>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Session ID</label>
+            <input type="text" x-model="chatForm.sessionId" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">用户标识 (userId)</label>
+            <input type="text" x-model="chatForm.userId" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">快捷测试预设问题</label>
+            <div class="flex flex-wrap gap-1.5">
+              <button @click="chatForm.message = '预订下周一从北京到上海的最优商务航班'" class="text-xs bg-slate-700/60 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-lg transition">差旅航班预订</button>
+              <button @click="chatForm.message = '你好，请介绍一下你自己'" class="text-xs bg-slate-700/60 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-lg transition">轻量问答</button>
+              <button @click="chatForm.message = '帮我核算一下 1200 * 3 + 450 的出差总报销金额'" class="text-xs bg-slate-700/60 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-lg transition">计算工具调用</button>
+            </div>
+          </div>
+
+          <div class="pt-2">
+            <button @click="clearChat()" class="w-full py-2 bg-slate-700/60 hover:bg-slate-700 text-slate-300 rounded-xl text-sm transition">
+              清空对话面板
+            </button>
+          </div>
+        </div>
+
+        <!-- 右侧对话打字机与 SSE 实时事件流 -->
+        <div class="lg:col-span-2 bg-slate-800/60 border border-slate-700 rounded-2xl flex flex-col h-[640px] shadow-xl overflow-hidden">
+          <div class="bg-slate-800/90 border-b border-slate-700/80 px-5 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full" :class="isChatStreaming ? 'bg-amber-400 animate-ping' : 'bg-emerald-400'"></span>
+              <span class="text-sm font-semibold text-slate-200" x-text="isChatStreaming ? '正在接收 SSE 流式分片...' : '会话就绪'"></span>
+            </div>
+            <div class="text-xs text-slate-400" x-text="'消息数: ' + chatMessages.length"></div>
+          </div>
+
+          <!-- 消息列表 -->
+          <div class="flex-1 p-5 overflow-y-auto space-y-4" id="chatContainer">
+            <template x-if="chatMessages.length === 0">
+              <div class="h-full flex flex-col items-center justify-center text-slate-500 space-y-2">
+                <i class="fa-regular fa-comment-dots text-4xl"></i>
+                <p class="text-sm">暂无对话记录，在下方输入消息即可开始 SSE 流式交互</p>
+              </div>
+            </template>
+
+            <template x-for="(msg, index) in chatMessages" :key="index">
+              <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+                <div :class="msg.role === 'user' ? 'bg-indigo-600 text-white rounded-2xl rounded-tr-none' : 'bg-slate-900 border border-slate-700 text-slate-200 rounded-2xl rounded-tl-none'"
+                     class="max-w-[85%] px-4 py-3 shadow-md space-y-1.5">
+                  <div class="text-xs font-semibold opacity-75 flex items-center justify-between">
+                    <span x-text="msg.role === 'user' ? '我' : (msg.agent || 'OrchestrAgent')"></span>
+                    <span class="ml-2 font-normal text-[10px]" x-text="msg.time"></span>
+                  </div>
+                  <div class="text-sm whitespace-pre-wrap leading-relaxed" x-text="msg.content"></div>
+                </div>
+              </div>
+            </template>
+
+            <!-- 正在输出的流式缓冲区 -->
+            <template x-if="currentStreamChunk">
+              <div class="flex justify-start">
+                <div class="max-w-[85%] bg-slate-900 border border-indigo-500/50 text-slate-100 rounded-2xl rounded-tl-none px-4 py-3 shadow-md space-y-1.5">
+                  <div class="text-xs font-semibold text-indigo-400 flex items-center space-x-1.5">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                    <span>正在流式推送中...</span>
+                  </div>
+                  <div class="text-sm whitespace-pre-wrap leading-relaxed" x-text="currentStreamChunk"></div>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <!-- 底部输入框 -->
+          <div class="p-3 bg-slate-900/80 border-t border-slate-700">
+            <form @submit.prevent="sendChat()" class="flex space-x-2">
+              <input type="text" x-model="chatForm.message" :disabled="isChatStreaming" placeholder="请输入你的问题或任务指令..."
+                     class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 disabled:opacity-50">
+              <button type="submit" :disabled="isChatStreaming || !chatForm.message.trim()"
+                      class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 text-white rounded-xl text-sm font-medium transition flex items-center space-x-2 shadow-lg shadow-indigo-600/30">
+                <i class="fa-solid fa-paper-plane text-xs"></i>
+                <span>发送</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1.2 同步测试调用 testInvoke -->
+      <div x-show="ctlSubTab === 'testInvoke'" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5 space-y-4 shadow-xl">
+          <h3 class="font-semibold text-slate-200 flex items-center space-x-2">
+            <i class="fa-solid fa-bolt text-indigo-400"></i>
+            <span>同步调用入参 (POST /api/agent/testInvoke)</span>
+          </h3>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">编排策略 (strategyId)</label>
+            <select x-model="testInvokeForm.strategyId" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+              <template x-for="s in (configs.strategies || [])" :key="s.strategyId">
+                <option :value="s.strategyId" x-text="s.name + ' (' + s.strategyId + ')'"></option>
+              </template>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">用户指令 / 目标 (message)</label>
+            <textarea x-model="testInvokeForm.message" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Session ID</label>
+              <input type="text" x-model="testInvokeForm.sessionId" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">User ID</label>
+              <input type="text" x-model="testInvokeForm.userId" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">业务扩展数据 (bizData JSON)</label>
+            <textarea x-model="testInvokeForm.bizDataJson" rows="2" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+          </div>
+
+          <button @click="sendTestInvoke()" :disabled="isTestInvoking"
+                  class="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 text-white font-medium rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-indigo-500/20">
+            <i class="fa-solid fa-play text-xs" :class="isTestInvoking ? 'fa-spin' : ''"></i>
+            <span x-text="isTestInvoking ? '正在执行全流程协同质检...' : '触发同步测试执行 (阻塞等待)'"></span>
+          </button>
+        </div>
+
+        <!-- 同步测试结果展示 -->
+        <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5 space-y-4 shadow-xl flex flex-col">
+          <h3 class="font-semibold text-slate-200 flex items-center justify-between">
+            <span class="flex items-center space-x-2">
+              <i class="fa-solid fa-clipboard-check text-emerald-400"></i>
+              <span>执行结果与 Evaluator 质检</span>
+            </span>
+            <template x-if="testInvokeResult">
+              <span class="text-xs px-2.5 py-0.5 rounded-full"
+                    :class="testInvokeResult.success ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'"
+                    x-text="testInvokeResult.success ? '调用成功' : '调用失败'"></span>
+            </template>
+          </h3>
+
+          <div class="flex-1 bg-slate-900 border border-slate-700/80 rounded-xl p-4 overflow-y-auto space-y-3">
+            <template x-if="!testInvokeResult && !isTestInvoking">
+              <div class="h-64 flex flex-col items-center justify-center text-slate-500 space-y-2">
+                <i class="fa-solid fa-code text-3xl"></i>
+                <p class="text-sm">点击左侧“触发同步测试执行”查看完整产出及质检评分</p>
+              </div>
+            </template>
+
+            <template x-if="isTestInvoking">
+              <div class="h-64 flex flex-col items-center justify-center text-indigo-400 space-y-3">
+                <i class="fa-solid fa-circle-notch fa-spin text-3xl"></i>
+                <p class="text-sm animate-pulse">ReAct 协同中 (Planner -> Conductor -> Worker -> Evaluator -> Reporter)...</p>
+              </div>
+            </template>
+
+            <template x-if="testInvokeResult && testInvokeResult.data">
+              <div class="space-y-4">
+                <!-- 核心指标卡 -->
+                <div class="grid grid-cols-3 gap-2 text-center">
+                  <div class="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700/60">
+                    <div class="text-[10px] text-slate-400 uppercase">流程状态</div>
+                    <div class="text-sm font-bold text-emerald-400" x-text="testInvokeResult.data.state || 'FINISHED'"></div>
+                  </div>
+                  <div class="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700/60">
+                    <div class="text-[10px] text-slate-400 uppercase">质检得分</div>
+                    <div class="text-sm font-bold"
+                         :class="(testInvokeResult.data.evaluation && testInvokeResult.data.evaluation.pass) ? 'text-emerald-400' : 'text-amber-400'"
+                         x-text="(testInvokeResult.data.evaluation ? testInvokeResult.data.evaluation.score : '-') + ' 分'"></div>
+                  </div>
+                  <div class="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700/60">
+                    <div class="text-[10px] text-slate-400 uppercase">总耗时</div>
+                    <div class="text-sm font-bold text-indigo-300" x-text="(testInvokeResult.data.costMs || 0) + ' ms'"></div>
+                  </div>
+                </div>
+
+                <!-- 最终产物 -->
+                <div>
+                  <div class="text-xs font-semibold text-slate-300 mb-1">最终输出结果 (Reply):</div>
+                  <div class="bg-slate-800 p-3 rounded-lg text-sm text-slate-200 whitespace-pre-wrap border border-slate-700" x-text="testInvokeResult.data.reply"></div>
+                </div>
+
+                <!-- Evaluator 评估详情 -->
+                <template x-if="testInvokeResult.data.evaluation">
+                  <div class="bg-slate-800/90 border border-slate-700 rounded-lg p-3 space-y-2">
+                    <div class="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                      <span>Evaluator 质检报告</span>
+                      <span class="text-xs px-2 py-0.5 rounded"
+                            :class="testInvokeResult.data.evaluation.pass ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'"
+                            x-text="testInvokeResult.data.evaluation.pass ? '验收通过' : '验收未通过'"></span>
+                    </div>
+                    <div class="text-xs text-slate-400" x-text="'诊断意见: ' + (testInvokeResult.data.evaluation.critique || '无')"></div>
+                    <div class="text-xs text-slate-400" x-text="'自愈建议: ' + (testInvokeResult.data.evaluation.suggestedRemedy || '无')"></div>
+                  </div>
+                </template>
+
+                <!-- 原始 JSON 快照 -->
+                <details class="text-xs text-slate-400">
+                  <summary class="cursor-pointer hover:text-slate-200">查看完整原始响应 JSON</summary>
+                  <pre class="mt-2 bg-slate-950 p-2.5 rounded overflow-x-auto text-[11px] text-emerald-400" x-text="JSON.stringify(testInvokeResult, null, 2)"></pre>
+                </details>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1.3 异步调用 invoke -->
+      <div x-show="ctlSubTab === 'invoke'" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5 space-y-4 shadow-xl">
+          <h3 class="font-semibold text-slate-200 flex items-center space-x-2">
+            <i class="fa-solid fa-rocket text-indigo-400"></i>
+            <span>异步调用入参 (POST /api/agent/invoke)</span>
+          </h3>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">编排策略 (strategyId)</label>
+            <select x-model="invokeForm.strategyId" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+              <template x-for="s in (configs.strategies || [])" :key="s.strategyId">
+                <option :value="s.strategyId" x-text="s.name + ' (' + s.strategyId + ')'"></option>
+              </template>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">用户指令 / 目标 (message)</label>
+            <textarea x-model="invokeForm.message" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Session ID</label>
+              <input type="text" x-model="invokeForm.sessionId" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">User ID</label>
+              <input type="text" x-model="invokeForm.userId" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+            </div>
+          </div>
+
+          <button @click="sendInvoke()" :disabled="isInvoking"
+                  class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-indigo-500/20">
+            <i class="fa-solid fa-paper-plane text-xs"></i>
+            <span x-text="isInvoking ? '正在提交...' : '提交异步流程 (立即返回 flowId)'"></span>
+          </button>
+        </div>
+
+        <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5 space-y-4 shadow-xl">
+          <h3 class="font-semibold text-slate-200 flex items-center space-x-2">
+            <i class="fa-solid fa-clock-rotate-left text-indigo-400"></i>
+            <span>异步启动返回结果</span>
+          </h3>
+
+          <div class="bg-slate-900 border border-slate-700/80 rounded-xl p-4 min-h-[240px]">
+            <template x-if="!invokeResult">
+              <div class="h-48 flex flex-col items-center justify-center text-slate-500 space-y-2">
+                <i class="fa-solid fa-inbox text-3xl"></i>
+                <p class="text-sm">点击左侧“提交异步流程”查看返回的 flowId</p>
+              </div>
+            </template>
+            <template x-if="invokeResult">
+              <div class="space-y-3 text-sm">
+                <div class="flex items-center justify-between p-3 bg-slate-800 rounded-lg">
+                  <span class="text-xs text-slate-400">流程实例 ID (flowId):</span>
+                  <span class="font-mono text-xs text-indigo-300 font-bold" x-text="invokeResult.data ? invokeResult.data.flowId : '-'"></span>
+                </div>
+                <div class="flex items-center justify-between p-3 bg-slate-800 rounded-lg">
+                  <span class="text-xs text-slate-400">初始状态:</span>
+                  <span class="text-xs font-semibold text-emerald-400" x-text="invokeResult.data ? invokeResult.data.state : '-'"></span>
+                </div>
+                <pre class="bg-slate-950 p-3 rounded-lg text-xs text-emerald-400 overflow-x-auto" x-text="JSON.stringify(invokeResult, null, 2)"></pre>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ============================================== -->
+    <!-- Tab 2: 7 大仓储 Mock 配置中心 -->
+    <!-- ============================================== -->
+    <div x-show="activeTab === 'config'" class="space-y-6">
+      <!-- 仓储分类切换 -->
+      <div class="flex flex-wrap gap-2 border-b border-slate-700 pb-3 items-center justify-between">
+        <div class="flex flex-wrap gap-2">
+          <button @click="configCategory = 'strategies'" :class="configCategory === 'strategies' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
+            🎯 编排策略 (strategies)
+          </button>
+          <button @click="configCategory = 'agents'" :class="configCategory === 'agents' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
+            🤖 智能体 (agents)
+          </button>
+          <button @click="configCategory = 'tools'" :class="configCategory === 'tools' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
+            🛠️ 外部工具 (tools)
+          </button>
+          <button @click="configCategory = 'models'" :class="configCategory === 'models' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
+            🧠 大模型 (models)
+          </button>
+          <button @click="configCategory = 'dict'" :class="configCategory === 'dict' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
+            📖 运行字典 (dict)
+          </button>
+          <button @click="configCategory = 'prompts'" :class="configCategory === 'prompts' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
+            📝 提示词模板 (prompts)
+          </button>
+          <button @click="configCategory = 'promptGroups'" :class="configCategory === 'promptGroups' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
+            📦 提示词组 (promptGroups)
+          </button>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <button @click="openAddModal()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition flex items-center space-x-1.5 shadow">
+            <i class="fa-solid fa-plus text-xs"></i>
+            <span>新增配置项</span>
+          </button>
+          <button @click="resetConfigs()" class="px-3 py-1.5 bg-rose-600/80 hover:bg-rose-600 text-white rounded-lg text-xs font-medium transition flex items-center space-x-1.5">
+            <i class="fa-solid fa-trash-arrow-up text-xs"></i>
+            <span>重置为默认预设</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 提示横幅 -->
+      <div class="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-3.5 flex items-center justify-between text-xs text-indigo-300">
+        <div class="flex items-center space-x-2">
+          <i class="fa-solid fa-circle-info text-indigo-400 text-sm"></i>
+          <span>此处的 Mock 配置通过 REST API（如 <code>/api/strategy</code>、<code>/api/agent</code>）对外暴露，供 Java OrchestrAgent 轮询拉取同步。</span>
+        </div>
+        <button @click="triggerJavaReload()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition flex items-center space-x-1 shadow">
+          <i class="fa-solid fa-arrows-rotate text-xs"></i>
+          <span>修改后通知 Java 立即重载</span>
+        </button>
+      </div>
+
+      <!-- 配置项列表卡片 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <template x-for="(item, index) in (configs[configCategory] || [])" :key="index">
+          <div class="bg-slate-800/70 border border-slate-700 hover:border-slate-600 rounded-xl p-4 space-y-3 transition shadow-lg">
+            <div class="flex items-start justify-between">
+              <div>
+                <h4 class="font-bold text-slate-100 text-sm flex items-center space-x-2">
+                  <span x-text="item.name || item.code || item.strategyId || item.key"></span>
+                  <span class="text-[10px] bg-slate-700 text-indigo-300 px-2 py-0.5 rounded-full" x-text="item.flowTopologyType || item.agentType || item.code || ''"></span>
+                </h4>
+                <p class="text-xs text-slate-400 mt-0.5" x-text="item.description || item.prompt || item.value || '无描述'"></p>
+              </div>
+              <div class="flex space-x-1">
+                <button @click="openEditModal(item)" class="p-1.5 text-slate-400 hover:text-indigo-300 hover:bg-slate-700 rounded-lg transition" title="编辑 JSON">
+                  <i class="fa-regular fa-pen-to-square"></i>
+                </button>
+                <button @click="deleteItem(item)" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-700 rounded-lg transition" title="删除">
+                  <i class="fa-regular fa-trash-can"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- 格式化摘要预览 -->
+            <pre class="bg-slate-950 p-2.5 rounded-lg text-[11px] text-slate-300 overflow-x-auto max-h-36 font-mono" x-text="JSON.stringify(item, null, 2)"></pre>
+          </div>
+        </template>
+      </div>
+    </div>
+
+
+    <!-- ============================================== -->
+    <!-- Tab 3: Java 内存快照与实时同步状态 -->
+    <!-- ============================================== -->
+    <div x-show="activeTab === 'java'" class="space-y-6">
+      <div class="flex items-center justify-between border-b border-slate-700 pb-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-200 flex items-center space-x-2">
+            <i class="fa-solid fa-microchip text-indigo-400"></i>
+            <span>Java OrchestrAgent 7 大仓储当前内存快照</span>
+          </h2>
+          <p class="text-xs text-slate-400">直接查询 Java 暴露的 <code>/api/agent/config/overview</code> 与 <code>/api/agent/config/all</code></p>
+        </div>
+
+        <div class="flex space-x-2">
+          <button @click="fetchJavaData()" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-medium transition flex items-center space-x-1.5">
+            <i class="fa-solid fa-rotate text-xs" :class="refreshing ? 'fa-spin' : ''"></i>
+            <span>拉取 Java 最新快照</span>
+          </button>
+          <button @click="triggerJavaReload()" class="px-3.5 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-medium transition flex items-center space-x-1.5 shadow-lg shadow-indigo-600/20">
+            <i class="fa-solid fa-bolt text-xs"></i>
+            <span>通知 Java 立即执行全量热重载</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 7 大仓储概览卡片 -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <template x-for="(repo, index) in javaOverview" :key="index">
+          <div class="bg-slate-800/70 border border-slate-700 rounded-xl p-4 space-y-2 shadow-lg">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-200" x-text="repo.name"></span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                    :class="repo.healthy ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'"
+                    x-text="repo.healthy ? 'Healthy' : 'Unhealthy'"></span>
+            </div>
+            <div class="flex items-baseline space-x-2">
+              <div class="text-2xl font-black text-indigo-300" x-text="repo.itemCount"></div>
+              <div class="text-xs text-slate-400">条缓存配置</div>
+            </div>
+            <div class="text-[11px] text-slate-500 flex items-center justify-between border-t border-slate-700/60 pt-2">
+              <span x-text="'轮询周期: ' + (repo.refreshIntervalSeconds || 10) + 's'"></span>
+              <span x-text="repo.lastRefreshTime || '未刷新'"></span>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Java 内存全量数据详情 -->
+      <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5 space-y-3 shadow-xl">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-bold text-slate-200">Java 内存中完整的快照结构 (JSON)</h3>
+          <span class="text-xs text-slate-400">直连端点: <code>GET /api/agent/config/all</code></span>
+        </div>
+        <pre class="bg-slate-950 p-4 rounded-xl text-xs text-emerald-400 overflow-x-auto max-h-[500px] font-mono border border-slate-800" x-text="JSON.stringify(javaFullConfigs, null, 2)"></pre>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- Tab 4: 实时日志流监控控制台 -->
+    <!-- ============================================== -->
+    <div x-show="activeTab === 'logs'" class="space-y-4">
+      <!-- 快捷工具栏 -->
+      <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-xl">
+        <div class="flex items-center space-x-2">
+          <span class="text-xs text-slate-400 font-medium">快捷筛选:</span>
+          <div class="flex space-x-1">
+            <button @click="logFilterTag = ''" :class="logFilterTag === '' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-900 text-slate-300 hover:bg-slate-700'" class="px-2.5 py-1 rounded-md text-xs font-medium transition">全部</button>
+            <button @click="logFilterTag = '[API]'" :class="logFilterTag === '[API]' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-900 text-cyan-300 hover:bg-slate-700'" class="px-2.5 py-1 rounded-md text-xs font-medium transition">API 切面</button>
+            <button @click="logFilterTag = '[FLOW'" :class="logFilterTag === '[FLOW' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-900 text-purple-300 hover:bg-slate-700'" class="px-2.5 py-1 rounded-md text-xs font-medium transition">流程编排</button>
+            <button @click="logFilterTag = '[CONFIG'" :class="logFilterTag === '[CONFIG' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-900 text-indigo-300 hover:bg-slate-700'" class="px-2.5 py-1 rounded-md text-xs font-medium transition">仓储配置</button>
+            <button @click="logFilterTag = 'ERROR'" :class="logFilterTag === 'ERROR' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-900 text-rose-400 hover:bg-slate-700'" class="px-2.5 py-1 rounded-md text-xs font-medium transition">ERROR</button>
+            <button @click="logFilterTag = 'WARN'" :class="logFilterTag === 'WARN' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-900 text-amber-400 hover:bg-slate-700'" class="px-2.5 py-1 rounded-md text-xs font-medium transition">WARN</button>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-3">
+          <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-400"></i>
+            <input x-model="logSearchKeyword" type="text" placeholder="关键词搜索..."
+                   class="w-56 pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+          </div>
+
+          <button @click="toggleLogAutoScroll()" :class="logAutoScroll ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40' : 'bg-slate-900 text-slate-400 border-slate-700'" class="px-3 py-1.5 rounded-lg text-xs font-medium transition border flex items-center space-x-1.5">
+            <i class="fa-solid fa-angles-down text-xs"></i>
+            <span x-text="logAutoScroll ? '滚屏: 开启' : '滚屏: 关闭'"></span>
+          </button>
+
+          <button @click="toggleLogPause()" :class="logPaused ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-slate-900 text-slate-300 border-slate-700'" class="px-3 py-1.5 rounded-lg text-xs font-medium transition border flex items-center space-x-1.5">
+            <i :class="logPaused ? 'fa-solid fa-play' : 'fa-solid fa-pause'" class="text-xs"></i>
+            <span x-text="logPaused ? '继续' : '暂停'"></span>
+          </button>
+
+          <button @click="clearScreenLogs()" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-medium text-slate-300 transition flex items-center space-x-1.5">
+            <i class="fa-regular fa-trash-can text-xs"></i>
+            <span>清屏</span>
+          </button>
+
+          <button @click="clearServerLogFile()" class="px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/50 rounded-lg text-xs font-medium text-rose-300 transition flex items-center space-x-1.5">
+            <i class="fa-solid fa-file-circle-xmark text-xs"></i>
+            <span>清空文件</span>
+          </button>
+
+          <button @click="initLogStream()" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-medium text-slate-300 transition flex items-center space-x-1.5" title="重新连接">
+            <i class="fa-solid fa-rotate text-xs"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- 日志终端界面 -->
+      <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 shadow-2xl flex flex-col h-[650px]">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-800 text-xs text-slate-400">
+          <div class="flex items-center space-x-4">
+            <span>展示条数: <strong class="text-indigo-400" x-text="filteredLogs.length"></strong></span>
+            <span>总捕获行: <strong class="text-slate-300" x-text="logList.length"></strong></span>
+            <span class="inline-flex items-center" :class="logConnStatus === 'connected' ? 'text-emerald-400' : 'text-amber-400'">
+              <span class="w-2 h-2 rounded-full mr-1.5" :class="logConnStatus === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'"></span>
+              <span x-text="logConnStatus === 'connected' ? 'SSE 已连接' : '未连接/连接中'"></span>
+            </span>
+          </div>
+          <div class="truncate max-w-md text-slate-500 font-mono text-xs" x-text="logFileInfo || '端点: /proxy/logs/stream'"></div>
+        </div>
+
+        <div id="pyLogContainer" class="flex-1 overflow-y-auto pt-3 space-y-1 text-xs select-text font-mono log-scroll">
+          <template x-for="(line, idx) in filteredLogs" :key="idx">
+            <div class="py-0.5 px-2 rounded hover:bg-slate-900/80 transition"
+                 :class="{
+                   'text-rose-400 bg-rose-500/5 border-l-2 border-rose-500': line.includes('ERROR'),
+                   'text-amber-300 bg-amber-500/5 border-l-2 border-amber-500': line.includes('WARN') && !line.includes('ERROR'),
+                   'text-cyan-300 bg-cyan-500/5 border-l-2 border-cyan-400': line.includes('[API][REQUEST]'),
+                   'text-emerald-300 bg-emerald-500/5 border-l-2 border-emerald-400': line.includes('[API][RESPONSE]'),
+                   'text-purple-300 border-l-2 border-purple-400': line.includes('[FLOW') && !line.includes('ERROR'),
+                   'text-indigo-300 border-l-2 border-indigo-400': line.includes('[CONFIG') && !line.includes('ERROR'),
+                   'text-slate-300': !line.includes('ERROR') && !line.includes('WARN') && !line.includes('[API]') && !line.includes('[FLOW') && !line.includes('[CONFIG')
+                 }"
+                 x-text="line">
+            </div>
+          </template>
+          <div x-show="filteredLogs.length === 0" class="text-center py-24 text-slate-500">
+            <i class="fa-solid fa-inbox text-2xl mb-2"></i>
+            <p>暂无日志或没有匹配筛选条件的记录</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 编辑 / 新增 JSON 模态窗 -->
+  <div x-show="editModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div @click.away="editModalOpen = false" class="bg-slate-800 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-base text-slate-100" x-text="isEditMode ? '编辑配置项' : '新增配置项'"></h3>
+        <button @click="editModalOpen = false" class="text-slate-400 hover:text-white">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-slate-400 mb-1">配置项内容 (JSON 格式)</label>
+        <textarea x-model="editingJsonStr" rows="14" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs font-mono text-emerald-400 focus:outline-none focus:border-indigo-500"></textarea>
+      </div>
+
+      <div class="flex justify-end space-x-3 pt-2">
+        <button @click="editModalOpen = false" class="px-4 py-2 bg-slate-700 text-slate-300 rounded-xl text-sm font-medium hover:bg-slate-600 transition">取消</button>
+        <button @click="saveEditingItem()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-medium transition shadow-lg shadow-indigo-600/30">保存并生效</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function appData() {
+      return {
+        activeTab: 'controller',
+        ctlSubTab: 'chat',
+        configCategory: 'strategies',
+        javaHealthy: false,
+        refreshing: false,
+
+        // 仓储配置数据
+        configs: {},
+
+        // 实时日志流状态
+        logList: [],
+        logFilterTag: '',
+        logSearchKeyword: '',
+        logAutoScroll: true,
+        logPaused: false,
+        logConnStatus: 'disconnected',
+        logEventSource: null,
+        logFileInfo: '',
+
+        get filteredLogs() {
+          let list = this.logList;
+          if (this.logFilterTag) {
+            list = list.filter(l => l.includes(this.logFilterTag));
+          }
+          if (this.logSearchKeyword) {
+            const kw = this.logSearchKeyword.toLowerCase();
+            list = list.filter(l => l.toLowerCase().includes(kw));
+          }
+          return list;
+        },
+
+        // Java 侧实时快照
+        javaOverview: [],
+        javaFullConfigs: {},
+
+        // Controller 交互表单
+        chatForm: {
+          strategyId: 'biz_travel',
+          message: '预订下周一从北京到上海的最优商务航班',
+          sessionId: 'session-' + Math.floor(Math.random() * 10000),
+          userId: 'user-001'
+        },
+        chatMessages: [],
+        currentStreamChunk: '',
+        isChatStreaming: false,
+
+        testInvokeForm: {
+          strategyId: 'biz_travel',
+          message: '预订北京到上海的最优航班并给出建议',
+          sessionId: 'session-' + Math.floor(Math.random() * 10000),
+          userId: 'user-002',
+          bizDataJson: '{"department": "sales"}'
+        },
+        testInvokeResult: null,
+        isTestInvoking: false,
+
+        invokeForm: {
+          strategyId: 'biz_travel',
+          message: '执行差旅全流程规划与机票检索',
+          sessionId: 'session-' + Math.floor(Math.random() * 10000),
+          userId: 'user-003'
+        },
+        invokeResult: null,
+        isInvoking: false,
+
+        // 编辑模态框
+        editModalOpen: false,
+        isEditMode: false,
+        editingJsonStr: '',
+
+        async init() {
+          await this.loadConfigs();
+          await this.checkJavaStatus();
+        },
+
+        async loadConfigs() {
+          try {
+            const res = await fetch('/admin/configs');
+            this.configs = await res.json();
+          } catch (e) {
+            console.error('加载 Mock 配置失败:', e);
+          }
+        },
+
+        async checkJavaStatus() {
+          this.refreshing = true;
+          try {
+            const res = await fetch('/proxy/java/overview');
+            const data = await res.json();
+            if (data.success) {
+              this.javaHealthy = true;
+              this.javaOverview = data.data || [];
+            } else {
+              this.javaHealthy = false;
+            }
+          } catch (e) {
+            this.javaHealthy = false;
+          } finally {
+            this.refreshing = false;
+          }
+        },
+
+        async fetchJavaData() {
+          this.refreshing = true;
+          try {
+            const res1 = await fetch('/proxy/java/overview');
+            const d1 = await res1.json();
+            if (d1.success) {
+              this.javaOverview = d1.data || [];
+              this.javaHealthy = true;
+            }
+            const res2 = await fetch('/proxy/java/all');
+            const d2 = await res2.json();
+            if (d2.success) {
+              this.javaFullConfigs = d2.data || {};
+            }
+          } catch (e) {
+            alert('拉取 Java 快照异常: ' + e.message);
+          } finally {
+            this.refreshing = false;
+          }
+        },
+
+        async triggerJavaReload() {
+          try {
+            const res = await fetch('/proxy/java/reload', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+              alert('Java 仓储热重载成功！');
+              await this.fetchJavaData();
+            } else {
+              alert('重载失败: ' + (data.message || '未知错误'));
+            }
+          } catch (e) {
+            alert('触发热重载异常: ' + e.message);
+          }
+        },
+
+        // Chat SSE
+        async sendChat() {
+          if (!this.chatForm.message.trim() || this.isChatStreaming) return;
+          const userMsg = this.chatForm.message.trim();
+          this.chatMessages.push({
+            role: 'user',
+            content: userMsg,
+            time: new Date().toLocaleTimeString()
+          });
+          this.chatForm.message = '';
+          this.isChatStreaming = true;
+          this.currentStreamChunk = '';
+
+          try {
+            const response = await fetch('/proxy/chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                strategyId: this.chatForm.strategyId,
+                message: userMsg,
+                sessionId: this.chatForm.sessionId,
+                userId: this.chatForm.userId,
+                bizData: {}
+              })
+            });
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              this.currentStreamChunk = buffer;
+              const container = document.getElementById('chatContainer');
+              if (container) container.scrollTop = container.scrollHeight;
+            }
+
+            this.chatMessages.push({
+              role: 'assistant',
+              agent: 'OrchestrAgent',
+              content: this.currentStreamChunk || '（流程执行完成）',
+              time: new Date().toLocaleTimeString()
+            });
+            this.currentStreamChunk = '';
+          } catch (e) {
+            this.chatMessages.push({
+              role: 'assistant',
+              agent: '系统错误',
+              content: '流式交互发生异常: ' + e.message,
+              time: new Date().toLocaleTimeString()
+            });
+          } finally {
+            this.isChatStreaming = false;
+          }
+        },
+
+        clearChat() {
+          this.chatMessages = [];
+          this.currentStreamChunk = '';
+        },
+
+        // testInvoke
+        async sendTestInvoke() {
+          this.isTestInvoking = true;
+          this.testInvokeResult = null;
+          let bizData = {};
+          try {
+            bizData = JSON.parse(this.testInvokeForm.bizDataJson || '{}');
+          } catch (e) {}
+
+          try {
+            const res = await fetch('/proxy/testInvoke', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                strategyId: this.testInvokeForm.strategyId,
+                message: this.testInvokeForm.message,
+                sessionId: this.testInvokeForm.sessionId,
+                userId: this.testInvokeForm.userId,
+                bizData: bizData
+              })
+            });
+            this.testInvokeResult = await res.json();
+          } catch (e) {
+            this.testInvokeResult = { success: false, message: e.message };
+          } finally {
+            this.isTestInvoking = false;
+          }
+        },
+
+        // invoke
+        async sendInvoke() {
+          this.isInvoking = true;
+          this.invokeResult = null;
+          try {
+            const res = await fetch('/proxy/invoke', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                strategyId: this.invokeForm.strategyId,
+                message: this.invokeForm.message,
+                sessionId: this.invokeForm.sessionId,
+                userId: this.invokeForm.userId,
+                bizData: {}
+              })
+            });
+            this.invokeResult = await res.json();
+          } catch (e) {
+            this.invokeResult = { success: false, message: e.message };
+          } finally {
+            this.isInvoking = false;
+          }
+        },
+
+        // 配置项操作
+        openAddModal() {
+          this.isEditMode = false;
+          this.editingJsonStr = JSON.stringify({ name: "new_item_" + Date.now() }, null, 2);
+          this.editModalOpen = true;
+        },
+
+        openEditModal(item) {
+          this.isEditMode = true;
+          this.editingJsonStr = JSON.stringify(item, null, 2);
+          this.editModalOpen = true;
+        },
+
+        async saveEditingItem() {
+          try {
+            const parsed = JSON.parse(this.editingJsonStr);
+            const res = await fetch('/admin/configs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                category: this.configCategory,
+                item: parsed
+              })
+            });
+            const data = await res.json();
+            if (data.success) {
+              await this.loadConfigs();
+              this.editModalOpen = false;
+            } else {
+              alert('保存失败');
+            }
+          } catch (e) {
+            alert('JSON 解析错误: ' + e.message);
+          }
+        },
+
+        async deleteItem(item) {
+          const keyFieldMap = {
+            strategies: "strategyId",
+            agents: "name",
+            tools: "name",
+            models: "code",
+            dict: "key",
+            prompts: "name",
+            promptGroups: "code"
+          };
+          const field = keyFieldMap[this.configCategory] || "name";
+          const val = item[field];
+          if (!confirm('确定删除配置项 [' + val + '] 吗？')) return;
+
+          try {
+            const res = await fetch('/admin/configs/' + this.configCategory + '/' + encodeURIComponent(val), {
+              method: 'DELETE'
+            });
+            const data = await res.json();
+            if (data.success) {
+              await this.loadConfigs();
+            }
+          } catch (e) {
+            alert('删除异常: ' + e.message);
+          }
+        },
+
+        async resetConfigs() {
+          if (!confirm('确定要将所有 Mock 配置重置为初始官方预设吗？')) return;
+          try {
+            const res = await fetch('/admin/reset', { method: 'POST' });
+            this.configs = await res.json();
+            alert('已成功重置为默认预设！');
+          } catch (e) {
+            alert('重置异常: ' + e.message);
+          }
+        },
+
+        initLogStream() {
+          if (this.logEventSource) {
+            this.logEventSource.close();
+          }
+          this.logConnStatus = 'connecting';
+          const url = '/proxy/logs/stream?tail=150';
+          this.logEventSource = new EventSource(url);
+
+          this.logEventSource.addEventListener('init', (e) => {
+            this.logConnStatus = 'connected';
+            this.logFileInfo = e.data;
+          });
+
+          this.logEventSource.addEventListener('log', (e) => {
+            if (!this.logPaused) {
+              this.logList.push(e.data);
+              if (this.logList.length > 2500) {
+                this.logList.shift();
+              }
+              if (this.logAutoScroll) {
+                this.$nextTick(() => {
+                  const el = document.getElementById('pyLogContainer');
+                  if (el) el.scrollTop = el.scrollHeight;
+                });
+              }
+            }
+          });
+
+          this.logEventSource.onopen = () => {
+            this.logConnStatus = 'connected';
+          };
+
+          this.logEventSource.onerror = () => {
+            this.logConnStatus = 'error';
+          };
+        },
+
+        toggleLogAutoScroll() {
+          this.logAutoScroll = !this.logAutoScroll;
+          if (this.logAutoScroll) {
+            this.$nextTick(() => {
+              const el = document.getElementById('pyLogContainer');
+              if (el) el.scrollTop = el.scrollHeight;
+            });
+          }
+        },
+
+        toggleLogPause() {
+          this.logPaused = !this.logPaused;
+        },
+
+        clearScreenLogs() {
+          this.logList = [];
+        },
+
+        async clearServerLogFile() {
+          if (!confirm('确定清空服务端的日志文件吗？')) return;
+          try {
+            const res = await fetch('/proxy/logs/clear', { method: 'POST' });
+            const data = await res.json();
+            alert(data.message || '日志文件已清空');
+            this.clearScreenLogs();
+          } catch (e) {
+            alert('清空日志文件异常: ' + e.message);
+          }
+        }
+      };
+    }
+  </script>
+</body>
+</html>

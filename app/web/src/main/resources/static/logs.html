@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OrchestrAgent - 实时日志流监控台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .log-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+    .log-scroll::-webkit-scrollbar-track { background: #0f172a; }
+    .log-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    .log-scroll::-webkit-scrollbar-thumb:hover { background: #475569; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
+
+  <!-- 顶部导航与状态栏 -->
+  <header class="bg-slate-900/95 border-b border-slate-800 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <i class="fa-solid fa-terminal text-white text-sm"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-base bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-indigo-300 to-pink-400">
+            OrchestrAgent 实时日志控制台
+          </h1>
+          <p class="text-xs text-slate-400">Log4j / Logback 文件流式监控 (SSE Stream)</p>
+        </div>
+      </div>
+
+      <!-- 实时连接状态徽标 -->
+      <div class="flex items-center space-x-3">
+        <span id="connBadge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border bg-amber-500/10 text-amber-400 border-amber-500/30">
+          <span id="connDot" class="w-2 h-2 rounded-full mr-2 bg-amber-400 animate-ping"></span>
+          <span id="connText">连接中...</span>
+        </span>
+        <button id="btnReconnect" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-medium text-slate-200 transition flex items-center space-x-1.5" title="重新连接">
+          <i class="fa-solid fa-rotate text-xs"></i>
+          <span>重连</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 工具栏控制面板 -->
+  <section class="bg-slate-900 border-b border-slate-800/80 px-4 sm:px-6 lg:px-8 py-3">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <!-- 快捷标签过滤 -->
+      <div class="flex items-center space-x-2">
+        <span class="text-xs text-slate-400 font-medium">快捷筛选:</span>
+        <div class="flex space-x-1" id="tagFilters">
+          <button data-filter="" class="filter-btn active px-2.5 py-1 rounded-md text-xs font-medium transition bg-indigo-600 text-white shadow">全部</button>
+          <button data-filter="[API]" class="filter-btn px-2.5 py-1 rounded-md text-xs font-medium transition bg-slate-800 text-slate-300 hover:bg-slate-700">API 切面</button>
+          <button data-filter="[FLOW" class="filter-btn px-2.5 py-1 rounded-md text-xs font-medium transition bg-slate-800 text-slate-300 hover:bg-slate-700">编排流程</button>
+          <button data-filter="[CONFIG" class="filter-btn px-2.5 py-1 rounded-md text-xs font-medium transition bg-slate-800 text-slate-300 hover:bg-slate-700">仓储配置</button>
+          <button data-filter="ERROR" class="filter-btn px-2.5 py-1 rounded-md text-xs font-medium transition bg-slate-800 text-rose-400 hover:bg-slate-700">错误 ERROR</button>
+          <button data-filter="WARN" class="filter-btn px-2.5 py-1 rounded-md text-xs font-medium transition bg-slate-800 text-amber-400 hover:bg-slate-700">警告 WARN</button>
+        </div>
+      </div>
+
+      <!-- 搜索输入框与动作按钮 -->
+      <div class="flex items-center space-x-3">
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-400"></i>
+          <input id="searchInput" type="text" placeholder="关键词搜索 (如 flowId, Conductor, invoke)..."
+                 class="w-64 pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        </div>
+
+        <button id="btnAutoScroll" class="px-3 py-1.5 rounded-lg text-xs font-medium transition border flex items-center space-x-1.5 bg-indigo-600/20 text-indigo-300 border-indigo-500/40">
+          <i class="fa-solid fa-angles-down text-xs"></i>
+          <span>自动滚屏: 开</span>
+        </button>
+
+        <button id="btnPause" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-medium text-slate-300 transition flex items-center space-x-1.5">
+          <i class="fa-solid fa-pause text-xs"></i>
+          <span>暂停</span>
+        </button>
+
+        <button id="btnClearView" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-medium text-slate-300 transition flex items-center space-x-1.5" title="清空当前屏幕显示">
+          <i class="fa-regular fa-trash-can text-xs"></i>
+          <span>清屏</span>
+        </button>
+
+        <button id="btnClearFile" class="px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/50 rounded-lg text-xs font-medium text-rose-300 transition flex items-center space-x-1.5" title="清空服务器上的日志文件">
+          <i class="fa-solid fa-file-circle-xmark text-xs"></i>
+          <span>清空文件</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 终端日志展示区 -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 flex flex-col min-h-0">
+    <div class="flex-1 bg-slate-900 border border-slate-800 rounded-2xl p-4 overflow-hidden flex flex-col shadow-2xl relative">
+      <!-- 状态摘要条 -->
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800 text-xs text-slate-400">
+        <div class="flex items-center space-x-4">
+          <span>展示行数: <strong id="visibleCount" class="text-indigo-400">0</strong></span>
+          <span>总接收行数: <strong id="totalCount" class="text-slate-300">0</strong></span>
+        </div>
+        <div id="fileInfo" class="truncate max-w-md text-slate-400">
+          目标日志: logs/orchestr-agent.log
+        </div>
+      </div>
+
+      <!-- 日志行容器 -->
+      <div id="logContainer" class="flex-1 overflow-y-auto log-scroll pt-3 space-y-1 text-xs select-text">
+        <div id="emptyTip" class="text-center py-20 text-slate-400">
+          <i class="fa-solid fa-circle-notch fa-spin text-2xl mb-3 text-indigo-400"></i>
+          <p>正在连接日志流并读取历史数据...</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let eventSource = null;
+    let autoScroll = true;
+    let isPaused = false;
+    let activeFilter = "";
+    let searchKeyword = "";
+    let logs = [];
+    const MAX_BUFFER = 2000;
+
+    const logContainer = document.getElementById("logContainer");
+    const emptyTip = document.getElementById("emptyTip");
+    const visibleCount = document.getElementById("visibleCount");
+    const totalCount = document.getElementById("totalCount");
+    const connBadge = document.getElementById("connBadge");
+    const connDot = document.getElementById("connDot");
+    const connText = document.getElementById("connText");
+    const btnAutoScroll = document.getElementById("btnAutoScroll");
+    const btnPause = document.getElementById("btnPause");
+    const btnClearView = document.getElementById("btnClearView");
+    const btnClearFile = document.getElementById("btnClearFile");
+    const btnReconnect = document.getElementById("btnReconnect");
+    const searchInput = document.getElementById("searchInput");
+    const tagFilters = document.querySelectorAll(".filter-btn");
+
+    function setStatus(status, text) {
+      if (status === "connected") {
+        connBadge.className = "inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
+        connDot.className = "w-2 h-2 rounded-full mr-2 bg-emerald-400 animate-pulse";
+        connText.textContent = text || "实时监听中";
+      } else if (status === "connecting") {
+        connBadge.className = "inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border bg-amber-500/10 text-amber-400 border-amber-500/30";
+        connDot.className = "w-2 h-2 rounded-full mr-2 bg-amber-400 animate-ping";
+        connText.textContent = text || "连接中...";
+      } else {
+        connBadge.className = "inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border bg-rose-500/10 text-rose-400 border-rose-500/30";
+        connDot.className = "w-2 h-2 rounded-full mr-2 bg-rose-400";
+        connText.textContent = text || "已断开";
+      }
+    }
+
+    function formatLogLine(raw) {
+      // 级别着色
+      let styled = escapeHtml(raw);
+      if (raw.includes("ERROR")) {
+        return `<div class="py-0.5 px-2 rounded hover:bg-slate-800/80 transition text-rose-400 bg-rose-500/5 font-mono border-l-2 border-rose-500">${styled}</div>`;
+      } else if (raw.includes("WARN")) {
+        return `<div class="py-0.5 px-2 rounded hover:bg-slate-800/80 transition text-amber-300 bg-amber-500/5 font-mono border-l-2 border-amber-500">${styled}</div>`;
+      } else if (raw.includes("[API][REQUEST]")) {
+        return `<div class="py-0.5 px-2 rounded hover:bg-slate-800/80 transition text-cyan-300 bg-cyan-500/5 font-mono border-l-2 border-cyan-400">${styled}</div>`;
+      } else if (raw.includes("[API][RESPONSE]")) {
+        return `<div class="py-0.5 px-2 rounded hover:bg-slate-800/80 transition text-emerald-300 bg-emerald-500/5 font-mono border-l-2 border-emerald-400">${styled}</div>`;
+      } else if (raw.includes("[FLOW")) {
+        return `<div class="py-0.5 px-2 rounded hover:bg-slate-800/80 transition text-purple-300 font-mono border-l-2 border-purple-400">${styled}</div>`;
+      } else if (raw.includes("[CONFIG")) {
+        return `<div class="py-0.5 px-2 rounded hover:bg-slate-800/80 transition text-indigo-300 font-mono border-l-2 border-indigo-400">${styled}</div>`;
+      }
+      return `<div class="py-0.5 px-2 rounded hover:bg-slate-800/60 transition text-slate-300 font-mono">${styled}</div>`;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function matchesFilter(line) {
+      if (activeFilter && !line.includes(activeFilter)) return false;
+      if (searchKeyword && !line.toLowerCase().includes(searchKeyword.toLowerCase())) return false;
+      return true;
+    }
+
+    function renderLogs() {
+      if (logs.length === 0) {
+        emptyTip.style.display = "block";
+        emptyTip.innerHTML = '<i class="fa-solid fa-inbox text-2xl mb-3 text-slate-600"></i><p>暂无符合筛选条件的日志记录</p>';
+        visibleCount.textContent = "0";
+        return;
+      }
+      emptyTip.style.display = "none";
+
+      const filtered = logs.filter(matchesFilter);
+      logContainer.innerHTML = filtered.map(formatLogLine).join("");
+      visibleCount.textContent = filtered.length;
+      totalCount.textContent = logs.length;
+
+      if (autoScroll) {
+        logContainer.scrollTop = logContainer.scrollHeight;
+      }
+    }
+
+    function appendLine(line) {
+      logs.push(line);
+      if (logs.length > MAX_BUFFER) {
+        logs.shift();
+      }
+      totalCount.textContent = logs.length;
+
+      if (!isPaused && matchesFilter(line)) {
+        if (emptyTip.style.display !== "none") {
+          emptyTip.style.display = "none";
+        }
+        const div = document.createElement("div");
+        div.innerHTML = formatLogLine(line);
+        logContainer.appendChild(div.firstElementChild);
+        visibleCount.textContent = parseInt(visibleCount.textContent || 0) + 1;
+
+        if (autoScroll) {
+          logContainer.scrollTop = logContainer.scrollHeight;
+        }
+      }
+    }
+
+    function connectSSE() {
+      if (eventSource) {
+        eventSource.close();
+      }
+      setStatus("connecting", "连接中...");
+
+      const sseUrl = "/api/agent/logs/stream?tail=150";
+      eventSource = new EventSource(sseUrl);
+
+      eventSource.addEventListener("init", (e) => {
+        setStatus("connected", "已连接实时日志");
+        document.getElementById("fileInfo").textContent = e.data;
+      });
+
+      eventSource.addEventListener("log", (e) => {
+        appendLine(e.data);
+      });
+
+      eventSource.addEventListener("ping", (e) => {
+        // 心跳保活
+      });
+
+      eventSource.onopen = () => {
+        setStatus("connected", "已连接实时日志");
+      };
+
+      eventSource.onerror = () => {
+        setStatus("disconnected", "连接异常，自动重连中...");
+      };
+    }
+
+    // 事件绑定
+    btnAutoScroll.addEventListener("click", () => {
+      autoScroll = !autoScroll;
+      btnAutoScroll.className = autoScroll
+        ? "px-3 py-1.5 rounded-lg text-xs font-medium transition border flex items-center space-x-1.5 bg-indigo-600/20 text-indigo-300 border-indigo-500/40"
+        : "px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-medium text-slate-400 transition flex items-center space-x-1.5";
+      btnAutoScroll.innerHTML = `<i class="fa-solid fa-angles-down text-xs"></i><span>自动滚屏: ${autoScroll ? "开" : "关"}</span>`;
+      if (autoScroll) {
+        logContainer.scrollTop = logContainer.scrollHeight;
+      }
+    });
+
+    btnPause.addEventListener("click", () => {
+      isPaused = !isPaused;
+      btnPause.className = isPaused
+        ? "px-3 py-1.5 rounded-lg text-xs font-medium transition border flex items-center space-x-1.5 bg-amber-500/20 text-amber-300 border-amber-500/40"
+        : "px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-medium text-slate-300 transition flex items-center space-x-1.5";
+      btnPause.innerHTML = `<i class="fa-solid ${isPaused ? "fa-play" : "fa-pause"} text-xs"></i><span>${isPaused ? "继续" : "暂停"}</span>`;
+    });
+
+    btnClearView.addEventListener("click", () => {
+      logs = [];
+      logContainer.innerHTML = "";
+      emptyTip.style.display = "block";
+      emptyTip.innerHTML = '<i class="fa-solid fa-inbox text-2xl mb-3 text-slate-600"></i><p>当前屏幕已清空，等待新日志流...</p>';
+      visibleCount.textContent = "0";
+      totalCount.textContent = "0";
+    });
+
+    btnClearFile.addEventListener("click", async () => {
+      if (!confirm("确认清空服务端日志文件吗？此操作无法撤销。")) return;
+      try {
+        const resp = await fetch("/api/agent/logs/clear", { method: "POST" });
+        const data = await resp.json();
+        alert(data.message || "日志文件已清空");
+        btnClearView.click();
+      } catch (err) {
+        alert("清空日志文件失败: " + err.message);
+      }
+    });
+
+    btnReconnect.addEventListener("click", () => {
+      connectSSE();
+    });
+
+    searchInput.addEventListener("input", (e) => {
+      searchKeyword = e.target.value.trim();
+      renderLogs();
+    });
+
+    tagFilters.forEach(btn => {
+      btn.addEventListener("click", () => {
+        tagFilters.forEach(b => {
+          b.className = "filter-btn px-2.5 py-1 rounded-md text-xs font-medium transition bg-slate-800 text-slate-300 hover:bg-slate-700";
+        });
+        btn.className = "filter-btn active px-2.5 py-1 rounded-md text-xs font-medium transition bg-indigo-600 text-white shadow";
+        activeFilter = btn.dataset.filter || "";
+        renderLogs();
+      });
+    });
+
+    // 页面加载启动连接
+    connectSSE();
+  </script>
+</body>
+</html>

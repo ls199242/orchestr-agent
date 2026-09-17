@@ -1,0 +1,33 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: orchestragent
+
+orchestr:
+  manager:
+    api-url: http://127.0.0.1:8000
+  repository:
+    refresh-interval-seconds: 10
+
+orchestragent:
+  llm:
+    endpoint: https://api.openai.com/v1/chat/completions
+    api-key: ${OPENAI_API_KEY:}
+    model: gpt-4o
+    timeout-ms: 30000
+
+logging:
+  file:
+    name: ${LOG_FILE:logs/orchestr-agent.log}
+  logback:
+    rollingpolicy:
+      max-file-size: 50MB
+      max-history: 7
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
+  level:
+    root: INFO
+    com.shane.orchestragent: DEBUG

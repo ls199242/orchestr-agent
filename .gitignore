@@ -1,0 +1,53 @@
+# ==============================================================================
+# Git Ignore Configuration for OrchestrAgent
+# ==============================================================================
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# IDE & Editor Settings
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.classpath
+.project
+
+# Maven Build Outputs
+target/
+**/target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# Application Logs
+logs/
+**/logs/
+*.log
+
+# Python Runtime & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+venv/
+env/
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Python Mock Console Private Configurations & Local Runtime Data
+# 注意：config.py 包含用户私有配置/模型密钥，禁止提交至外部仓库
+py-mock-console/config.py
+py-mock-console/data/

@@ -1,0 +1,414 @@
+"""
+OrchestrAgent Python Mock Console & Data Provider 配置文件示例模板
+=============================================================
+使用说明：
+请复制本文件为 config.py 并根据实际需要修改：
+    cp config.py.example config.py
+config.py 已经被写入 .gitignore，不会被提交至代码仓库，可安全配置真实 API 密钥与内部参数。
+"""
+
+import json
+import os
+
+# ==============================================================================
+# 1. 服务与网络配置
+# ==============================================================================
+
+# Python Mock Console 监听地址与端口
+SERVER_HOST = "0.0.0.0"
+SERVER_PORT = 8000
+
+# Java OrchestrAgent 后台服务地址（用于联调代理与监控快照）
+JAVA_BACKEND_URL = os.getenv("JAVA_BACKEND_URL", "http://127.0.0.1:8080")
+
+# 启动策略：是否在控制台启动时强制使用本文件配置覆盖本地 data/configs.json 运行时缓存
+OVERWRITE_DATA_WITH_CONFIG = False
+
+
+# ==============================================================================
+# 2. 7 大仓储默认配置数据 (供 Java OrchestrAgent 远程拉取与页面 Mock)
+# ==============================================================================
+
+DEFAULT_CONFIGS = {
+    # 2.1 策略流程配置 (StrategyConfigDO)
+    "strategies": [
+        {
+            "strategyId": "biz_travel",
+            "code": "biz_travel",
+            "name": "商务差旅推荐与合规策略",
+            "description": "面向差旅场景的端到端智能体协同流程，包含航班检索、差标核验与结果汇编",
+            "prompt": "精准为用户规划差旅并严格核验企业标准",
+            "maxStep": 10,
+            "flowTopologyType": "REACT",
+            "stream": True,
+            "workers": [
+                {
+                    "name": "search_worker",
+                    "description": "航班检索专精工作节点",
+                    "prompt": "负责根据出发地与目的地检索实时航班与余票",
+                    "model": "gpt-4o",
+                    "temperature": 0.2,
+                    "maxTokens": 2048,
+                    "nodeWaitTime": 15000,
+                },
+                {
+                    "name": "policy_worker",
+                    "description": "企业差旅合规核验节点",
+                    "prompt": "负责核验差旅预算超标、免费行李额与退改签政策",
+                    "model": "gpt-4o",
+                    "temperature": 0.1,
+                    "maxTokens": 2048,
+                    "nodeWaitTime": 15000,
+                },
+            ],
+            "properties": {"department": "sales", "budget_limit": 3000},
+        },
+        {
+            "strategyId": "default_react_strategy",
+            "code": "react_default_strategy",
+            "name": "标准 ReAct 协同策略",
+            "description": "系统默认的通用自主规划、指挥调度、质检验收自愈闭环流程",
+            "prompt": "通用任务协同编排",
+            "maxStep": 15,
+            "flowTopologyType": "REACT",
+            "stream": False,
+            "workers": [
+                {
+                    "name": "search_worker",
+                    "description": "信息检索节点",
+                    "prompt": "检索相关任务素材",
+                    "model": "gpt-4o",
+                }
+            ],
+            "properties": {},
+        },
+        {
+            "strategyId": "multi_chat_strategy",
+            "code": "multi_chat_strategy",
+            "name": "多轮会话意图分流策略",
+            "description": "支持 RouterAgent 意图识别，轻量问答直接回复，复杂任务流转 ReAct",
+            "prompt": "多轮会话智能路由",
+            "maxStep": 8,
+            "flowTopologyType": "MULTIPLE_CHAT",
+            "stream": True,
+            "workers": [],
+            "properties": {},
+        },
+    ],
+
+    # 2.2 智能体基础配置 (AgentConfigDO)
+    "agents": [
+        {
+            "name": "ROUTER",
+            "code": "router_agent",
+            "description": "意图识别与前置路由决策智能体",
+            "agentType": "SYSTEM",
+            "model": "gpt-4o",
+            "temperature": 0.1,
+            "maxTokens": 1024,
+            "nodeWaitTime": 10000,
+            "promptTemplates": {},
+            "extraProperties": {},
+        },
+        {
+            "name": "PLANNER",
+            "code": "planner_agent",
+            "description": "任务分解与执行路径全局规划智能体",
+            "agentType": "SYSTEM",
+            "model": "gpt-4o",
+            "temperature": 0.2,
+            "maxTokens": 2048,
+            "nodeWaitTime": 15000,
+            "promptTemplates": {},
+            "extraProperties": {},
+        },
+        {
+            "name": "CONDUCTOR",
+            "code": "conductor_agent",
+            "description": "执行流水线调度中枢与自愈驱动智能体",
+            "agentType": "SYSTEM",
+            "model": "gpt-4o",
+            "temperature": 0.2,
+            "maxTokens": 2048,
+            "nodeWaitTime": 20000,
+            "promptTemplates": {},
+            "extraProperties": {},
+        },
+        {
+            "name": "EVALUATOR",
+            "code": "evaluator_agent",
+            "description": "多维度质量评估与自愈缺陷诊断智能体",
+            "agentType": "SYSTEM",
+            "model": "gpt-4o",
+            "temperature": 0.1,
+            "maxTokens": 1500,
+            "nodeWaitTime": 15000,
+            "promptTemplates": {},
+            "extraProperties": {},
+        },
+        {
+            "name": "REPORTER",
+            "code": "reporter_agent",
+            "description": "执行产出聚合与终版汇报渲染智能体",
+            "agentType": "SYSTEM",
+            "model": "gpt-4o",
+            "temperature": 0.3,
+            "maxTokens": 4096,
+            "nodeWaitTime": 20000,
+            "promptTemplates": {},
+            "extraProperties": {},
+        },
+        {
+            "name": "search_worker",
+            "code": "search_worker",
+            "description": "实时数据与航班检索专精工作节点",
+            "agentType": "WORKER",
+            "model": "gpt-4o",
+            "temperature": 0.2,
+            "maxTokens": 2048,
+            "nodeWaitTime": 15000,
+            "promptTemplates": {},
+            "extraProperties": {},
+        },
+        {
+            "name": "policy_worker",
+            "code": "policy_worker",
+            "description": "企业差旅合规核验专精工作节点",
+            "agentType": "WORKER",
+            "model": "gpt-4o",
+            "temperature": 0.1,
+            "maxTokens": 2048,
+            "nodeWaitTime": 15000,
+            "promptTemplates": {},
+            "extraProperties": {},
+        },
+    ],
+
+    # 2.3 工具配置 (ToolConfigDO)
+    "tools": [
+        {
+            "name": "flight_search",
+            "code": "flight_search",
+            "title": "实时航班班次检索工具",
+            "description": "根据出发城市、目的地城市及乘机日期，精准查询民航实时航班和机票价格",
+            "endpoint": "http://127.0.0.1:8000/mock/tools/flights",
+            "requestJsonSchema": json.dumps(
+                {
+                    "type": "object",
+                    "properties": {
+                        "origin": {"type": "string", "description": "出发地城市"},
+                        "destination": {"type": "string", "description": "目的地城市"},
+                        "departureDate": {"type": "string", "description": "出行日期 YYYY-MM-DD"},
+                    },
+                    "required": ["origin", "destination", "departureDate"],
+                },
+                ensure_ascii=False,
+            ),
+            "responseJsonSchema": json.dumps(
+                {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "flightNo": {"type": "string"},
+                            "price": {"type": "number"},
+                            "depTime": {"type": "string"},
+                            "arrTime": {"type": "string"},
+                        },
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            "parameters": {"provider": "MockGDS"},
+        },
+        {
+            "name": "calculator",
+            "code": "calc_tool",
+            "title": "科学计算与汇率换算工具",
+            "description": "用于计算复杂数学公式或换算报销币种",
+            "endpoint": "http://127.0.0.1:8000/mock/tools/calc",
+            "requestJsonSchema": json.dumps(
+                {
+                    "type": "object",
+                    "properties": {
+                        "expression": {"type": "string", "description": "计算表达式如 1500 * 0.15"},
+                    },
+                    "required": ["expression"],
+                },
+                ensure_ascii=False,
+            ),
+            "responseJsonSchema": json.dumps(
+                {"type": "object", "properties": {"result": {"type": "number"}}},
+                ensure_ascii=False,
+            ),
+            "parameters": {},
+        },
+    ],
+
+    # 2.4 大模型接入配置 (ModelConfigDO)
+    "models": [
+        {
+            "code": "gpt-4o",
+            "name": "OpenAI GPT-4o 旗舰模型",
+            "contextMaxTokens": 128000,
+            "endpoint": "https://api.openai.com/v1/chat/completions",
+            "apiKey": "sk-your-openai-api-key",
+            "temperature": 0.7,
+            "supportImage": True,
+            "tags": ["chat", "vision", "function_calling"],
+        },
+        {
+            "code": "deepseek-chat",
+            "name": "DeepSeek-V3",
+            "contextMaxTokens": 64000,
+            "endpoint": "https://api.deepseek.com/v1/chat/completions",
+            "apiKey": "sk-your-deepseek-api-key",
+            "temperature": 0.6,
+            "supportImage": False,
+            "tags": ["chat", "reasoning", "coding"],
+        },
+    ],
+
+    # 2.5 全局运行字典 (DictDO)
+    "dict": [
+        {
+            "key": "flow_max_step",
+            "value": "20",
+            "description": "流程最大执行步长限制",
+        },
+        {
+            "key": "llm_max_wait_time",
+            "value": "30000",
+            "description": "大模型调用最大等待毫秒数",
+        },
+        {
+            "key": "flow_result_cache_save_time",
+            "value": "3600",
+            "description": "流程执行结果缓存有效时间（秒）",
+        },
+        {
+            "key": "flow_chat_history_save_time",
+            "value": "86400",
+            "description": "聊天多轮记忆临时缓存保存时间（秒）",
+        },
+        {
+            "key": "flow_chat_history_summary_token_size",
+            "value": "20000",
+            "description": "触发多轮会话摘要压缩的 Token 门槛阈值",
+        },
+        {
+            "key": "log_flag",
+            "value": "true",
+            "description": "全局日志详细跟踪输出开关",
+        },
+        {
+            "key": "flow_eval_max_retry",
+            "value": "2",
+            "description": "Evaluator 验收失败时的自愈重试最大次数",
+        },
+        {
+            "key": "flow_instance_expire_minutes",
+            "value": "30",
+            "description": "流程实例与上下文在内存缓存中的驻留淘汰时间（分钟）",
+        },
+        {
+            "key": "flow_instance_max_capacity",
+            "value": "10000",
+            "description": "流程实例本地缓存最大并发容量限制",
+        },
+        {
+            "key": "log_stream_max_lines",
+            "value": "1000",
+            "description": "实时日志流初次建立连接时回溯读取的最大行数",
+        },
+        {
+            "key": "log_stream_poll_interval_ms",
+            "value": "200",
+            "description": "日志流增量读取文件更新的轮询时间间隔（毫秒）",
+        },
+        {
+            "key": "default_llm_model",
+            "value": "gpt-4o",
+            "description": "系统各智能体未指定模型时的全局默认大模型名称",
+        },
+        {
+            "key": "default_system_agent_temp",
+            "value": "0.7",
+            "description": "系统智能体默认采样温度（未在 AgentConfig 配置时的保底值）",
+        },
+        {
+            "key": "default_worker_agent_temp",
+            "value": "0.3",
+            "description": "业务 Worker 智能体默认采样温度（未在策略或配置中指定时的保底值）",
+        },
+    ],
+
+    # 2.6 提示词模板 (PromptConfigDO)
+    "prompts": [
+        {
+            "name": "PLANNER_SYSTEM",
+            "code": "planner_system",
+            "domain": "SYSTEM",
+            "prompt": "你是一位出色的规划大师。请根据用户需求将目标分解为具体的执行计划：${strategy_target}",
+            "description": "Planner 默认规划系统提示词",
+        },
+        {
+            "name": "CONDUCTOR_SYSTEM",
+            "code": "conductor_system",
+            "domain": "SYSTEM",
+            "prompt": "你是协同执行中枢 Conductor。请根据当前规划步骤与各节点反馈执行下一步行动。",
+            "description": "Conductor 默认调度系统提示词",
+        },
+        {
+            "name": "EVALUATOR_SYSTEM",
+            "code": "evaluator_system",
+            "domain": "SYSTEM",
+            "prompt": "你是严谨的质检验收专家。请对当前产物进行验收打分，若存在缺陷请明确提出改进要求。",
+            "description": "Evaluator 质检系统提示词",
+        },
+        {
+            "name": "REPORTER_SYSTEM",
+            "code": "reporter_system",
+            "domain": "SYSTEM",
+            "prompt": "你是成果汇报交付专家。请将各专精节点的执行成果汇总并清晰友善地展示给用户。",
+            "description": "Reporter 汇报系统提示词",
+        },
+        {
+            "name": "ROUTER_SYSTEM",
+            "code": "router_system",
+            "domain": "SYSTEM",
+            "prompt": "你是智能问答意图分流器。若用户问题属于日常闲聊请直接回答；若属于复杂多步骤任务请交由 Planner 处理。",
+            "description": "Router 前置意图分流提示词",
+        },
+    ],
+
+    # 2.7 提示词分组 (PromptGroupConfigDO)
+    "promptGroups": [
+        {
+            "code": "pg_react_default",
+            "name": "ReAct 流程默认提示词组",
+            "strategyCode": "react_default_strategy",
+            "flowType": "REACT",
+            "version": "v1.0.0",
+            "promptBindings": {
+                "PLANNER": "planner_system",
+                "CONDUCTOR": "conductor_system",
+                "EVALUATOR": "evaluator_system",
+                "REPORTER": "reporter_system",
+            },
+        },
+        {
+            "code": "pg_biz_travel",
+            "name": "商务差旅专属提示词组",
+            "strategyCode": "biz_travel",
+            "flowType": "REACT",
+            "version": "v1.0.0",
+            "promptBindings": {
+                "PLANNER": "planner_system",
+                "CONDUCTOR": "conductor_system",
+                "EVALUATOR": "evaluator_system",
+                "REPORTER": "reporter_system",
+            },
+        },
+    ],
+}

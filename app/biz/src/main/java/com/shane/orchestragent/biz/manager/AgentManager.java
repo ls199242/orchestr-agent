@@ -1,0 +1,59 @@
+package com.shane.orchestragent.biz.manager;
+
+import com.shane.orchestragent.biz.model.request.RecommendRequestVO;
+import com.shane.orchestragent.biz.model.response.RecommendResponseVO;
+import com.shane.orchestragent.biz.model.vo.AgentChatRequestVO;
+import com.shane.orchestragent.biz.model.vo.AgentInvokeRequestVO;
+import com.shane.orchestragent.biz.model.vo.AgentInvokeResponseVO;
+import com.shane.orchestragent.biz.sse.SseEmitterUTF8;
+import com.shane.orchestragent.common.exception.BizException;
+
+/**
+ * 智能体策略协同核心编排中枢接口
+ * 负责智能体工作流的生命周期调度、上下文组装、线程池分发与状态流转
+ *
+ * @author Shane
+ */
+public interface AgentManager {
+
+    /**
+     * 核心异步调用入口
+     * 直接触发从 Plan 规划开始的 ReAct 循环协同流程，虚拟线程后台异步执行，立即返回 flowId 供调用方后续查询状态与获取结果
+     *
+     * @param request 异步调用请求业务对象
+     * @return 初始异步响应业务对象 (包含 flowId、sessionId 以及初始状态)
+     * @throws BizException 业务异常
+     */
+    AgentInvokeResponseVO invoke(AgentInvokeRequestVO request) throws BizException;
+
+    /**
+     * SSE 流式多轮会话交互入口
+     * 调用 Router 智能体进行前置意图识别和分流决策:
+     * - 轻量会话意图: 由 Router 智能体直接给出解答并通过 SSE 流式推送完毕
+     * - 复杂任务意图: 移交由 Plan 规划器与 ReAct 自愈循环执行，并全程流式推送各智能体步骤思考与最终交付结果
+     *
+     * @param request 流式会话请求业务对象
+     * @return SSE 事件发射器 (SseEmitterUTF8)
+     * @throws BizException 业务异常
+     */
+    SseEmitterUTF8 chat(AgentChatRequestVO request) throws BizException;
+
+    /**
+     * 同步测试调用入口
+     * 同步阻塞触发与 invoke 相同的 ReAct 协同执行流水线，等待全流程执行完毕并返回完整产物、Evaluator 自愈质检评分与总耗时
+     *
+     * @param request 测试调用请求业务对象
+     * @return 包含最终交付成果与质量评估反馈的完整响应业务对象
+     * @throws BizException 业务异常
+     */
+    AgentInvokeResponseVO testInvoke(AgentInvokeRequestVO request) throws BizException;
+
+    /**
+     * 策略推荐调度流程 (兼容旧版调用)
+     *
+     * @param request 协同推荐请求
+     * @return 响应结果
+     * @throws BizException 业务异常
+     */
+    RecommendResponseVO process(RecommendRequestVO request) throws BizException;
+}
