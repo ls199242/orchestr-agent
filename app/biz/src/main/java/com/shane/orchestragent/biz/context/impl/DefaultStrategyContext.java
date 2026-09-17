@@ -107,6 +107,25 @@ public class DefaultStrategyContext implements StrategyContext {
     }
 
     @Override
+    public String getTraceId() {
+        if (request != null && StringUtils.isNotBlank(request.getTraceId())) {
+            return request.getTraceId();
+        }
+        Object trace = properties.get("traceId");
+        return trace != null ? trace.toString() : null;
+    }
+
+    @Override
+    public boolean isStream() {
+        return request != null && request.isStream();
+    }
+
+    @Override
+    public Object getAgentRequest() {
+        return nextAgentRequest != null ? nextAgentRequest : properties.get("agentRequest");
+    }
+
+    @Override
     public void registerAgent(Agent agent) {
         if (agent != null && agent.getName() != null) {
             agents.put(agent.getName(), agent);

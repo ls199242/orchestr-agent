@@ -33,13 +33,7 @@ public class ToolAgent extends BaseAgent<AgentContext> {
             return null;
         }
 
-        Object request = null;
-        if (context instanceof StrategyContext sc) {
-            request = sc.getNextAgentRequest();
-        }
-        if (request == null) {
-            request = context.getProperty("agentRequest");
-        }
+        Object request = context.getAgentRequest();
         String requestJson = request != null ? JsonUtils.toJsonString(request) : "{}";
 
         String output = callTool(requestJson, context);

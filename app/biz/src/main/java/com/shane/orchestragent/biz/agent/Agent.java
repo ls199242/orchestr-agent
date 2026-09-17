@@ -42,4 +42,11 @@ public interface Agent<CONTEXT extends AgentContext> extends AgentLifecycle {
      * 智能体类型
      */
     AgentTypeEnum getType();
+
+    /**
+     * 注册智能体执行切面扩展点
+     *
+     * @param extension 扩展切面
+     */
+    void registerExtension(AgentAdvisor extension);
 }

@@ -303,4 +303,56 @@ public class OrchestrAgentFlowTest {
         Assertions.assertEquals("Hello World!", response.getFirstMessage().getContent());
         Assertions.assertEquals("Think 1 Think 2", response.getFirstMessage().getReasoningContent());
     }
+
+    @Test
+    @DisplayName("测试 Context 分层设计: AgentContext (traceId, isStream, properties) 与 StrategyContext (flowId, sessionId, userId)")
+    public void testAgentContextAndStrategyContextHierarchy() throws BizException {
+        // 1. 测试独立轻量级 DefaultAgentContext
+        com.shane.orchestragent.biz.context.impl.DefaultAgentContext baseContext =
+                new com.shane.orchestragent.biz.context.impl.DefaultAgentContext("trace-12345", true, Map.of("action", "ping"));
+        Assertions.assertEquals("trace-12345", baseContext.getTraceId());
+        Assertions.assertTrue(baseContext.isStream());
+        Assertions.assertNotNull(baseContext.getAgentRequest());
+        baseContext.addProperty("k1", "v1");
+        Assertions.assertEquals("v1", baseContext.getProperty("k1"));
+
+        // 单独让 ToolAgent 在基础 AgentContext 下运行
+        com.shane.orchestragent.repository.model.ToolConfigDO toolConfig = com.shane.orchestragent.repository.model.ToolConfigDO.builder()
+                .name("standalone_tool")
+                .description("单节点独立工具")
+                .build();
+        ToolAgent standaloneTool = new ToolAgent(toolConfig);
+        com.shane.orchestragent.biz.model.agent.AgentResult standaloneResult = standaloneTool.execute(baseContext);
+        Assertions.assertNotNull(standaloneResult);
+        Assertions.assertTrue(standaloneResult.getOutput().contains("standalone_tool"));
+        Assertions.assertTrue(standaloneResult.getOutput().contains("ping"));
+
+        // 2. 测试策略上下文 DefaultStrategyContext 继承与扩展
+        com.shane.orchestragent.biz.model.request.RecommendRequestVO requestVO =
+                com.shane.orchestragent.biz.model.request.RecommendRequestVO.builder()
+                        .flowId("flow-999")
+                        .sessionId("session-888")
+                        .traceId("trace-777")
+                        .stream(false)
+                        .build();
+
+        DefaultStrategyContext strategyContext = new DefaultStrategyContext(null, "flow-999", "session-888", requestVO);
+        strategyContext.setUserId("user-007");
+        strategyContext.setNextAgentRequest(Map.of("step", "execute_task"));
+
+        // 验证基础 AgentContext 属性
+        Assertions.assertEquals("trace-777", strategyContext.getTraceId());
+        Assertions.assertFalse(strategyContext.isStream());
+        Assertions.assertEquals(Map.of("step", "execute_task"), strategyContext.getAgentRequest());
+
+        // 验证 StrategyContext 专属属性
+        Assertions.assertEquals("flow-999", strategyContext.getFlowId());
+        Assertions.assertEquals("session-888", strategyContext.getSessionId());
+        Assertions.assertEquals("user-007", strategyContext.getUserId());
+
+        // 验证 Agent 接口 registerExtension
+        Agent<StrategyContext> ragAgent = new RagAgent("rag", "desc");
+        ragAgent.registerExtension((agent, agentResult, agentCtx) -> agentResult);
+        Assertions.assertEquals(AgentTypeEnum.RAG, ragAgent.getType());
+    }
 }
