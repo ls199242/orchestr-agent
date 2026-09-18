@@ -30,19 +30,50 @@ public class ModelConfigRepositoryImpl extends AbstractConfigRepository<ModelCon
     /** 按模型代码索引的映射快照 */
     private volatile Map<String, ModelConfigDO> dataMapByCode = Collections.emptyMap();
 
+    /** 按配置名称索引的映射快照 */
+    private volatile Map<String, ModelConfigDO> dataMapByName = Collections.emptyMap();
+
     @Override
     public ModelConfigDO findByCode(String code) {
         if (StringUtils.isBlank(code)) {
             return null;
         }
-        return dataMapByCode.get(code.toLowerCase());
+        String key = code.toLowerCase().trim();
+        ModelConfigDO model = dataMapByCode.get(key);
+        if (model != null) {
+            return model;
+        }
+        return dataMapByName.get(key);
+    }
+
+    @Override
+    public ModelConfigDO findByName(String name) {
+        if (StringUtils.isBlank(name)) {
+            return null;
+        }
+        String key = name.toLowerCase().trim();
+        ModelConfigDO model = dataMapByName.get(key);
+        if (model != null) {
+            return model;
+        }
+        return dataMapByCode.get(key);
+    }
+
+    @Override
+    public ModelConfigDO findByNameOrCode(String nameOrCode) {
+        if (StringUtils.isBlank(nameOrCode)) {
+            return null;
+        }
+        String key = nameOrCode.toLowerCase().trim();
+        ModelConfigDO model = dataMapByName.get(key);
+        if (model != null) {
+            return model;
+        }
+        return dataMapByCode.get(key);
     }
 
     @Override
     public ModelConfigDO getDefaultModel() {
-        if (dataMapByCode.containsKey("gpt-4o")) {
-            return dataMapByCode.get("gpt-4o");
-        }
         return dataList.isEmpty() ? null : dataList.get(0);
     }
 
@@ -63,15 +94,25 @@ public class ModelConfigRepositoryImpl extends AbstractConfigRepository<ModelCon
             return false;
         }
 
-        Map<String, ModelConfigDO> map = new HashMap<>();
+        Map<String, ModelConfigDO> mapByCode = new HashMap<>();
+        Map<String, ModelConfigDO> mapByName = new HashMap<>();
         for (ModelConfigDO model : remoteList) {
-            if (model != null && StringUtils.isNotBlank(model.getCode())) {
-                map.put(model.getCode().toLowerCase(), model);
+            if (model != null) {
+                if (StringUtils.isNotBlank(model.getCode())) {
+                    mapByCode.put(model.getCode().toLowerCase().trim(), model);
+                }
+                if (StringUtils.isNotBlank(model.getName())) {
+                    mapByName.put(model.getName().toLowerCase().trim(), model);
+                }
+                if (StringUtils.isNotBlank(model.getModelName())) {
+                    mapByCode.putIfAbsent(model.getModelName().toLowerCase().trim(), model);
+                }
             }
         }
 
         this.dataList = Collections.unmodifiableList(new ArrayList<>(remoteList));
-        this.dataMapByCode = Collections.unmodifiableMap(map);
+        this.dataMapByCode = Collections.unmodifiableMap(mapByCode);
+        this.dataMapByName = Collections.unmodifiableMap(mapByName);
         logger.info("[ModelConfigRepository] 从远程接口成功加载 {} 条大模型配置", remoteList.size());
         return true;
     }

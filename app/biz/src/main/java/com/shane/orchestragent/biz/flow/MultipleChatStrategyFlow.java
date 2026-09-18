@@ -6,6 +6,7 @@ import com.shane.orchestragent.biz.context.StrategyContext;
 import com.shane.orchestragent.common.enums.AgentTypeEnum;
 import com.shane.orchestragent.biz.model.flow.RouterResult;
 import com.shane.orchestragent.common.constant.PropertyKeys;
+import com.shane.orchestragent.common.exception.BizErrorFactory;
 import com.shane.orchestragent.common.exception.BizException;
 import com.shane.orchestragent.memory.model.ConversationCacheUnit;
 import com.shane.orchestragent.memory.model.MemoryQueryCriteria;
@@ -40,8 +41,14 @@ public class MultipleChatStrategyFlow extends ReActStrategyFlow {
         // 2. 路由门禁意图决策
         if (routerAgent != null) {
             RouterResult routerResult = (RouterResult) executeStep(routerAgent, RouterResult.class);
-            if (routerResult != null && !routerResult.isHandoffToPlanner()) {
-                String reply = StringUtils.defaultIfEmpty(routerResult.getReply(), "您好，有什么可以帮您？");
+            if (routerResult == null) {
+                throw BizErrorFactory.getInstance().routerDecisionEmpty();
+            }
+            if (!routerResult.isHandoffToPlanner()) {
+                String reply = routerResult.getReply();
+                if (StringUtils.isBlank(reply)) {
+                    throw BizErrorFactory.getInstance().routerReplyEmpty();
+                }
                 getContext().setRecommendResult(reply);
                 getContext().setProperties(PropertyKeys.KEY_RECOMMEND_RESULT, reply);
                 log.info("[Flow: {}][FLOW_ROUTER] RouterAgent 判定为日常闲聊或简单查询，执行直接答复", getFlowId());

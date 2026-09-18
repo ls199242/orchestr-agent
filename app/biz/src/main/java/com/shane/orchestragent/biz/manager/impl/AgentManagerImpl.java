@@ -307,7 +307,7 @@ public class AgentManagerImpl implements AgentManager {
         }
         log.info("[CONFIG][GET] 成功获取策略配置: strategyId={}, name={}, topology={}, workersCount={}",
                 config.getStrategyId(), config.getName(), config.getFlowTopologyType(),
-                config.getWorkers() != null ? config.getWorkers().size() : 0);
+                config.getWorkerCodes() != null ? config.getWorkerCodes().size() : 0);
         return config;
     }
 
@@ -328,7 +328,7 @@ public class AgentManagerImpl implements AgentManager {
                                          String message, Map<String, String> bizData, Map<String, Object> properties,
                                          String userId, String traceId) {
         RecommendRequestVO recommendReq = RecommendRequestVO.builder()
-                .code(strategyConfig != null ? strategyConfig.getStrategyId() : "default")
+                .code(strategyConfig != null ? strategyConfig.getStrategyId() : null)
                 .flowId(flowId)
                 .sessionId(sessionId)
                 .traceId(traceId)

@@ -33,8 +33,6 @@ def get_default_configs() -> Dict[str, Any]:
         "tools": [],
         "models": [],
         "dict": [],
-        "prompts": [],
-        "promptGroups": [],
     }
 
 
@@ -103,10 +101,26 @@ class ConfigStore:
 
         updated = False
         for idx, existing in enumerate(items):
-            if existing.get(key_field) == key_val:
+            match = False
+            if key_val is not None and existing.get(key_field) == key_val:
+                match = True
+            elif category == "models":
+                item_code = item.get("code")
+                item_name = item.get("name")
+                if item_code and (existing.get("code") == item_code or existing.get("name") == item_code):
+                    match = True
+                elif item_name and (existing.get("name") == item_name or existing.get("code") == item_name):
+                    match = True
+            elif category == "strategies":
+                item_sid = item.get("strategyId")
+                if item_sid and existing.get("strategyId") == item_sid:
+                    match = True
+
+            if match:
                 items[idx] = item
                 updated = True
                 break
+
         if not updated:
             items.append(item)
 
@@ -117,7 +131,17 @@ class ConfigStore:
         if category not in self.data:
             return False
         before_len = len(self.data[category])
-        self.data[category] = [x for x in self.data[category] if x.get(key_field) != key_val]
+
+        def is_match(existing):
+            if existing.get(key_field) == key_val:
+                return True
+            if category == "models" and (existing.get("code") == key_val or existing.get("name") == key_val):
+                return True
+            if category == "strategies" and existing.get("strategyId") == key_val:
+                return True
+            return False
+
+        self.data[category] = [x for x in self.data[category] if not is_match(x)]
         if len(self.data[category]) != before_len:
             self.save()
             return True

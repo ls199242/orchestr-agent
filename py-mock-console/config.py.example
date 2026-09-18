@@ -26,72 +26,52 @@ OVERWRITE_DATA_WITH_CONFIG = False
 
 
 # ==============================================================================
-# 2. 7 大仓储默认配置数据 (供 Java OrchestrAgent 远程拉取与页面 Mock)
+# 2. 5 大核心仓储默认配置数据 (供 Java OrchestrAgent 远程拉取与页面 Mock)
 # ==============================================================================
 
 DEFAULT_CONFIGS = {
     # 2.1 策略流程配置 (StrategyConfigDO)
     "strategies": [
         {
-            "strategyId": "biz_travel",
-            "code": "biz_travel",
-            "name": "商务差旅推荐与合规策略",
-            "description": "面向差旅场景的端到端智能体协同流程，包含航班检索、差标核验与结果汇编",
-            "prompt": "精准为用户规划差旅并严格核验企业标准",
-            "maxStep": 10,
+            "strategyId": "flight_arrival_cross_sell",
+            "code": "flight_arrival_cross_sell",
+            "name": "航班落地交叉营销推荐策略",
+            "description": "航班落地时刻，结合实时天气、时段、用户偏好画像与落地服务，精准推荐接机专车、酒店或景点门票",
+            "prompt": """# 策略总目标
+针对当前刚落地的航班【${flightNo}】上的用户【${userId}】，结合到达地【${arrivalCity}（${arrivalAirport}）】的实时天气与时段，以及该用户的消费偏好画像，从到达地周边可用服务中精准匹配并生成 1~2 项个性化增值服务推荐方案。
+
+# 执行协同 SOP 规范（请 Planner 严格按照此顺序规划步骤）
+1. 【获取环境与用户画像】：
+   - 并行或先后调用 `query_weather_tool`（获取落地实时天气与昼夜信息）与 `query_user_profile_tool`（获取用户消费偏好类型：价格敏感型 vs 体验品质型）。
+2. 【检索落地供给服务】：
+   - 调用 `query_arrival_services_tool` 查询当前落地机场周边的可售服务（接送机专车、周边优质酒店、热门景点门票）。
+3. 【专精业务决策与排序推荐】：
+   - 调度 `arrival_recommend_worker`（落地服务推荐专家），综合上述客观环境、用户偏好与候选服务，执行推荐矩阵决策与文案生成。
+4. 【生成交付报文】：
+   - 由 Reporter 严格按照 Output Schema 生成结构化推荐卡片。""",
+            "maxStep": 12,
             "flowTopologyType": "REACT",
             "stream": True,
-            "workers": [
-                {
-                    "name": "search_worker",
-                    "description": "航班检索专精工作节点",
-                    "prompt": "负责根据出发地与目的地检索实时航班与余票",
-                    "model": "gpt-4o",
-                    "temperature": 0.2,
-                    "maxTokens": 2048,
-                    "nodeWaitTime": 15000,
-                },
-                {
-                    "name": "policy_worker",
-                    "description": "企业差旅合规核验节点",
-                    "prompt": "负责核验差旅预算超标、免费行李额与退改签政策",
-                    "model": "gpt-4o",
-                    "temperature": 0.1,
-                    "maxTokens": 2048,
-                    "nodeWaitTime": 15000,
-                },
+            "toolCodes": [
+                "query_weather_tool",
+                "query_user_profile_tool",
+                "query_arrival_services_tool",
             ],
-            "properties": {"department": "sales", "budget_limit": 3000},
-        },
-        {
-            "strategyId": "default_react_strategy",
-            "code": "react_default_strategy",
-            "name": "标准 ReAct 协同策略",
-            "description": "系统默认的通用自主规划、指挥调度、质检验收自愈闭环流程",
-            "prompt": "通用任务协同编排",
-            "maxStep": 15,
-            "flowTopologyType": "REACT",
-            "stream": False,
-            "workers": [
-                {
-                    "name": "search_worker",
-                    "description": "信息检索节点",
-                    "prompt": "检索相关任务素材",
-                    "model": "gpt-4o",
-                }
+            "workerCodes": [
+                "arrival_recommend_worker",
             ],
             "properties": {},
         },
         {
             "strategyId": "multi_chat_strategy",
             "code": "multi_chat_strategy",
-            "name": "多轮会话意图分流策略",
+            "name": "多轮会话服务咨询策略",
             "description": "支持 RouterAgent 意图识别，轻量问答直接回复，复杂任务流转 ReAct",
-            "prompt": "多轮会话智能路由",
+            "prompt": "航班落地后的多轮智能管家服务与咨询路由",
             "maxStep": 8,
             "flowTopologyType": "MULTIPLE_CHAT",
             "stream": True,
-            "workers": [],
+            "workerCodes": [],
             "properties": {},
         },
     ],
@@ -103,11 +83,12 @@ DEFAULT_CONFIGS = {
             "code": "router_agent",
             "description": "意图识别与前置路由决策智能体",
             "agentType": "SYSTEM",
-            "model": "gpt-4o",
+            "model": "Deepseek",
             "temperature": 0.1,
             "maxTokens": 1024,
             "nodeWaitTime": 10000,
-            "promptTemplates": {},
+            "systemPrompt": "# 角色定义\n你是智能问答与意图路由专家 RouterAgent。\n请分析用户的问题：\n- 若属于日常问答、咨询闲聊或单轮知识查询，请在 reply 字段直接回答，并将 handoffToPlanner 置为 false。\n- 若属于复杂业务任务（如差旅预订、多工具协同、数据核验等），请将 handoffToPlanner 置为 true，由后续 Planner 与协同流处理。\n\n【输出格式要求】：严格输出 JSON：\n{\n  \"handoffToPlanner\": false,\n  \"reply\": \"直接答复内容\"\n}",
+            "userPrompt": "用户诉求: ${strategy_target}",
             "extraProperties": {},
         },
         {
@@ -115,11 +96,12 @@ DEFAULT_CONFIGS = {
             "code": "planner_agent",
             "description": "任务分解与执行路径全局规划智能体",
             "agentType": "SYSTEM",
-            "model": "gpt-4o",
+            "model": "Deepseek",
             "temperature": 0.2,
             "maxTokens": 2048,
             "nodeWaitTime": 15000,
-            "promptTemplates": {},
+            "systemPrompt": "# 角色定义\n你是一位出色的规划大师 PlannerAgent。请根据用户的战略目标进行任务拆解与执行步骤规划，输出格式严格为 JSON。\n【候选外部工具与专精节点】：\n${agent_list}\n\n【输出格式要求】：严格输出符合以下结构的 JSON，不要添加多余解释：\n{\n  \"steps\": [\n    {\"step\": 1, \"agent\": \"节点名称\", \"description\": \"执行该步骤的具体指令说明\"}\n  ]\n}",
+            "userPrompt": "【战略目标】：${strategy_target}",
             "extraProperties": {},
         },
         {
@@ -127,11 +109,12 @@ DEFAULT_CONFIGS = {
             "code": "conductor_agent",
             "description": "执行流水线调度中枢与自愈驱动智能体",
             "agentType": "SYSTEM",
-            "model": "gpt-4o",
+            "model": "Deepseek",
             "temperature": 0.2,
             "maxTokens": 2048,
             "nodeWaitTime": 20000,
-            "promptTemplates": {},
+            "systemPrompt": "# 角色定义\n你是协同执行中枢 ConductorAgent。请根据全局规划步骤与各专精节点的执行反馈，精准做出下一步调度决策：调度哪一个智能体（Worker 或 Tool）执行任务，或是所有任务完成（FINISH）。\n战略目标：${strategy_target}\n\n【输出格式要求】：严格输出 JSON：\n{\n  \"next\": \"目标节点名称或FINISH\",\n  \"request\": {\n    \"query\": \"给目标节点的具体工单入参内容\"\n  }\n}",
+            "userPrompt": "请依据计划调度下一步。若全部步骤已完成，请输出 FINISH。",
             "extraProperties": {},
         },
         {
@@ -139,11 +122,12 @@ DEFAULT_CONFIGS = {
             "code": "evaluator_agent",
             "description": "多维度质量评估与自愈缺陷诊断智能体",
             "agentType": "SYSTEM",
-            "model": "gpt-4o",
+            "model": "Deepseek",
             "temperature": 0.1,
             "maxTokens": 1500,
             "nodeWaitTime": 15000,
-            "promptTemplates": {},
+            "systemPrompt": "# 角色定义\n你是严谨的质检验收专家 EvaluatorAgent。请对整个协同流各阶段的产出成果进行全方位质量评估与合规审计。\n战略目标：${strategy_target}\n\n【输出格式要求】：严格输出以下 JSON：\n{\n  \"pass\": true,\n  \"score\": 90,\n  \"critique\": \"验收意见或缺陷分析\",\n  \"suggestedRemedy\": \"自愈整改建议\"\n}",
+            "userPrompt": "【各节点产出汇报汇总】：\n${allAgentOutputs}",
             "extraProperties": {},
         },
         {
@@ -151,35 +135,27 @@ DEFAULT_CONFIGS = {
             "code": "reporter_agent",
             "description": "执行产出聚合与终版汇报渲染智能体",
             "agentType": "SYSTEM",
-            "model": "gpt-4o",
+            "model": "Deepseek",
             "temperature": 0.3,
             "maxTokens": 4096,
             "nodeWaitTime": 20000,
-            "promptTemplates": {},
+            "systemPrompt": "# 角色定义\n你是最终成果汇编与交付专家 ReporterAgent。请将各智能体节点的协同交付成果，汇编为一份结构清晰、条理分明、用词友善专业的最终回复呈现给用户。\n<#if outputJsonSchema??>\n【输出结构规范】：\n必须严格输出符合以下 JSON Schema 的纯 JSON 内容，严禁包含 ```json 代码块或任何多余文字：\n${outputJsonSchema}\n</#if>",
+            "userPrompt": "【用户原始诉求】：${strategy_target}\n【执行流水线产物汇编】：\n${flowExecutionSummary}",
             "extraProperties": {},
         },
         {
-            "name": "search_worker",
-            "code": "search_worker",
-            "description": "实时数据与航班检索专精工作节点",
+            "name": "arrival_recommend_worker",
+            "code": "arrival_recommend_worker",
+            "description": "落地场景化交叉营销决策专家，负责结合天气、画像与服务列表，执行推荐矩阵裁决并生成个性化推荐文案",
             "agentType": "WORKER",
-            "model": "gpt-4o",
+            "model": "Deepseek",
             "temperature": 0.2,
             "maxTokens": 2048,
-            "nodeWaitTime": 15000,
-            "promptTemplates": {},
-            "extraProperties": {},
-        },
-        {
-            "name": "policy_worker",
-            "code": "policy_worker",
-            "description": "企业差旅合规核验专精工作节点",
-            "agentType": "WORKER",
-            "model": "gpt-4o",
-            "temperature": 0.1,
-            "maxTokens": 2048,
-            "nodeWaitTime": 15000,
-            "promptTemplates": {},
+            "nodeWaitTime": 20000,
+            "systemPrompt": "# 专精业务智能体: ${worker_name}\n【岗位职责与执行规范】：\n负责结合天气、画像与服务列表，执行推荐矩阵裁决并生成个性化推荐文案。\n<#if rag_result?? && rag_result?length gt 0>\n【伴生知识库检索参考结果】：\n${rag_result}\n</#if>\n请严格基于上述职责与参考信息，保质保量完成当前工单任务。",
+            "userPrompt": "【总体战略目标】：${strategy_target}\n【当前调度工单入参】：${agent_request}",
+            "datasets": [],
+            "tools": [],
             "extraProperties": {},
         },
     ],
@@ -187,58 +163,125 @@ DEFAULT_CONFIGS = {
     # 2.3 工具配置 (ToolConfigDO)
     "tools": [
         {
-            "name": "flight_search",
-            "code": "flight_search",
-            "title": "实时航班班次检索工具",
-            "description": "根据出发城市、目的地城市及乘机日期，精准查询民航实时航班和机票价格",
-            "endpoint": "http://127.0.0.1:8000/mock/tools/flights",
+            "name": "query_weather_tool",
+            "code": "query_weather_tool",
+            "title": "到达地实时天气时段查询工具",
+            "description": "根据机场三字码和到达城市，查询当前落地时刻的实时天气状况（晴、雨、雪等）、温度以及当前是否属于夜间时段",
+            "endpoint": "http://127.0.0.1:8000/mock/tools/weather",
             "requestJsonSchema": json.dumps(
                 {
                     "type": "object",
                     "properties": {
-                        "origin": {"type": "string", "description": "出发地城市"},
-                        "destination": {"type": "string", "description": "目的地城市"},
-                        "departureDate": {"type": "string", "description": "出行日期 YYYY-MM-DD"},
+                        "city": {"type": "string", "description": "落地城市，例如：上海"},
+                        "airportCode": {"type": "string", "description": "落地机场代码，例如：SHA"},
                     },
-                    "required": ["origin", "destination", "departureDate"],
+                    "required": ["city", "airportCode"],
                 },
                 ensure_ascii=False,
             ),
             "responseJsonSchema": json.dumps(
                 {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "flightNo": {"type": "string"},
-                            "price": {"type": "number"},
-                            "depTime": {"type": "string"},
-                            "arrTime": {"type": "string"},
+                    "type": "object",
+                    "properties": {
+                        "weather": {"type": "string", "enum": ["RAINY", "SUNNY", "CLOUDY", "SNOW"]},
+                        "temperature": {"type": "number", "description": "摄氏度"},
+                        "isNight": {"type": "boolean", "description": "是否夜间时段（20:00-06:00）"},
+                        "description": {"type": "string", "description": "天气概述说明"},
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            "parameters": {},
+        },
+        {
+            "name": "query_user_profile_tool",
+            "code": "query_user_profile_tool",
+            "title": "旅客消费偏好画像查询工具",
+            "description": "根据用户 ID 查询旅客的历史消费能力、价格敏感度以及客群偏好标签（价格优先型 PRICE_FIRST 或 体验优先型 EXPERIENCE_FIRST）",
+            "endpoint": "http://127.0.0.1:8000/mock/tools/user-profile",
+            "requestJsonSchema": json.dumps(
+                {
+                    "type": "object",
+                    "properties": {
+                        "userId": {"type": "string", "description": "旅客会员ID"},
+                    },
+                    "required": ["userId"],
+                },
+                ensure_ascii=False,
+            ),
+            "responseJsonSchema": json.dumps(
+                {
+                    "type": "object",
+                    "properties": {
+                        "preferenceType": {"type": "string", "enum": ["PRICE_FIRST", "EXPERIENCE_FIRST"], "description": "价格优先型或体验优先型"},
+                        "historicalSpendingLevel": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH"]},
+                        "frequentHotelStar": {"type": "integer", "description": "常住酒店星级"},
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            "parameters": {},
+        },
+        {
+            "name": "query_arrival_services_tool",
+            "code": "query_arrival_services_tool",
+            "title": "落地目的地周边供给服务检索工具",
+            "description": "查询落地机场附近的现货服务，包括接送机接机专车、周边高评分酒店、热门景点门票信息",
+            "endpoint": "http://127.0.0.1:8000/mock/tools/arrival-services",
+            "requestJsonSchema": json.dumps(
+                {
+                    "type": "object",
+                    "properties": {
+                        "airportCode": {"type": "string", "description": "落地机场三字码"},
+                    },
+                    "required": ["airportCode"],
+                },
+                ensure_ascii=False,
+            ),
+            "responseJsonSchema": json.dumps(
+                {
+                    "type": "object",
+                    "properties": {
+                        "pickupServices": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "serviceId": {"type": "string"},
+                                    "carType": {"type": "string"},
+                                    "title": {"type": "string"},
+                                    "price": {"type": "number"},
+                                    "features": {"type": "string"},
+                                },
+                            },
+                        },
+                        "hotels": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "hotelId": {"type": "string"},
+                                    "name": {"type": "string"},
+                                    "star": {"type": "integer"},
+                                    "distanceKm": {"type": "number"},
+                                    "price": {"type": "number"},
+                                },
+                            },
+                        },
+                        "attractions": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "ticketId": {"type": "string"},
+                                    "name": {"type": "string"},
+                                    "price": {"type": "number"},
+                                    "tag": {"type": "string"},
+                                },
+                            },
                         },
                     },
                 },
-                ensure_ascii=False,
-            ),
-            "parameters": {"provider": "MockGDS"},
-        },
-        {
-            "name": "calculator",
-            "code": "calc_tool",
-            "title": "科学计算与汇率换算工具",
-            "description": "用于计算复杂数学公式或换算报销币种",
-            "endpoint": "http://127.0.0.1:8000/mock/tools/calc",
-            "requestJsonSchema": json.dumps(
-                {
-                    "type": "object",
-                    "properties": {
-                        "expression": {"type": "string", "description": "计算表达式如 1500 * 0.15"},
-                    },
-                    "required": ["expression"],
-                },
-                ensure_ascii=False,
-            ),
-            "responseJsonSchema": json.dumps(
-                {"type": "object", "properties": {"result": {"type": "number"}}},
                 ensure_ascii=False,
             ),
             "parameters": {},
@@ -248,24 +291,15 @@ DEFAULT_CONFIGS = {
     # 2.4 大模型接入配置 (ModelConfigDO)
     "models": [
         {
-            "code": "gpt-4o",
-            "name": "OpenAI GPT-4o 旗舰模型",
-            "contextMaxTokens": 128000,
-            "endpoint": "https://api.openai.com/v1/chat/completions",
-            "apiKey": "sk-your-openai-api-key",
-            "temperature": 0.7,
-            "supportImage": True,
-            "tags": ["chat", "vision", "function_calling"],
-        },
-        {
-            "code": "deepseek-chat",
-            "name": "DeepSeek-V3",
+            "code": "Deepseek",
+            "name": "Deepseek",
+            "modelName": "deepseek-flash",
             "contextMaxTokens": 64000,
-            "endpoint": "https://api.deepseek.com/v1/chat/completions",
-            "apiKey": "sk-your-deepseek-api-key",
-            "temperature": 0.6,
+            "endpoint": "https://api.deepseek.com",
+            "apiKey": "sk-a4077ed8bd294ebf86bb8e6a75658f81",
+            "temperature": 0.7,
             "supportImage": False,
-            "tags": ["chat", "reasoning", "coding"],
+            "tags": ["chat", "reasoning"],
         },
     ],
 
@@ -328,7 +362,7 @@ DEFAULT_CONFIGS = {
         },
         {
             "key": "default_llm_model",
-            "value": "gpt-4o",
+            "value": "Deepseek",
             "description": "系统各智能体未指定模型时的全局默认大模型名称",
         },
         {
@@ -340,75 +374,6 @@ DEFAULT_CONFIGS = {
             "key": "default_worker_agent_temp",
             "value": "0.3",
             "description": "业务 Worker 智能体默认采样温度（未在策略或配置中指定时的保底值）",
-        },
-    ],
-
-    # 2.6 提示词模板 (PromptConfigDO)
-    "prompts": [
-        {
-            "name": "PLANNER_SYSTEM",
-            "code": "planner_system",
-            "domain": "SYSTEM",
-            "prompt": "你是一位出色的规划大师。请根据用户需求将目标分解为具体的执行计划：${strategy_target}",
-            "description": "Planner 默认规划系统提示词",
-        },
-        {
-            "name": "CONDUCTOR_SYSTEM",
-            "code": "conductor_system",
-            "domain": "SYSTEM",
-            "prompt": "你是协同执行中枢 Conductor。请根据当前规划步骤与各节点反馈执行下一步行动。",
-            "description": "Conductor 默认调度系统提示词",
-        },
-        {
-            "name": "EVALUATOR_SYSTEM",
-            "code": "evaluator_system",
-            "domain": "SYSTEM",
-            "prompt": "你是严谨的质检验收专家。请对当前产物进行验收打分，若存在缺陷请明确提出改进要求。",
-            "description": "Evaluator 质检系统提示词",
-        },
-        {
-            "name": "REPORTER_SYSTEM",
-            "code": "reporter_system",
-            "domain": "SYSTEM",
-            "prompt": "你是成果汇报交付专家。请将各专精节点的执行成果汇总并清晰友善地展示给用户。",
-            "description": "Reporter 汇报系统提示词",
-        },
-        {
-            "name": "ROUTER_SYSTEM",
-            "code": "router_system",
-            "domain": "SYSTEM",
-            "prompt": "你是智能问答意图分流器。若用户问题属于日常闲聊请直接回答；若属于复杂多步骤任务请交由 Planner 处理。",
-            "description": "Router 前置意图分流提示词",
-        },
-    ],
-
-    # 2.7 提示词分组 (PromptGroupConfigDO)
-    "promptGroups": [
-        {
-            "code": "pg_react_default",
-            "name": "ReAct 流程默认提示词组",
-            "strategyCode": "react_default_strategy",
-            "flowType": "REACT",
-            "version": "v1.0.0",
-            "promptBindings": {
-                "PLANNER": "planner_system",
-                "CONDUCTOR": "conductor_system",
-                "EVALUATOR": "evaluator_system",
-                "REPORTER": "reporter_system",
-            },
-        },
-        {
-            "code": "pg_biz_travel",
-            "name": "商务差旅专属提示词组",
-            "strategyCode": "biz_travel",
-            "flowType": "REACT",
-            "version": "v1.0.0",
-            "promptBindings": {
-                "PLANNER": "planner_system",
-                "CONDUCTOR": "conductor_system",
-                "EVALUATOR": "evaluator_system",
-                "REPORTER": "reporter_system",
-            },
         },
     ],
 }

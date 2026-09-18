@@ -6,14 +6,13 @@ import com.shane.orchestragent.biz.model.agent.LlmConfig;
 import com.shane.orchestragent.biz.model.flow.FlowAgentMessage;
 import com.shane.orchestragent.biz.service.LlmService;
 import com.shane.orchestragent.common.enums.AgentTypeEnum;
+import com.shane.orchestragent.common.exception.BizErrorFactory;
 import com.shane.orchestragent.common.exception.BizException;
 import com.shane.orchestragent.common.utils.JsonUtils;
 import com.shane.orchestragent.integration.llm.model.AssistantChatMessageDTO;
 import com.shane.orchestragent.integration.llm.model.ChatMessageDTO;
 import com.shane.orchestragent.integration.llm.model.SystemChatMessageDTO;
 import com.shane.orchestragent.integration.llm.model.UserChatMessageDTO;
-import com.shane.orchestragent.prompt.PromptPropertyConstant;
-import com.shane.orchestragent.prompt.model.PromptTypeEnum;
 import com.shane.orchestragent.prompt.service.PromptService;
 import org.apache.commons.lang3.StringUtils;
 
@@ -23,7 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 步进调度指挥智能体 (基于多轮对话拓扑精准驱动状态机与自愈响应)
+ * 步进调度指挥智能体 (严格基于配置中心渲染，精准驱动状态机与自愈响应)
  *
  * @author Shane
  */
@@ -36,6 +35,7 @@ public class ConductorAgent extends BaseLlmAgent<StrategyContext> {
     @Override
     protected SystemChatMessageDTO buildSystemPrompt(StrategyContext context) throws BizException {
         Map<String, Object> properties = new HashMap<>(context.getProperties());
+        properties.put("strategy_target", context.getStrategyTarget());
 
         if (context.getPlanResult() != null) {
             properties.put("plan_steps", JsonUtils.toJsonString(context.getPlanResult().getSteps()));
@@ -49,13 +49,9 @@ public class ConductorAgent extends BaseLlmAgent<StrategyContext> {
         String feedback = context.getEvaluationFeedback();
         properties.put("evaluator_feedback", StringUtils.isNotEmpty(feedback) ? feedback : "无 (前序执行正常)");
 
-        String template = getLlmConfig().getPromptTemplates() != null ?
-                getLlmConfig().getPromptTemplates().get(PromptTypeEnum.CONDUCTOR_SYSTEM_PROMPT) : null;
-        if (StringUtils.isEmpty(template)) {
-            template = promptService.loadClasspathTemplate("conductor");
-        }
-        if (StringUtils.isEmpty(template)) {
-            template = "# ConductorAgent\n负责根据当前进度调度下一个 Worker 或输出 FINISH。输出 JSON: {\"next\": \"...\", \"request\": {}}";
+        String template = llmConfig != null ? llmConfig.getSystemPrompt() : null;
+        if (StringUtils.isBlank(template)) {
+            throw BizErrorFactory.getInstance().agentSystemPromptMissing("CONDUCTOR");
         }
         String prompt = promptService.renderPrompt(template, properties);
         return new SystemChatMessageDTO(prompt);
@@ -71,23 +67,19 @@ public class ConductorAgent extends BaseLlmAgent<StrategyContext> {
             }
             switch (chatMessage.getAgentType()) {
                 case PLANNER -> {
-                    String planPrompt = renderConductorPlannerUserPrompt(chatMessage.getOutput(), context.getProperties());
-                    chatMessages.add(new UserChatMessageDTO(planPrompt));
+                    chatMessages.add(new UserChatMessageDTO("【任务规划步骤】: " + chatMessage.getOutput()));
                 }
                 case TOOL -> {
-                    String toolPrompt = renderConductorToolUserPrompt(chatMessage.getAgentName(), chatMessage.getOutput(), context.getProperties());
-                    chatMessages.add(new UserChatMessageDTO(toolPrompt));
+                    chatMessages.add(new UserChatMessageDTO("【工具 " + chatMessage.getAgentName() + " 调用结果】: " + chatMessage.getOutput()));
                 }
                 case CONDUCTOR -> {
                     chatMessages.add(new AssistantChatMessageDTO(chatMessage.getOutput()));
                 }
                 case WORKER -> {
-                    String workerPrompt = renderConductorWorkerUserPrompt(chatMessage.getAgentName(), chatMessage.getOutput(), context.getProperties());
-                    chatMessages.add(new UserChatMessageDTO(workerPrompt));
+                    chatMessages.add(new UserChatMessageDTO("【工作节点 " + chatMessage.getAgentName() + " 执行结果】: " + chatMessage.getOutput()));
                 }
                 case EVALUATOR -> {
-                    String evalPrompt = renderConductorEvaluatorUserPrompt(chatMessage.getOutput(), context.getProperties());
-                    chatMessages.add(new UserChatMessageDTO(evalPrompt));
+                    chatMessages.add(new UserChatMessageDTO("【整改要求】: " + chatMessage.getOutput()));
                 }
                 default -> {
                     if (StringUtils.isNotEmpty(chatMessage.getOutput())) {
@@ -107,61 +99,13 @@ public class ConductorAgent extends BaseLlmAgent<StrategyContext> {
         }
 
         if (chatMessages.isEmpty()) {
-            chatMessages.add(new UserChatMessageDTO("请依据计划调度下一步。若全部步骤已完成，请输出 FINISH。"));
+            String defaultPrompt = llmConfig != null ? llmConfig.getUserPrompt() : null;
+            if (StringUtils.isBlank(defaultPrompt)) {
+                throw BizErrorFactory.getInstance().agentUserPromptMissing("CONDUCTOR");
+            }
+            chatMessages.add(new UserChatMessageDTO(defaultPrompt));
         }
 
         return chatMessages;
-    }
-
-    public String renderConductorPlannerUserPrompt(String planResult, Map<String, Object> properties) throws BizException {
-        Map<String, Object> dataModel = new HashMap<>();
-        dataModel.put(PromptPropertyConstant.PLANNER.KEY_PLAN_RESULT, planResult);
-        if (properties != null) {
-            dataModel.putAll(properties);
-        }
-        String template = getPromptTemplate(PromptTypeEnum.CONDUCTOR_PLANNER_USER_PROMPT, "conductor_planner_user");
-        return promptService.renderPrompt(template, dataModel);
-    }
-
-    public String renderConductorToolUserPrompt(String toolName, String toolResponse, Map<String, Object> properties) throws BizException {
-        Map<String, Object> dataModel = new HashMap<>();
-        dataModel.put(PromptPropertyConstant.TOOL.KEY_NAME, toolName);
-        dataModel.put(PromptPropertyConstant.TOOL.KEY_RESPONSE, toolResponse);
-        if (properties != null) {
-            dataModel.putAll(properties);
-        }
-        String template = getPromptTemplate(PromptTypeEnum.CONDUCTOR_TOOL_USER_PROMPT, "conductor_tool_user");
-        return promptService.renderPrompt(template, dataModel);
-    }
-
-    public String renderConductorWorkerUserPrompt(String workerName, String workerResponse, Map<String, Object> properties) throws BizException {
-        Map<String, Object> dataModel = new HashMap<>();
-        dataModel.put(PromptPropertyConstant.WORKER.KEY_NAME, workerName);
-        dataModel.put(PromptPropertyConstant.WORKER.KEY_RESPONSE, workerResponse);
-        if (properties != null) {
-            dataModel.putAll(properties);
-        }
-        String template = getPromptTemplate(PromptTypeEnum.CONDUCTOR_WORKER_USER_PROMPT, "conductor_worker_user");
-        return promptService.renderPrompt(template, dataModel);
-    }
-
-    public String renderConductorEvaluatorUserPrompt(String critique, Map<String, Object> properties) throws BizException {
-        Map<String, Object> dataModel = new HashMap<>();
-        dataModel.put(PromptPropertyConstant.EVALUATOR.KEY_CRITIQUE, critique);
-        dataModel.put(PromptPropertyConstant.EVALUATOR.KEY_SUGGESTED_REMEDY, "");
-        if (properties != null) {
-            dataModel.putAll(properties);
-        }
-        String template = getPromptTemplate(PromptTypeEnum.CONDUCTOR_EVALUATOR_USER_PROMPT, "conductor_evaluator_user");
-        return promptService.renderPrompt(template, dataModel);
-    }
-
-    private String getPromptTemplate(PromptTypeEnum type, String fallbackClasspath) {
-        String template = getLlmConfig().getPromptTemplates() != null ?
-                getLlmConfig().getPromptTemplates().get(type) : null;
-        if (StringUtils.isEmpty(template)) {
-            template = promptService.loadClasspathTemplate(fallbackClasspath);
-        }
-        return StringUtils.isNotEmpty(template) ? template : "";
     }
 }

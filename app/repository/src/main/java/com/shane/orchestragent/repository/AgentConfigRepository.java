@@ -25,6 +25,16 @@ public interface AgentConfigRepository extends Repository<AgentConfigDO> {
     AgentConfigDO getByName(String name);
 
     /**
+     * 根据智能体业务代码获取其配置
+     *
+     * @param code 智能体编码（如 arrival_recommend_worker）
+     * @return 智能体配置实体
+     */
+    default AgentConfigDO getByCode(String code) {
+        return getByName(code);
+    }
+
+    /**
      * 根据智能体唯一名称获取配置（规范别名）
      *
      * @param agentName 智能体名称

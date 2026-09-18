@@ -7,7 +7,7 @@ import com.shane.orchestragent.common.exception.BizException;
 import com.shane.orchestragent.integration.llm.model.ChatMessageDTO;
 import com.shane.orchestragent.integration.llm.model.UserChatMessageDTO;
 import com.shane.orchestragent.prompt.service.PromptService;
-import com.shane.orchestragent.repository.model.StrategyWorkerDO;
+import com.shane.orchestragent.repository.model.AgentConfigDO;
 
 import java.util.Collections;
 import java.util.List;
@@ -20,8 +20,8 @@ import java.util.Map;
  */
 public class WorkerVLAgent extends WorkerAgent {
 
-    public WorkerVLAgent(StrategyWorkerDO workerConfig, LlmConfig llmConfig, LlmService llmService, PromptService promptService) {
-        super(workerConfig, llmConfig, llmService, promptService);
+    public WorkerVLAgent(AgentConfigDO agentConfig, LlmConfig llmConfig, LlmService llmService, PromptService promptService) {
+        super(agentConfig, llmConfig, llmService, promptService);
     }
 
     @Override

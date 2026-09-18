@@ -1,16 +1,14 @@
 package com.shane.orchestragent.biz.model.agent;
 
-import com.shane.orchestragent.prompt.model.PromptTypeEnum;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
-import java.util.Map;
 
 /**
- * 大模型调用配置
+ * 大模型调用配置 (纯粹执行与模型参数，彻底解耦提示词模板)
  *
  * @author Shane
  */
@@ -20,12 +18,19 @@ import java.util.Map;
 @AllArgsConstructor
 public class LlmConfig implements Serializable {
 
+    private static final long serialVersionUID = 1L;
+
     private String model;
     private Double temperature;
     private Integer maxTokens;
     private Double presencePenalty;
     private Long nodeWaitTime;
-    private Map<PromptTypeEnum, String> promptTemplates;
+
+    /** 智能体固定系统提示词模板 */
+    private String systemPrompt;
+
+    /** 智能体用户提示词模板（带占位符） */
+    private String userPrompt;
 
     public Long getNodeWaitTime() {
         return nodeWaitTime != null && nodeWaitTime > 0 ? nodeWaitTime : 30000L;

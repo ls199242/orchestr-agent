@@ -9,22 +9,37 @@ import com.shane.orchestragent.common.constant.PropertyKeys;
 import com.shane.orchestragent.common.enums.AgentTypeEnum;
 import com.shane.orchestragent.common.exception.BizException;
 import com.shane.orchestragent.prompt.model.AgentPO;
+import org.apache.commons.collections4.CollectionUtils;
 
 import java.util.Collections;
+import java.util.List;
 
 /**
- * 知识库检索增强智能体 (在 Worker 运行前注入 RAG 检索上下文)
+ * 知识库检索增强智能体 (作为专精 Worker 的伴生节点，隐式伴随触发并注入知识)
  *
  * @author Shane
  */
 public class RagAgent extends BaseAgent<StrategyContext> {
 
-    public RagAgent() {
-        super("rag_agent", "知识库检索增强智能体", AgentTypeEnum.RAG);
+    private final List<String> datasets;
+
+    public RagAgent(String name, List<String> datasets) {
+        this(name, "知识库检索增强智能体: " + name, datasets);
     }
 
-    public RagAgent(String name, String description) {
+    public RagAgent(String name, String description, List<String> datasets) {
         super(name, description, AgentTypeEnum.RAG);
+        this.datasets = datasets != null ? datasets : Collections.emptyList();
+    }
+
+    /**
+     * 生成伴生 RAG 节点名称
+     *
+     * @param workerName 绑定的 Worker 名称
+     * @return 伴生名称，如 "TicketWorker#RAG"
+     */
+    public static String buildRagName(String workerName) {
+        return workerName + "#RAG";
     }
 
     @Override
@@ -50,7 +65,12 @@ public class RagAgent extends BaseAgent<StrategyContext> {
     }
 
     protected String retrieveKnowledge(String query, StrategyContext context) {
-        return "【知识库匹配内容】针对用户诉求 [" + query + "] 的业务规范与参考信息已成功检索。";
+        String dsInfo = CollectionUtils.isNotEmpty(datasets) ? String.join(",", datasets) : "无指定知识库";
+        return "【知识库匹配内容(库: " + dsInfo + ")】针对用户诉求 [" + query + "] 的业务规范与参考信息已成功检索。";
+    }
+
+    public List<String> getDatasets() {
+        return datasets;
     }
 
     @SuppressWarnings("unchecked")

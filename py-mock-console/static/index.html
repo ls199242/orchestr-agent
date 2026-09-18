@@ -416,53 +416,59 @@
           <button @click="configCategory = 'dict'" :class="configCategory === 'dict' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
             📖 运行字典 (dict)
           </button>
-          <button @click="configCategory = 'prompts'" :class="configCategory === 'prompts' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
-            📝 提示词模板 (prompts)
-          </button>
-          <button @click="configCategory = 'promptGroups'" :class="configCategory === 'promptGroups' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
-            📦 提示词组 (promptGroups)
-          </button>
         </div>
 
         <div class="flex items-center space-x-2">
-          <button @click="openAddModal()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition flex items-center space-x-1.5 shadow">
+          <!-- 搜索过滤 -->
+          <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2 text-xs text-slate-400"></i>
+            <input x-model="configSearchKeyword" type="text" placeholder="搜索配置项..."
+                   class="w-36 pl-7 pr-2.5 py-1 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+          </div>
+          <button @click="openFormModal(null)" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition flex items-center space-x-1.5 shadow">
             <i class="fa-solid fa-plus text-xs"></i>
-            <span>新增配置项</span>
+            <span>以表单新增</span>
           </button>
           <button @click="resetConfigs()" class="px-3 py-1.5 bg-rose-600/80 hover:bg-rose-600 text-white rounded-lg text-xs font-medium transition flex items-center space-x-1.5">
             <i class="fa-solid fa-trash-arrow-up text-xs"></i>
-            <span>重置为默认预设</span>
+            <span>重置预设</span>
           </button>
         </div>
       </div>
 
       <!-- 提示横幅 -->
-      <div class="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-3.5 flex items-center justify-between text-xs text-indigo-300">
+      <div class="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs text-indigo-300">
         <div class="flex items-center space-x-2">
           <i class="fa-solid fa-circle-info text-indigo-400 text-sm"></i>
-          <span>此处的 Mock 配置通过 REST API（如 <code>/api/strategy</code>、<code>/api/agent</code>）对外暴露，供 Java OrchestrAgent 轮询拉取同步。</span>
+          <span>当前分类：<strong class="text-indigo-200" x-text="getCategoryTitle(configCategory)"></strong>。支持以字段表单形式配置与修改，保存后在列表以标准 <strong>JSON 格式</strong> 呈现查看。</span>
         </div>
         <button @click="triggerJavaReload()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition flex items-center space-x-1 shadow">
           <i class="fa-solid fa-arrows-rotate text-xs"></i>
-          <span>修改后通知 Java 立即重载</span>
+          <span>通知 Java 立即重载生效</span>
         </button>
       </div>
 
-      <!-- 配置项列表卡片 -->
+      <!-- 配置项列表卡片 (以标准 JSON 格式展示查看) -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <template x-for="(item, index) in (configs[configCategory] || [])" :key="index">
-          <div class="bg-slate-800/70 border border-slate-700 hover:border-slate-600 rounded-xl p-4 space-y-3 transition shadow-lg">
-            <div class="flex items-start justify-between">
+        <template x-for="(item, index) in filteredConfigItems" :key="index">
+          <div class="bg-slate-800/80 border border-slate-700 hover:border-slate-600 rounded-xl p-4 space-y-3 transition shadow-lg flex flex-col">
+            <div class="flex items-start justify-between pb-2 border-b border-slate-700/60">
               <div>
                 <h4 class="font-bold text-slate-100 text-sm flex items-center space-x-2">
-                  <span x-text="item.name || item.code || item.strategyId || item.key"></span>
-                  <span class="text-[10px] bg-slate-700 text-indigo-300 px-2 py-0.5 rounded-full" x-text="item.flowTopologyType || item.agentType || item.code || ''"></span>
+                  <span x-text="item.strategyId || item.code || item.name || item.key"></span>
+                  <span class="text-[10px] bg-slate-700 text-indigo-300 px-2 py-0.5 rounded-full font-mono"
+                        x-text="item.flowTopologyType || item.agentType || item.domain || ''"></span>
                 </h4>
-                <p class="text-xs text-slate-400 mt-0.5" x-text="item.description || item.prompt || item.value || '无描述'"></p>
+                <p class="text-xs text-slate-400 mt-0.5 line-clamp-1"
+                   x-text="item.name ? (item.name + (item.description ? ' - ' + item.description : '')) : (item.description || item.title || item.value || '无描述')"></p>
               </div>
-              <div class="flex space-x-1">
-                <button @click="openEditModal(item)" class="p-1.5 text-slate-400 hover:text-indigo-300 hover:bg-slate-700 rounded-lg transition" title="编辑 JSON">
-                  <i class="fa-regular fa-pen-to-square"></i>
+              <div class="flex items-center space-x-1.5">
+                <button @click="openFormModal(item)" class="px-2.5 py-1 text-xs bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 rounded-lg transition flex items-center space-x-1" title="按字段表单编辑">
+                  <i class="fa-regular fa-pen-to-square text-xs"></i>
+                  <span>表单配置</span>
+                </button>
+                <button @click="copyJson(item)" class="p-1.5 text-slate-400 hover:text-emerald-300 hover:bg-slate-700 rounded-lg transition" title="复制 JSON">
+                  <i class="fa-regular fa-copy"></i>
                 </button>
                 <button @click="deleteItem(item)" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-700 rounded-lg transition" title="删除">
                   <i class="fa-regular fa-trash-can"></i>
@@ -470,8 +476,25 @@
               </div>
             </div>
 
-            <!-- 格式化摘要预览 -->
-            <pre class="bg-slate-950 p-2.5 rounded-lg text-[11px] text-slate-300 overflow-x-auto max-h-36 font-mono" x-text="JSON.stringify(item, null, 2)"></pre>
+            <!-- 标准 JSON 结构展示查看 -->
+            <div class="flex-1 flex flex-col space-y-1">
+              <div class="flex items-center justify-between text-[11px] text-slate-400 px-0.5">
+                <span class="flex items-center space-x-1">
+                  <i class="fa-solid fa-code text-[10px] text-emerald-400"></i>
+                  <span>标准 JSON 配置快照</span>
+                </span>
+                <span class="text-[10px] text-slate-500 font-mono">JSON View</span>
+              </div>
+              <pre class="bg-slate-950 p-3 rounded-xl text-xs font-mono text-emerald-400 overflow-x-auto max-h-56 border border-slate-800/80 select-all"
+                   x-text="JSON.stringify(item, null, 2)"></pre>
+            </div>
+          </div>
+        </template>
+        <template x-if="filteredConfigItems.length === 0">
+          <div class="col-span-2 py-16 text-center text-slate-500 space-y-2">
+            <i class="fa-solid fa-inbox text-3xl"></i>
+            <p class="text-sm">暂无该分类配置项或没有匹配搜索词的内容</p>
+            <button @click="openFormModal(null)" class="text-xs text-indigo-400 hover:text-indigo-300">点击此处以表单新增一项</button>
           </div>
         </template>
       </div>
@@ -624,26 +647,447 @@
     </div>
   </main>
 
-  <!-- 编辑 / 新增 JSON 模态窗 -->
-  <div x-show="editModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-    <div @click.away="editModalOpen = false" class="bg-slate-800 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl">
-      <div class="flex items-center justify-between">
-        <h3 class="font-bold text-base text-slate-100" x-text="isEditMode ? '编辑配置项' : '新增配置项'"></h3>
-        <button @click="editModalOpen = false" class="text-slate-400 hover:text-white">
-          <i class="fa-solid fa-xmark text-lg"></i>
-        </button>
+  <!-- 编辑 / 新增结构化表单模态窗 (支持按照字段以 Form 形式配置，保存后按 JSON 展示) -->
+  <div x-show="editModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div @click.away="editModalOpen = false" class="bg-slate-900 border border-slate-700 rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+      
+      <!-- 模态窗顶部栏 -->
+      <div class="bg-slate-800/90 border-b border-slate-700 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="w-8 h-8 rounded-lg bg-indigo-600/30 text-indigo-400 flex items-center justify-center text-sm border border-indigo-500/30">
+            <i class="fa-solid fa-sliders"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-base text-slate-100 flex items-center space-x-2">
+              <span x-text="isEditMode ? '字段配置' : '新增配置'"></span>
+              <span class="text-xs font-normal text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-full" x-text="getCategoryTitle(configCategory)"></span>
+            </h3>
+            <p class="text-xs text-slate-400">按照字段以 Form 形式精细配置，保存后以标准 JSON 结构持久化并查看</p>
+          </div>
+        </div>
+
+        <!-- 模式切换按钮 -->
+        <div class="flex items-center space-x-3">
+          <div class="bg-slate-950 p-1 rounded-xl border border-slate-800 flex text-xs">
+            <button @click="formModalTab = 'form'" :class="formModalTab === 'form' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1 rounded-lg transition font-medium">
+              📝 表单模式
+            </button>
+            <button @click="formModalTab = 'preview'" :class="formModalTab === 'preview' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1 rounded-lg transition font-medium">
+              👁️ 实时 JSON 预览
+            </button>
+            <button @click="formModalTab = 'raw'; syncRawJsonFromForm();" :class="formModalTab === 'raw' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1 rounded-lg transition font-medium">
+              💻 原始 JSON
+            </button>
+          </div>
+          <button @click="editModalOpen = false" class="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
       </div>
 
-      <div>
-        <label class="block text-xs font-medium text-slate-400 mb-1">配置项内容 (JSON 格式)</label>
-        <textarea x-model="editingJsonStr" rows="14" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs font-mono text-emerald-400 focus:outline-none focus:border-indigo-500"></textarea>
+      <!-- 模态窗表单内容区 (Scrollable) -->
+      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+
+        <!-- ==================== 1. 表单模式 ==================== -->
+        <div x-show="formModalTab === 'form'" class="space-y-5">
+          
+          <!-- 1.1 Strategy 表单 -->
+          <template x-if="configCategory === 'strategies'">
+            <div class="space-y-4 text-xs">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">策略唯一标识 (strategyId) <span class="text-rose-400">*</span></label>
+                  <input type="text" x-model="formData.strategyId" :disabled="isEditMode"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 disabled:opacity-60">
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">策略名称 (name) <span class="text-rose-400">*</span></label>
+                  <input type="text" x-model="formData.name"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">策略业务编码 (code)</label>
+                  <input type="text" x-model="formData.code"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">流程拓扑类型 (flowTopologyType) <span class="text-rose-400">*</span></label>
+                  <select x-model="formData.flowTopologyType"
+                          class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                    <option value="REACT">REACT (自主规划调度质检自愈流)</option>
+                    <option value="MULTIPLE_CHAT">MULTIPLE_CHAT (意图路由多轮会话)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">最大循环步数 (maxStep)</label>
+                  <input type="number" x-model.number="formData.maxStep" min="1" max="50"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+                <div class="flex items-center pt-5 space-x-2">
+                  <input type="checkbox" id="stratStream" x-model="formData.stream" class="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500">
+                  <label for="stratStream" class="font-medium text-slate-300 cursor-pointer">启用流式输出 (stream)</label>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">业务场景描述 (description)</label>
+                  <textarea x-model="formData.description" rows="2"
+                            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">策略全局目标与业务原则 (prompt)</label>
+                  <textarea x-model="formData.prompt" rows="2"
+                            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+                </div>
+              </div>
+
+              <!-- 挂载的外部工具 (toolCodes) -->
+              <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                <div class="flex items-center justify-between">
+                  <label class="font-medium text-slate-300 flex items-center space-x-1.5">
+                    <i class="fa-solid fa-wrench text-indigo-400"></i>
+                    <span>策略挂载工具编码 (toolCodes)</span>
+                  </label>
+                  <span class="text-[11px] text-slate-500">输入工具名称，多个用英文逗号分隔</span>
+                </div>
+                <input type="text" x-model="formData.toolCodesInput" placeholder="例如: flight_search, calculator"
+                       class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-indigo-500">
+                <div class="flex flex-wrap gap-1.5 pt-1">
+                  <span class="text-[11px] text-slate-400">当前可选工具：</span>
+                  <template x-for="t in (configs.tools || [])" :key="t.name">
+                    <button type="button" @click="toggleToolCode(t.name)"
+                            class="px-2 py-0.5 rounded text-[11px] border transition"
+                            :class="formData.toolCodesInput.includes(t.name) ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
+                            x-text="t.name + (t.title ? ' (' + t.title + ')' : '')"></button>
+                  </template>
+                </div>
+              </div>
+
+              <!-- 挂载的专精业务智能体 (workerCodes) -->
+              <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                <div class="flex items-center justify-between">
+                  <label class="font-medium text-slate-300 flex items-center space-x-1.5">
+                    <i class="fa-solid fa-users-gear text-indigo-400"></i>
+                    <span>策略挂载专精智能体编码 (workerCodes)</span>
+                  </label>
+                  <span class="text-[11px] text-slate-500">输入 Worker 编码，多个用英文逗号分隔</span>
+                </div>
+                <input type="text" x-model="formData.workerCodesInput" placeholder="例如: arrival_recommend_worker"
+                       class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-indigo-500">
+                <div class="flex flex-wrap gap-1.5 pt-1">
+                  <span class="text-[11px] text-slate-400">当前可选 Worker：</span>
+                  <template x-for="w in (configs.agents || []).filter(a => a.agentType === 'WORKER')" :key="w.code || w.name">
+                    <button type="button" @click="toggleWorkerCode(w.code || w.name)"
+                            class="px-2 py-0.5 rounded text-[11px] border transition"
+                            :class="(formData.workerCodesInput || '').includes(w.code || w.name) ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
+                            x-text="(w.code || w.name) + (w.description ? ' (' + w.description + ')' : '')"></button>
+                  </template>
+                </div>
+              </div>
+
+              <!-- 扩展属性 properties -->
+              <div>
+                <label class="block font-medium text-slate-300 mb-1">自定义业务属性 (properties JSON)</label>
+                <textarea x-model="formData.propertiesJson" rows="2"
+                          class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono text-xs focus:outline-none focus:border-indigo-500"></textarea>
+              </div>
+            </div>
+          </template>
+
+          <!-- 1.2 Agent 表单 (智能体核心资产：超参与提示词内置) -->
+          <template x-if="configCategory === 'agents'">
+            <div class="space-y-4 text-xs">
+              <div class="bg-indigo-950/50 border border-indigo-500/30 rounded-xl p-3 text-indigo-300">
+                <i class="fa-solid fa-robot mr-1.5 text-indigo-400"></i>
+                <strong>智能体提示词内置架构：</strong>系统提示词（固定描述与规范）与用户提示词（支持占位符动态渲染）已直接收敛至 AgentConfig 资产中。
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">智能体名称 (name) <span class="text-rose-400">*</span></label>
+                  <input type="text" x-model="formData.name" :disabled="isEditMode" placeholder="例如: PLANNER, search_worker"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 disabled:opacity-60">
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">智能体编码 (code)</label>
+                  <input type="text" x-model="formData.code" placeholder="例如: planner_agent"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">智能体角色类型 (agentType) <span class="text-rose-400">*</span></label>
+                  <select x-model="formData.agentType"
+                          class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                    <option value="SYSTEM">SYSTEM (系统核心节点: PLANNER, CONDUCTOR 等)</option>
+                    <option value="WORKER">WORKER (专精业务工作节点)</option>
+                    <option value="COMMON">COMMON (通用辅助节点)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">模型配置 (model)</label>
+                  <select x-model="formData.model"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                    <template x-for="m in (configs.models || [])" :key="m.code || m.name">
+                      <option :value="m.name || m.code" x-text="getModelOptionLabel(m)"></option>
+                    </template>
+                    <option :value="formData.model" x-show="formData.model && !(configs.models || []).some(m => (m.name || m.code) === formData.model)" x-text="formData.model"></option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">采样温度 (temperature)</label>
+                  <input type="number" x-model.number="formData.temperature" step="0.05" min="0" max="1"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">最大 Token (maxTokens)</label>
+                  <input type="number" x-model.number="formData.maxTokens"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">超时等待毫秒 (nodeWaitTime)</label>
+                  <input type="number" x-model.number="formData.nodeWaitTime"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+              </div>
+
+              <div>
+                <label class="block font-medium text-slate-300 mb-1">功能职责描述 (description)</label>
+                <textarea x-model="formData.description" rows="2"
+                          class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+              </div>
+
+              <div>
+                <label class="block font-medium text-slate-300 mb-1">系统提示词 (systemPrompt - 固定描述/角色人设/输出结构规范)</label>
+                <textarea x-model="formData.systemPrompt" rows="6" placeholder="例如: # 角色定义\n你是一个规划专家..."
+                          class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono text-xs focus:outline-none focus:border-indigo-500"></textarea>
+              </div>
+
+              <div>
+                <label class="block font-medium text-slate-300 mb-1">用户提示词模板 (userPrompt - 支持 ${strategy_target} 等占位符动态插值)</label>
+                <textarea x-model="formData.userPrompt" rows="3" placeholder="例如: 战略目标: ${strategy_target}"
+                          class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono text-xs focus:outline-none focus:border-indigo-500"></textarea>
+              </div>
+
+              <div>
+                <label class="block font-medium text-slate-300 mb-1">扩展参数 (extraProperties JSON)</label>
+                <textarea x-model="formData.extraPropertiesJson" rows="2"
+                          class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"></textarea>
+              </div>
+            </div>
+          </template>
+
+          <!-- 1.3 Tool 表单 -->
+          <template x-if="configCategory === 'tools'">
+            <div class="space-y-4 text-xs">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">工具名称 (name) <span class="text-rose-400">*</span></label>
+                  <input type="text" x-model="formData.name" :disabled="isEditMode" placeholder="flight_search"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 disabled:opacity-60">
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">工具编码 (code)</label>
+                  <input type="text" x-model="formData.code" placeholder="flight_search"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">工具中文标题 (title)</label>
+                  <input type="text" x-model="formData.title" placeholder="民航实时航班检索工具"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="md:col-span-3">
+                  <label class="block font-medium text-slate-300 mb-1">工具调用端点 (endpoint) <span class="text-rose-400">*</span></label>
+                  <input type="text" x-model="formData.endpoint" placeholder="http://127.0.0.1:8000/mock/tools/flights"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">HTTP 方法</label>
+                  <select x-model="formData.method" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200">
+                    <option value="POST">POST</option>
+                    <option value="GET">GET</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label class="block font-medium text-slate-300 mb-1">工具功能详细描述 (description)</label>
+                <textarea x-model="formData.description" rows="2" placeholder="根据出发地、目的地与出行日期查询实时航班信息"
+                          class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">入参 JSON Schema (requestJsonSchema)</label>
+                  <textarea x-model="formData.requestJsonSchema" rows="4"
+                            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"></textarea>
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">出参 JSON Schema (responseJsonSchema)</label>
+                  <textarea x-model="formData.responseJsonSchema" rows="4"
+                            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"></textarea>
+                </div>
+              </div>
+
+              <div>
+                <label class="block font-medium text-slate-300 mb-1">默认固定入参 (parameters JSON)</label>
+                <textarea x-model="formData.parametersJson" rows="2"
+                          class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"></textarea>
+              </div>
+            </div>
+          </template>
+
+
+          <!-- 1.5 Model 表单 -->
+          <template x-if="configCategory === 'models'">
+            <div class="space-y-4 text-xs">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">配置标识 (code) <span class="text-rose-400">*</span></label>
+                  <input type="text" x-model="formData.code" placeholder="Deepseek"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">配置名称 (name) <span class="text-rose-400">*</span></label>
+                  <input type="text" x-model="formData.name" placeholder="Deepseek"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">模型名称 (modelName)</label>
+                  <input type="text" x-model="formData.modelName" placeholder="deepseek-flash"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">API Endpoint (URL)</label>
+                  <input type="text" x-model="formData.endpoint" placeholder="https://api.deepseek.com"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">API Key</label>
+                  <input type="text" x-model="formData.apiKey" placeholder="sk-a4077ed8bd294ebf86bb8e6a75658f81"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">上下文窗口 (contextMaxTokens)</label>
+                  <input type="number" x-model.number="formData.contextMaxTokens"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">默认采样温度 (temperature)</label>
+                  <input type="number" x-model.number="formData.temperature" step="0.05"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+                <div class="flex items-center pt-5 space-x-2">
+                  <input type="checkbox" id="modelSupportImage" x-model="formData.supportImage" class="rounded border-slate-700 text-indigo-600">
+                  <label for="modelSupportImage" class="font-medium text-slate-300 cursor-pointer">支持多模态 (supportImage)</label>
+                </div>
+              </div>
+
+              <div>
+                <label class="block font-medium text-slate-300 mb-1">能力标签 (tags, 逗号分隔)</label>
+                <input type="text" x-model="formData.tagsInput" placeholder="chat, vision, function_calling"
+                       class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+              </div>
+            </div>
+          </template>
+
+          <!-- 1.6 Dict 表单 -->
+          <template x-if="configCategory === 'dict'">
+            <div class="space-y-4 text-xs">
+              <div>
+                <label class="block font-medium text-slate-300 mb-1">字典键名 (key) <span class="text-rose-400">*</span></label>
+                <input type="text" x-model="formData.key" :disabled="isEditMode" placeholder="flow_max_step"
+                       class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 disabled:opacity-60">
+              </div>
+              <div>
+                <label class="block font-medium text-slate-300 mb-1">字典取值 (value) <span class="text-rose-400">*</span></label>
+                <template x-if="formData.key === 'default_llm_model'">
+                  <select x-model="formData.value"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                    <template x-for="m in (configs.models || [])" :key="m.code || m.name">
+                      <option :value="m.name || m.code" x-text="getModelOptionLabel(m)"></option>
+                    </template>
+                    <option :value="formData.value" x-show="formData.value && !(configs.models || []).some(m => (m.name || m.code) === formData.value)" x-text="formData.value"></option>
+                  </select>
+                </template>
+                <template x-if="formData.key !== 'default_llm_model'">
+                  <input type="text" x-model="formData.value" placeholder="20"
+                         class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                </template>
+              </div>
+              <div>
+                <label class="block font-medium text-slate-300 mb-1">字典说明 (description)</label>
+                <textarea x-model="formData.description" rows="3"
+                          class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+              </div>
+            </div>
+          </template>
+
+
+        </div>
+
+        <!-- ==================== 2. 实时 JSON 预览模式 ==================== -->
+        <div x-show="formModalTab === 'preview'" class="space-y-2">
+          <div class="flex items-center justify-between text-xs text-slate-400">
+            <span>根据当前表单字段实时生成的标准 JSON 结构：</span>
+            <button type="button" @click="copyJson(buildItemFromForm())" class="text-indigo-400 hover:text-indigo-300 flex items-center space-x-1">
+              <i class="fa-regular fa-copy"></i>
+              <span>复制该 JSON</span>
+            </button>
+          </div>
+          <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400 overflow-x-auto max-h-[500px] border border-slate-800"
+               x-text="JSON.stringify(buildItemFromForm(), null, 2)"></pre>
+        </div>
+
+        <!-- ==================== 3. 原始 JSON 编辑模式 ==================== -->
+        <div x-show="formModalTab === 'raw'" class="space-y-2">
+          <div class="flex items-center justify-between text-xs text-slate-400">
+            <span>高级原始 JSON 编辑（点击保存时将直接解析此文本）：</span>
+          </div>
+          <textarea x-model="editingJsonStr" rows="18"
+                    class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs font-mono text-emerald-400 focus:outline-none focus:border-indigo-500"></textarea>
+        </div>
+
       </div>
 
-      <div class="flex justify-end space-x-3 pt-2">
-        <button @click="editModalOpen = false" class="px-4 py-2 bg-slate-700 text-slate-300 rounded-xl text-sm font-medium hover:bg-slate-600 transition">取消</button>
-        <button @click="saveEditingItem()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-medium transition shadow-lg shadow-indigo-600/30">保存并生效</button>
+      <!-- 模态窗底部操作按钮 -->
+      <div class="bg-slate-800/90 border-t border-slate-700 px-6 py-4 flex items-center justify-between">
+        <div class="text-xs text-slate-400">
+          <span>保存后自动在列表卡片以</span>
+          <strong class="text-emerald-400">JSON 格式</strong>
+          <span>展示</span>
+        </div>
+        <div class="flex space-x-3">
+          <button @click="editModalOpen = false" class="px-4 py-2 bg-slate-700 text-slate-300 rounded-xl text-sm font-medium hover:bg-slate-600 transition">取消</button>
+          <button @click="saveEditingItem()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-medium transition shadow-lg shadow-indigo-600/30 flex items-center space-x-1.5">
+            <i class="fa-solid fa-check"></i>
+            <span>保存并生效</span>
+          </button>
+        </div>
       </div>
+
     </div>
+  </div>
+
+  <!-- 全局轻量 Toast 提示 -->
+  <div x-show="toastVisible" x-cloak
+       class="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center space-x-2 text-sm transition-all">
+    <i class="fa-solid fa-circle-check"></i>
+    <span x-text="toastMessage"></span>
   </div>
 
   <script>
@@ -686,38 +1130,55 @@
 
         // Controller 交互表单
         chatForm: {
-          strategyId: 'biz_travel',
-          message: '预订下周一从北京到上海的最优商务航班',
+          strategyId: 'flight_arrival_cross_sell',
+          message: '我的航班刚刚落地虹桥机场，当前正在下雨，请为我推荐适合的落地后服务',
           sessionId: 'session-' + Math.floor(Math.random() * 10000),
-          userId: 'user-001'
+          userId: 'U8801'
         },
         chatMessages: [],
         currentStreamChunk: '',
         isChatStreaming: false,
 
         testInvokeForm: {
-          strategyId: 'biz_travel',
-          message: '预订北京到上海的最优航班并给出建议',
+          strategyId: 'flight_arrival_cross_sell',
+          message: '航班MU5101刚在上海虹桥落地，请帮我规划推荐服务',
           sessionId: 'session-' + Math.floor(Math.random() * 10000),
-          userId: 'user-002',
-          bizDataJson: '{"department": "sales"}'
+          userId: 'U8801',
+          bizDataJson: '{"flightNo": "MU5101", "userId": "U8801", "arrivalCity": "上海", "arrivalAirport": "SHA"}'
         },
         testInvokeResult: null,
         isTestInvoking: false,
 
         invokeForm: {
-          strategyId: 'biz_travel',
-          message: '执行差旅全流程规划与机票检索',
+          strategyId: 'flight_arrival_cross_sell',
+          message: '航班MU5101落地推荐执行',
           sessionId: 'session-' + Math.floor(Math.random() * 10000),
-          userId: 'user-003'
+          userId: 'U8801'
         },
         invokeResult: null,
         isInvoking: false,
 
-        // 编辑模态框
+        // 配置搜索过滤与展示状态
+        configSearchKeyword: '',
+        toastMessage: '',
+        toastVisible: false,
+
+        get filteredConfigItems() {
+          let list = this.configs[this.configCategory] || [];
+          if (this.configSearchKeyword) {
+            const kw = this.configSearchKeyword.toLowerCase();
+            list = list.filter(item => JSON.stringify(item).toLowerCase().includes(kw));
+          }
+          return list;
+        },
+
+        // 编辑模态框与结构化表单状态
         editModalOpen: false,
         isEditMode: false,
+        formModalTab: 'form', // 'form' | 'preview' | 'raw'
         editingJsonStr: '',
+        formData: {},
+
 
         async init() {
           await this.loadConfigs();
@@ -903,39 +1364,263 @@
           }
         },
 
-        // 配置项操作
-        openAddModal() {
-          this.isEditMode = false;
-          this.editingJsonStr = JSON.stringify({ name: "new_item_" + Date.now() }, null, 2);
+        // ==========================================
+        // 配置项结构化表单与 JSON 交互操作
+        // ==========================================
+        getCategoryTitle(cat) {
+          const map = {
+            strategies: '编排策略 (Strategy)',
+            agents: '智能体超参 (Agent)',
+            tools: '外部工具 (Tool)',
+            models: '大模型接入 (Model)',
+            dict: '运行字典 (Dict)'
+          };
+          return map[cat] || cat;
+        },
+
+        getModelOptionLabel(m) {
+          if (!m) return '';
+          const name = m.name || m.code || '';
+          const actual = m.modelName || (m.code !== m.name ? m.code : '');
+          return actual && actual !== name ? `${name} (${actual})` : name;
+        },
+
+        getDefaultModelName() {
+          const models = (this.configs && this.configs.models) || [];
+          if (models.length > 0) {
+            return models[0].name || models[0].code || 'Deepseek';
+          }
+          return 'Deepseek';
+        },
+
+        showToast(msg) {
+          this.toastMessage = msg;
+          this.toastVisible = true;
+          setTimeout(() => {
+            this.toastVisible = false;
+          }, 2500);
+        },
+
+        copyJson(item) {
+          const text = typeof item === 'string' ? item : JSON.stringify(item, null, 2);
+          navigator.clipboard.writeText(text).then(() => {
+            this.showToast('已复制 JSON 到剪贴板');
+          }).catch(e => {
+            alert('复制失败: ' + e.message);
+          });
+        },
+
+        openFormModal(item) {
+          this.isEditMode = !!item;
+          const defaultModel = this.getDefaultModelName();
+          this.formModalTab = 'form';
+
+          // 重置表单基础数据
+          this.formData = {
+            // 通用基础
+            name: '',
+            code: '',
+            description: '',
+            // Strategy
+            strategyId: 'strategy_' + Math.floor(Math.random() * 1000),
+            flowTopologyType: 'REACT',
+            maxStep: 10,
+            stream: true,
+            prompt: '',
+            toolCodesInput: '',
+            workerCodesInput: '',
+            propertiesJson: '{}',
+            // Agent
+            agentType: 'SYSTEM',
+            model: defaultModel,
+            temperature: 0.2,
+            maxTokens: 2048,
+            nodeWaitTime: 15000,
+            extraPropertiesJson: '{}',
+            systemPrompt: '',
+            userPrompt: '',
+            // Tool
+            title: '',
+            endpoint: 'http://127.0.0.1:8000/mock/tools/',
+            method: 'POST',
+            requestJsonSchema: '{}',
+            responseJsonSchema: '{}',
+            parametersJson: '{}',
+            // Dict
+            key: '',
+            value: ''
+          };
+
+          if (item) {
+            // 回填数据
+            Object.assign(this.formData, JSON.parse(JSON.stringify(item)));
+            
+            // 针对各类型的特化字段做序列化回填
+            if (this.configCategory === 'strategies') {
+              this.formData.toolCodesInput = Array.isArray(item.toolCodes) ? item.toolCodes.join(', ') : '';
+              this.formData.workerCodesInput = Array.isArray(item.workerCodes)
+                ? item.workerCodes.join(', ')
+                : (Array.isArray(item.workers) ? item.workers.map(w => w.code || w.name).filter(Boolean).join(', ') : '');
+              this.formData.propertiesJson = item.properties ? JSON.stringify(item.properties, null, 2) : '{}';
+            } else if (this.configCategory === 'agents') {
+              this.formData.extraPropertiesJson = item.extraProperties ? JSON.stringify(item.extraProperties, null, 2) : '{}';
+              if (!this.formData.model) {
+                this.formData.model = defaultModel;
+              }
+            } else if (this.configCategory === 'tools') {
+              this.formData.parametersJson = item.parameters ? JSON.stringify(item.parameters, null, 2) : '{}';
+            } else if (this.configCategory === 'models') {
+              this.formData.tagsInput = Array.isArray(item.tags) ? item.tags.join(', ') : '';
+              this.formData.modelName = item.modelName || item.code || '';
+            }
+          } else {
+            // 新增时的默认填充
+            if (this.configCategory === 'strategies') {
+              this.formData.workerCodesInput = 'arrival_recommend_worker';
+            } else if (this.configCategory === 'agents') {
+              this.formData.model = defaultModel;
+            } else if (this.configCategory === 'models') {
+              this.formData.code = 'Deepseek';
+              this.formData.name = 'Deepseek';
+              this.formData.modelName = 'deepseek-flash';
+              this.formData.endpoint = 'https://api.deepseek.com';
+              this.formData.apiKey = 'sk-a4077ed8bd294ebf86bb8e6a75658f81';
+              this.formData.contextMaxTokens = 64000;
+              this.formData.temperature = 0.7;
+              this.formData.supportImage = false;
+              this.formData.tagsInput = 'chat, reasoning';
+            }
+          }
+
+          this.syncRawJsonFromForm();
           this.editModalOpen = true;
         },
 
-        openEditModal(item) {
-          this.isEditMode = true;
+        toggleToolCode(toolName) {
+          let list = this.formData.toolCodesInput.split(',').map(s => s.trim()).filter(Boolean);
+          if (list.includes(toolName)) {
+            list = list.filter(t => t !== toolName);
+          } else {
+            list.push(toolName);
+          }
+          this.formData.toolCodesInput = list.join(', ');
+        },
+
+        toggleWorkerCode(workerCode) {
+          let list = (this.formData.workerCodesInput || '').split(',').map(s => s.trim()).filter(Boolean);
+          if (list.includes(workerCode)) {
+            list = list.filter(w => w !== workerCode);
+          } else {
+            list.push(workerCode);
+          }
+          this.formData.workerCodesInput = list.join(', ');
+        },
+
+        syncRawJsonFromForm() {
+          const item = this.buildItemFromForm();
           this.editingJsonStr = JSON.stringify(item, null, 2);
-          this.editModalOpen = true;
+        },
+
+        buildItemFromForm() {
+          const f = this.formData;
+          if (this.configCategory === 'strategies') {
+            let properties = {};
+            try { properties = JSON.parse(f.propertiesJson || '{}'); } catch(e) {}
+            const toolCodes = (f.toolCodesInput || '').split(',').map(s => s.trim()).filter(Boolean);
+            const workerCodes = (f.workerCodesInput || '').split(',').map(s => s.trim()).filter(Boolean);
+            return {
+              strategyId: f.strategyId,
+              code: f.code || f.strategyId,
+              name: f.name,
+              description: f.description || '',
+              prompt: f.prompt || '',
+              maxStep: parseInt(f.maxStep) || 10,
+              flowTopologyType: f.flowTopologyType || 'REACT',
+              stream: !!f.stream,
+              toolCodes: toolCodes,
+              workerCodes: workerCodes,
+              properties: properties
+            };
+          } else if (this.configCategory === 'agents') {
+            let extraProperties = {};
+            try { extraProperties = JSON.parse(f.extraPropertiesJson || '{}'); } catch(e) {}
+            return {
+              name: f.name,
+              code: f.code || (f.name.toLowerCase() + '_agent'),
+              description: f.description || '',
+              agentType: f.agentType || 'SYSTEM',
+              model: f.model || this.getDefaultModelName(),
+              temperature: parseFloat(f.temperature) || 0.2,
+              maxTokens: parseInt(f.maxTokens) || 2048,
+              nodeWaitTime: parseInt(f.nodeWaitTime) || 15000,
+              systemPrompt: f.systemPrompt || '',
+              userPrompt: f.userPrompt || '',
+              extraProperties: extraProperties
+            };
+          } else if (this.configCategory === 'tools') {
+            let parameters = {};
+            try { parameters = JSON.parse(f.parametersJson || '{}'); } catch(e) {}
+            return {
+              name: f.name,
+              code: f.code || f.name,
+              title: f.title || '',
+              description: f.description || '',
+              endpoint: f.endpoint,
+              method: f.method || 'POST',
+              requestJsonSchema: f.requestJsonSchema || '{}',
+              responseJsonSchema: f.responseJsonSchema || '{}',
+              parameters: parameters
+            };
+          } else if (this.configCategory === 'models') {
+            const tags = (f.tagsInput || '').split(',').map(s => s.trim()).filter(Boolean);
+            return {
+              code: f.code || f.name,
+              name: f.name || f.code,
+              modelName: f.modelName || f.code,
+              endpoint: f.endpoint || '',
+              apiKey: f.apiKey || '',
+              contextMaxTokens: parseInt(f.contextMaxTokens) || 64000,
+              temperature: parseFloat(f.temperature) || 0.7,
+              supportImage: !!f.supportImage,
+              tags: tags
+            };
+          } else if (this.configCategory === 'dict') {
+            return {
+              key: f.key,
+              value: f.value,
+              description: f.description || ''
+            };
+          }
+          return f;
         },
 
         async saveEditingItem() {
+          let itemToSave = null;
           try {
-            const parsed = JSON.parse(this.editingJsonStr);
+            if (this.formModalTab === 'raw') {
+              itemToSave = JSON.parse(this.editingJsonStr);
+            } else {
+              itemToSave = this.buildItemFromForm();
+            }
+
             const res = await fetch('/admin/configs', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 category: this.configCategory,
-                item: parsed
+                item: itemToSave
               })
             });
             const data = await res.json();
             if (data.success) {
               await this.loadConfigs();
               this.editModalOpen = false;
+              this.showToast('配置项保存成功！已更新并以 JSON 视图展示');
             } else {
-              alert('保存失败');
+              alert('保存失败: ' + (data.message || '未知错误'));
             }
           } catch (e) {
-            alert('JSON 解析错误: ' + e.message);
+            alert('保存异常: ' + e.message);
           }
         },
 
@@ -945,12 +1630,10 @@
             agents: "name",
             tools: "name",
             models: "code",
-            dict: "key",
-            prompts: "name",
-            promptGroups: "code"
+            dict: "key"
           };
           const field = keyFieldMap[this.configCategory] || "name";
-          const val = item[field];
+          const val = item[field] || item.name || item.code || item.strategyId;
           if (!confirm('确定删除配置项 [' + val + '] 吗？')) return;
 
           try {
@@ -960,6 +1643,7 @@
             const data = await res.json();
             if (data.success) {
               await this.loadConfigs();
+              this.showToast('配置项 [' + val + '] 已成功删除');
             }
           } catch (e) {
             alert('删除异常: ' + e.message);

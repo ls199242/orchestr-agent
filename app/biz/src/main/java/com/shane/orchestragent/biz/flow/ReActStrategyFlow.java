@@ -4,6 +4,7 @@ import com.shane.orchestragent.biz.agent.Agent;
 import com.shane.orchestragent.biz.agent.flow.ConductorAgent;
 import com.shane.orchestragent.biz.agent.flow.EvaluatorAgent;
 import com.shane.orchestragent.biz.agent.flow.PlannerAgent;
+import com.shane.orchestragent.biz.agent.flow.RagAgent;
 import com.shane.orchestragent.biz.agent.flow.ReporterAgent;
 import com.shane.orchestragent.biz.context.StrategyContext;
 import com.shane.orchestragent.biz.model.agent.WorkerErrorAgentResult;
@@ -130,7 +131,7 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
     private ConductorResult conduct() throws BizException {
         ConductorResult conductorResult = (ConductorResult) executeStep(conductorAgent, ConductorResult.class);
         if (conductorResult == null || StringUtils.isBlank(conductorResult.getNext())) {
-            conductorResult = ConductorResult.builder().next("FINISH").build();
+            throw BizErrorFactory.getInstance().conductorDecisionEmpty();
         }
         getContext().setLastConductorResult(conductorResult);
         getContext().setNextAgentRequest(conductorResult.getRequest());
@@ -145,14 +146,25 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
             log.warn("[Flow: {}] Conductor 未指定下一个执行节点，跳过", getFlowId());
             return;
         }
-        Agent worker = getAgents().get(nextAgentName);
-        if (worker == null) {
+        Agent targetAgent = getAgents().get(nextAgentName);
+        if (targetAgent == null) {
             throw BizErrorFactory.getInstance().agentNotFound(nextAgentName);
         }
 
-        log.info("[Flow: {}][FLOW_WORKER_EXEC] 调度专精节点 [{}] 执行工单...", getFlowId(), nextAgentName);
-        String output = (String) executeStep(worker, String.class);
-        validWorkerResult(worker, output);
+        // 1. 伴生 RAG 隐式前置调度：若目标为 Worker 且存在对应伴生 RAG 节点，先触发知识检索并压入上下文
+        if (targetAgent.getType() == AgentTypeEnum.WORKER) {
+            String companionRagName = RagAgent.buildRagName(nextAgentName);
+            Agent companionRag = getAgents().get(companionRagName);
+            if (companionRag != null) {
+                log.info("[Flow: {}][FLOW_RAG_EXEC] 触发专精节点 [{}] 的伴生 RAG [{}] 知识检索...", getFlowId(), nextAgentName, companionRagName);
+                executeStep(companionRag, String.class);
+            }
+        }
+
+        // 2. 调度执行目标节点 (WorkerAgent 或 ToolAgent)
+        log.info("[Flow: {}][FLOW_AGENT_EXEC] 调度节点 [{}] (类型: {}) 执行工单...", getFlowId(), nextAgentName, targetAgent.getType());
+        String output = (String) executeStep(targetAgent, String.class);
+        validWorkerResult(targetAgent, output);
         getContext().setLastAgentResult(output);
     }
 

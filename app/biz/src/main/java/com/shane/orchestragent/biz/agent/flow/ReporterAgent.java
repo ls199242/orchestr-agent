@@ -7,12 +7,11 @@ import com.shane.orchestragent.biz.model.flow.EvaluatorResult;
 import com.shane.orchestragent.biz.model.flow.FlowAgentMessage;
 import com.shane.orchestragent.biz.service.LlmService;
 import com.shane.orchestragent.common.enums.AgentTypeEnum;
+import com.shane.orchestragent.common.exception.BizErrorFactory;
 import com.shane.orchestragent.common.exception.BizException;
-import com.shane.orchestragent.common.utils.JsonUtils;
 import com.shane.orchestragent.integration.llm.model.ChatMessageDTO;
 import com.shane.orchestragent.integration.llm.model.SystemChatMessageDTO;
 import com.shane.orchestragent.integration.llm.model.UserChatMessageDTO;
-import com.shane.orchestragent.prompt.model.PromptTypeEnum;
 import com.shane.orchestragent.prompt.service.PromptService;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -24,7 +23,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 成果汇编汇报智能体 (提纯格式化输出，支持融入战略评估器的质量审计与降级提示)
+ * 成果汇编汇报智能体 (严格基于配置中心渲染，提纯格式化输出并融合质检审计)
  *
  * @author Shane
  */
@@ -39,13 +38,9 @@ public class ReporterAgent extends BaseLlmAgent<StrategyContext> {
         Map<String, Object> properties = new HashMap<>(context.getProperties());
         properties.put("strategy_target", context.getStrategyTarget());
 
-        String template = getLlmConfig().getPromptTemplates() != null ?
-                getLlmConfig().getPromptTemplates().get(PromptTypeEnum.REPORTER_SYSTEM_PROMPT) : null;
-        if (StringUtils.isEmpty(template)) {
-            template = promptService.loadClasspathTemplate("reporter");
-        }
-        if (StringUtils.isEmpty(template)) {
-            template = "# ReporterAgent\n你负责将所有执行结果整合成条理分明、客观详实的最终汇报。";
+        String template = llmConfig != null ? llmConfig.getSystemPrompt() : null;
+        if (StringUtils.isBlank(template)) {
+            throw BizErrorFactory.getInstance().agentSystemPromptMissing("REPORTER");
         }
         String prompt = promptService.renderPrompt(template, properties);
         return new SystemChatMessageDTO(prompt);
@@ -77,6 +72,17 @@ public class ReporterAgent extends BaseLlmAgent<StrategyContext> {
             sb.append("请在回复中向用户进行诚实、客观的补充说明，提升系统透明度与可信度。");
         }
 
-        return Collections.singletonList(new UserChatMessageDTO(sb.toString()));
+        Map<String, Object> properties = new HashMap<>(context.getProperties());
+        properties.put("strategy_target", context.getStrategyTarget());
+        properties.put("strategyTarget", context.getStrategyTarget());
+        properties.put("flowExecutionSummary", sb.toString());
+
+        String userTemplate = llmConfig != null ? llmConfig.getUserPrompt() : null;
+        if (StringUtils.isBlank(userTemplate)) {
+            throw BizErrorFactory.getInstance().agentUserPromptMissing("REPORTER");
+        }
+
+        String userContent = promptService.renderPrompt(userTemplate, properties);
+        return Collections.singletonList(new UserChatMessageDTO(userContent));
     }
 }

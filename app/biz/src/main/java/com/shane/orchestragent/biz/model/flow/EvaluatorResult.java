@@ -33,13 +33,4 @@ public class EvaluatorResult implements Serializable {
 
     /** 细项检查列表 */
     private List<EvaluationCheckItem> checkItems;
-
-    public static EvaluatorResult defaultPass() {
-        return EvaluatorResult.builder()
-                .pass(true)
-                .score(100)
-                .critique("战略目标与业务约束已完整达成")
-                .suggestedRemedy("")
-                .build();
-    }
 }

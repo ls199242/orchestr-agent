@@ -16,7 +16,7 @@ import com.shane.orchestragent.biz.sse.SseEmitterUTF8;
 import com.shane.orchestragent.common.enums.FlowStateEnum;
 import com.shane.orchestragent.common.exception.BizException;
 import com.shane.orchestragent.common.model.BaseResult;
-import com.shane.orchestragent.integration.llm.impl.OpenAiCompatibleLlmClient;
+import com.shane.orchestragent.test.support.MockLlmClient;
 import com.shane.orchestragent.memory.context.impl.CaffeineMemoryContext;
 import com.shane.orchestragent.prompt.render.TemplateRender;
 import com.shane.orchestragent.prompt.service.PromptService;
@@ -24,12 +24,14 @@ import com.shane.orchestragent.prompt.service.impl.PromptServiceImpl;
 import com.shane.orchestragent.repository.StrategyConfigRepository;
 import com.shane.orchestragent.repository.impl.StrategyConfigRepositoryImpl;
 import com.shane.orchestragent.repository.model.StrategyConfigDO;
-import com.shane.orchestragent.repository.model.StrategyWorkerDO;
 import com.shane.orchestragent.web.controller.OrchestrAgentController;
 import com.shane.orchestragent.web.converter.AgentApiMapping;
 import com.shane.orchestragent.web.dto.AgentChatRequestDTO;
 import com.shane.orchestragent.web.dto.AgentInvokeRequestDTO;
 import com.shane.orchestragent.web.dto.AgentInvokeResponseDTO;
+import com.shane.orchestragent.repository.client.AgentConfigApiClient;
+import com.shane.orchestragent.repository.impl.AgentConfigRepositoryImpl;
+import com.shane.orchestragent.repository.model.AgentConfigDO;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -51,8 +53,61 @@ public class OrchestrAgentControllerTest {
 
     @BeforeEach
     public void setup() {
-        OpenAiCompatibleLlmClient llmClient = new OpenAiCompatibleLlmClient();
+        MockLlmClient llmClient = new MockLlmClient();
         LlmService llmService = new LlmServiceImpl(llmClient);
+
+        AgentConfigRepositoryImpl agentRepo = new AgentConfigRepositoryImpl();
+        List<AgentConfigDO> systemAgents = List.of(
+                AgentConfigDO.builder()
+                        .name("PLANNER")
+                        .model("Deepseek")
+                        .systemPrompt("# PlannerAgent\n请分析目标，输出规划步骤: {\"steps\": [{\"step\": 1, \"agent\": \"search_worker\", \"description\": \"查询\"}]}")
+                        .userPrompt("目标: ${strategy_target}")
+                        .build(),
+                AgentConfigDO.builder()
+                        .name("CONDUCTOR")
+                        .model("Deepseek")
+                        .systemPrompt("# ConductorAgent\n调度下一步。输出: {\"next\": \"FINISH\", \"request\": {}}")
+                        .userPrompt("默认调度指令")
+                        .build(),
+                AgentConfigDO.builder()
+                        .name("EVALUATOR")
+                        .model("Deepseek")
+                        .systemPrompt("# EvaluatorAgent\n验收输出: {\"pass\": true, \"score\": 100, \"critique\": \"\", \"suggestedRemedy\": \"\"}")
+                        .userPrompt("【目标】: ${strategy_target}\n【执行结果汇总】: ${allAgentOutputs}")
+                        .build(),
+                AgentConfigDO.builder()
+                        .name("REPORTER")
+                        .model("Deepseek")
+                        .systemPrompt("# ReporterAgent\n汇总结果")
+                        .userPrompt("请根据执行总结输出最终回复:\n${flowExecutionSummary}")
+                        .build(),
+                AgentConfigDO.builder()
+                        .name("ROUTER")
+                        .model("Deepseek")
+                        .systemPrompt("# RouterAgent\n分析意图: {\"handoffToPlanner\": true, \"reply\": \"\"}")
+                        .userPrompt("用户诉求: ${strategy_target}")
+                        .build(),
+                AgentConfigDO.builder()
+                        .name("CHAT_SUMMARY")
+                        .model("Deepseek")
+                        .systemPrompt("# ChatSummaryAgent\n摘要压缩")
+                        .build(),
+                AgentConfigDO.builder()
+                        .name("search_worker")
+                        .code("search_worker")
+                        .agentType("WORKER")
+                        .model("Deepseek")
+                        .systemPrompt("负责检索航班实时信息")
+                        .build()
+        );
+        org.springframework.test.util.ReflectionTestUtils.setField(agentRepo, "agentConfigApiClient", (AgentConfigApiClient) () -> systemAgents);
+        try {
+            agentRepo.afterPropertiesSet();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
         PromptService promptService = new PromptServiceImpl(new TemplateRender());
 
         flowService = new FlowServiceImpl();
@@ -60,17 +115,14 @@ public class OrchestrAgentControllerTest {
         FlowExecutionRecorderImpl recorder = new FlowExecutionRecorderImpl(flowService);
 
         StrategyFlowFactory flowFactory = new StrategyFlowFactory(llmService, promptService, flowService, recorder);
+        flowFactory.setAgentConfigRepository(agentRepo);
         StrategyConfigRepositoryImpl strategyRepo = new StrategyConfigRepositoryImpl();
         StrategyConfigDO configDO = StrategyConfigDO.builder()
                 .strategyId("biz_travel")
                 .name("商务差旅推荐策略")
                 .maxStep(10)
                 .flowTopologyType("REACT")
-                .workers(List.of(StrategyWorkerDO.builder()
-                        .name("search_worker")
-                        .description("航班检索专精工作节点")
-                        .prompt("负责检索航班实时信息")
-                        .build()))
+                .workerCodes(List.of("search_worker"))
                 .build();
         org.springframework.test.util.ReflectionTestUtils.setField(strategyRepo, "strategyConfigApiClient", (com.shane.orchestragent.repository.client.StrategyConfigApiClient) () -> List.of(configDO));
         try {

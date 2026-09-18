@@ -10,9 +10,12 @@ import com.shane.orchestragent.common.exception.BizException;
 import com.shane.orchestragent.common.utils.JsonUtils;
 import com.shane.orchestragent.prompt.model.AgentPO;
 import com.shane.orchestragent.repository.model.ToolConfigDO;
+import org.apache.commons.lang3.StringUtils;
+
+import java.util.Objects;
 
 /**
- * 工具调用智能体 (基于 ToolConfigDO 执行外部能力接入)
+ * 工具调用智能体 (基于 ToolConfigDO 执行外部能力接入与动作交互)
  *
  * @author Shane
  */
@@ -21,9 +24,12 @@ public class ToolAgent extends BaseAgent<AgentContext> {
     private final ToolConfigDO toolConfig;
 
     public ToolAgent(ToolConfigDO toolConfig) {
-        super(toolConfig != null && toolConfig.getName() != null ? toolConfig.getName() : "tool",
-                toolConfig != null && toolConfig.getDescription() != null ? toolConfig.getDescription() : "外部工具",
+        super(Objects.requireNonNull(toolConfig, "toolConfig 不能为空").getName(),
+                toolConfig.getDescription(),
                 AgentTypeEnum.TOOL);
+        if (StringUtils.isBlank(toolConfig.getName())) {
+            throw new IllegalArgumentException("toolConfig.name 不能为空");
+        }
         this.toolConfig = toolConfig;
     }
 
@@ -34,6 +40,9 @@ public class ToolAgent extends BaseAgent<AgentContext> {
         }
 
         Object request = context.getAgentRequest();
+        if (request == null && context instanceof StrategyContext strategyContext) {
+            request = strategyContext.getNextAgentRequest();
+        }
         String requestJson = request != null ? JsonUtils.toJsonString(request) : "{}";
 
         String output = callTool(requestJson, context);

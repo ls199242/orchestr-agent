@@ -12,7 +12,7 @@ import java.util.*;
 
 /**
  * 仓储配置查看与运维控制器
- * 提供 7 大仓储当前内存快照查看、运行健康状态巡检及手动热重载触发能力
+ * 提供 5 大核心仓储当前内存快照查看、运行健康状态巡检及手动热重载触发能力
  *
  * @author Shane
  */
@@ -26,24 +26,18 @@ public class RepositoryConfigController {
     private final ToolConfigRepository toolRepo;
     private final ModelConfigRepository modelRepo;
     private final DictRepository dictRepo;
-    private final PromptRepository promptRepo;
-    private final PromptGroupRepository promptGroupRepo;
 
     public RepositoryConfigController(
             StrategyConfigRepository strategyRepo,
             AgentConfigRepository agentRepo,
             ToolConfigRepository toolRepo,
             ModelConfigRepository modelRepo,
-            DictRepository dictRepo,
-            PromptRepository promptRepo,
-            PromptGroupRepository promptGroupRepo) {
+            DictRepository dictRepo) {
         this.strategyRepo = strategyRepo;
         this.agentRepo = agentRepo;
         this.toolRepo = toolRepo;
         this.modelRepo = modelRepo;
         this.dictRepo = dictRepo;
-        this.promptRepo = promptRepo;
-        this.promptGroupRepo = promptGroupRepo;
     }
 
     /**
@@ -57,8 +51,6 @@ public class RepositoryConfigController {
         list.add(buildRepoOverview(toolRepo));
         list.add(buildRepoOverview(modelRepo));
         list.add(buildRepoOverview(dictRepo));
-        list.add(buildRepoOverview(promptRepo));
-        list.add(buildRepoOverview(promptGroupRepo));
         return BaseResult.ok(list);
     }
 
@@ -73,15 +65,13 @@ public class RepositoryConfigController {
         all.put("tools", toolRepo.getAll());
         all.put("models", modelRepo.getAll());
         all.put("dict", dictRepo.getDictMap());
-        all.put("prompts", promptRepo.getAll());
-        all.put("promptGroups", promptGroupRepo.getAll());
         return BaseResult.ok(all);
     }
 
     /**
      * 3. 获取指定仓储的详情数据
      *
-     * @param repoName 仓储标识 (strategy, agent, tool, model, dict, prompt, prompt-group)
+     * @param repoName 仓储标识 (strategy, agent, tool, model, dict)
      */
     @GetMapping("/{repoName}")
     public BaseResult<Object> getRepoDetails(@PathVariable("repoName") String repoName) {
@@ -94,8 +84,6 @@ public class RepositoryConfigController {
                     "dictMap", dictRepo.getDictMap(),
                     "items", dictRepo.getAll()
             ));
-            case "prompt", "promptconfigrepository" -> BaseResult.ok(promptRepo.getAll());
-            case "prompt-group", "promptgroup", "promptgrouprepository" -> BaseResult.ok(promptGroupRepo.getAll());
             default -> BaseResult.fail("UNKNOWN_REPO", "未知的仓储名称: " + repoName);
         };
     }
@@ -103,7 +91,7 @@ public class RepositoryConfigController {
     /**
      * 4. 手动触发仓储刷新重载
      *
-     * @param repoName 可选，指定仓储名称；若为空则刷新全部 7 个仓储
+     * @param repoName 可选，指定仓储名称；若为空则刷新全部 5 个仓储
      */
     @PostMapping("/reload")
     public BaseResult<Map<String, Object>> triggerReload(@RequestParam(value = "repoName", required = false) String repoName) {
@@ -114,9 +102,7 @@ public class RepositoryConfigController {
             toolRepo.reload();
             modelRepo.reload();
             dictRepo.reload();
-            promptRepo.reload();
-            promptGroupRepo.reload();
-            resultMap.put("message", "全部 7 个仓储热重载完成");
+            resultMap.put("message", "全部 5 个核心仓储热重载完成");
         } else {
             switch (repoName.toLowerCase()) {
                 case "strategy" -> strategyRepo.reload();
@@ -124,8 +110,6 @@ public class RepositoryConfigController {
                 case "tool" -> toolRepo.reload();
                 case "model" -> modelRepo.reload();
                 case "dict" -> dictRepo.reload();
-                case "prompt" -> promptRepo.reload();
-                case "prompt-group", "promptgroup" -> promptGroupRepo.reload();
                 default -> {
                     return BaseResult.fail("UNKNOWN_REPO", "未知的仓储名称: " + repoName);
                 }

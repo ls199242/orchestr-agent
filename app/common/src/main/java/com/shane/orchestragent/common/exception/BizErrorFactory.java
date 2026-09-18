@@ -54,6 +54,30 @@ public class BizErrorFactory {
         return new BizException("AGENT_NOT_FOUND", "未能找到指定名称的智能体: " + name);
     }
 
+    public BizException agentSystemPromptMissing(String agentName) {
+        return new BizException("AGENT_CONFIG_ERROR", "智能体 [" + agentName + "] 未配置系统提示词 (systemPrompt)");
+    }
+
+    public BizException agentUserPromptMissing(String agentName) {
+        return new BizException("AGENT_CONFIG_ERROR", "智能体 [" + agentName + "] 未配置用户提示词模板 (userPrompt)");
+    }
+
+    public BizException toolNotFound(String toolCode) {
+        return new BizException("TOOL_NOT_FOUND", "未能找到指定工具配置: " + toolCode);
+    }
+
+    public BizException conductorDecisionEmpty() {
+        return new BizException("CONDUCTOR_DECISION_EMPTY", "指挥调度器决策异常: 未能指定下一步执行动作或节点");
+    }
+
+    public BizException routerDecisionEmpty() {
+        return new BizException("ROUTER_DECISION_EMPTY", "路由门禁决策异常: 未能获取有效决策结果");
+    }
+
+    public BizException routerReplyEmpty() {
+        return new BizException("ROUTER_REPLY_EMPTY", "路由门禁决策为直接答复，但答复内容为空");
+    }
+
     public BizException strategyNotFound(String strategyId) {
         return new BizException("STRATEGY_NOT_FOUND", "未能获取到指定策略配置: " + strategyId);
     }

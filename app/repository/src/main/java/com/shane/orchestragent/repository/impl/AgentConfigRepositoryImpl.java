@@ -31,12 +31,27 @@ public class AgentConfigRepositoryImpl extends AbstractConfigRepository<AgentCon
     /** 按智能体名称索引的字典快照 */
     private volatile Map<String, AgentConfigDO> dataMapByName = Collections.emptyMap();
 
+    /** 按智能体编码索引的字典快照 */
+    private volatile Map<String, AgentConfigDO> dataMapByCode = Collections.emptyMap();
+
     @Override
     public AgentConfigDO getByName(String name) {
         if (StringUtils.isBlank(name)) {
             return null;
         }
         return dataMapByName.get(name);
+    }
+
+    @Override
+    public AgentConfigDO getByCode(String code) {
+        if (StringUtils.isBlank(code)) {
+            return null;
+        }
+        AgentConfigDO found = dataMapByCode.get(code);
+        if (found != null) {
+            return found;
+        }
+        return dataMapByName.get(code);
     }
 
     @Override
@@ -61,15 +76,22 @@ public class AgentConfigRepositoryImpl extends AbstractConfigRepository<AgentCon
             return false;
         }
 
-        Map<String, AgentConfigDO> map = new HashMap<>();
+        Map<String, AgentConfigDO> mapByName = new HashMap<>();
+        Map<String, AgentConfigDO> mapByCode = new HashMap<>();
         for (AgentConfigDO agent : remoteList) {
-            if (agent != null && StringUtils.isNotBlank(agent.getName())) {
-                map.put(agent.getName(), agent);
+            if (agent != null) {
+                if (StringUtils.isNotBlank(agent.getName())) {
+                    mapByName.put(agent.getName(), agent);
+                }
+                if (StringUtils.isNotBlank(agent.getCode())) {
+                    mapByCode.put(agent.getCode(), agent);
+                }
             }
         }
 
         this.dataList = Collections.unmodifiableList(new ArrayList<>(remoteList));
-        this.dataMapByName = Collections.unmodifiableMap(map);
+        this.dataMapByName = Collections.unmodifiableMap(mapByName);
+        this.dataMapByCode = Collections.unmodifiableMap(mapByCode);
         logger.info("[AgentConfigRepository] 从远程接口成功加载 {} 条智能体配置", remoteList.size());
         return true;
     }

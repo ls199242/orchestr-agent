@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 仓储配置查看控制器测试
+ * 仓储配置查看控制器测试 (5大核心仓储)
  *
  * @author Shane
  */
@@ -28,8 +28,6 @@ public class RepositoryConfigControllerTest {
     private ToolConfigRepositoryImpl toolRepo;
     private ModelConfigRepositoryImpl modelRepo;
     private DictRepositoryImpl dictRepo;
-    private PromptRepositoryImpl promptRepo;
-    private PromptGroupRepositoryImpl promptGroupRepo;
 
     @BeforeEach
     public void setup() throws Exception {
@@ -38,8 +36,6 @@ public class RepositoryConfigControllerTest {
         toolRepo = new ToolConfigRepositoryImpl();
         modelRepo = new ModelConfigRepositoryImpl();
         dictRepo = new DictRepositoryImpl();
-        promptRepo = new PromptRepositoryImpl();
-        promptGroupRepo = new PromptGroupRepositoryImpl();
 
         // 注入 Mock 数据客户端
         StrategyConfigDO strategy = StrategyConfigDO.builder().strategyId("strat_01").code("strat_01").name("测试策略").build();
@@ -57,23 +53,15 @@ public class RepositoryConfigControllerTest {
         DictDO dict = DictDO.builder().key("flow_max_step").value("15").build();
         ReflectionTestUtils.setField(dictRepo, "dictApiClient", (DictApiClient) () -> List.of(dict));
 
-        PromptConfigDO prompt = PromptConfigDO.builder().name("TEST_PROMPT").code("test_prompt").prompt("Hi").build();
-        ReflectionTestUtils.setField(promptRepo, "promptConfigApiClient", (PromptConfigApiClient) () -> List.of(prompt));
-
-        PromptGroupConfigDO group = PromptGroupConfigDO.builder().code("test_group").flowType("REACT").build();
-        ReflectionTestUtils.setField(promptGroupRepo, "promptGroupConfigApiClient", (PromptGroupConfigApiClient) () -> List.of(group));
-
         // 初始化
         strategyRepo.afterPropertiesSet();
         agentRepo.afterPropertiesSet();
         toolRepo.afterPropertiesSet();
         modelRepo.afterPropertiesSet();
         dictRepo.afterPropertiesSet();
-        promptRepo.afterPropertiesSet();
-        promptGroupRepo.afterPropertiesSet();
 
         configController = new RepositoryConfigController(
-                strategyRepo, agentRepo, toolRepo, modelRepo, dictRepo, promptRepo, promptGroupRepo
+                strategyRepo, agentRepo, toolRepo, modelRepo, dictRepo
         );
     }
 
@@ -83,7 +71,7 @@ public class RepositoryConfigControllerTest {
         BaseResult<List<Map<String, Object>>> result = configController.getOverview();
         Assertions.assertTrue(result.isSuccess());
         Assertions.assertNotNull(result.getData());
-        Assertions.assertEquals(7, result.getData().size());
+        Assertions.assertEquals(5, result.getData().size());
 
         Map<String, Object> first = result.getData().get(0);
         Assertions.assertTrue(first.containsKey("name"));
@@ -104,8 +92,8 @@ public class RepositoryConfigControllerTest {
         Assertions.assertTrue(data.containsKey("tools"));
         Assertions.assertTrue(data.containsKey("models"));
         Assertions.assertTrue(data.containsKey("dict"));
-        Assertions.assertTrue(data.containsKey("prompts"));
-        Assertions.assertTrue(data.containsKey("promptGroups"));
+        Assertions.assertFalse(data.containsKey("prompts"));
+        Assertions.assertFalse(data.containsKey("promptGroups"));
     }
 
     @Test
@@ -125,7 +113,7 @@ public class RepositoryConfigControllerTest {
     public void testTriggerReload() {
         BaseResult<Map<String, Object>> reloadAll = configController.triggerReload(null);
         Assertions.assertTrue(reloadAll.isSuccess());
-        Assertions.assertTrue(reloadAll.getData().get("message").toString().contains("全部 7 个仓储"));
+        Assertions.assertTrue(reloadAll.getData().get("message").toString().contains("全部 5 个核心仓储"));
 
         BaseResult<Map<String, Object>> reloadSingle = configController.triggerReload("strategy");
         Assertions.assertTrue(reloadSingle.isSuccess());

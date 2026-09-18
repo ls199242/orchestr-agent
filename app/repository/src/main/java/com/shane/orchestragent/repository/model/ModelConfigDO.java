@@ -22,16 +22,19 @@ public class ModelConfigDO implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    /** 模型唯一编码（如 "gpt-4o", "deepseek-chat"） */
+    /** 模型唯一编码（如 "gpt-4o", "Deepseek"） */
     private String code;
 
-    /** 模型展示名称 */
+    /** 模型展示名称 / 配置名称（如 "Deepseek"） */
     private String name;
+
+    /** 实际调用大模型名称（如 "deepseek-flash", "deepseek-chat"，为空时回退使用 code 或 name） */
+    private String modelName;
 
     /** 上下文窗口最大 Token 数量 */
     private Integer contextMaxTokens;
 
-    /** 接入端点地址（如 "https://api.openai.com/v1/chat/completions"） */
+    /** 接入端点地址（如 "https://api.deepseek.com", "https://api.openai.com/v1/chat/completions"） */
     private String endpoint;
 
     /** 访问凭证 API Key */
@@ -45,4 +48,18 @@ public class ModelConfigDO implements Serializable {
 
     /** 模型功能标签（如 ["chat", "reasoning", "vision"]） */
     private List<String> tags;
+
+    /**
+     * 获取用于 API 调用的实际模型名称
+     * 优先返回 modelName，若未配置则回退返回 code 或 name
+     */
+    public String getActualModelName() {
+        if (modelName != null && !modelName.isBlank()) {
+            return modelName.trim();
+        }
+        if (code != null && !code.isBlank()) {
+            return code.trim();
+        }
+        return name != null ? name.trim() : "deepseek-flash";
+    }
 }

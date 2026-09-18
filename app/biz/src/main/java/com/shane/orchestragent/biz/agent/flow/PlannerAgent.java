@@ -1,6 +1,5 @@
 package com.shane.orchestragent.biz.agent.flow;
 
-import com.shane.orchestragent.biz.agent.Agent;
 import com.shane.orchestragent.biz.agent.base.BaseLlmAgent;
 import com.shane.orchestragent.biz.context.StrategyContext;
 import com.shane.orchestragent.biz.model.agent.LlmConfig;
@@ -12,7 +11,6 @@ import com.shane.orchestragent.common.utils.JsonUtils;
 import com.shane.orchestragent.integration.llm.model.ChatMessageDTO;
 import com.shane.orchestragent.integration.llm.model.SystemChatMessageDTO;
 import com.shane.orchestragent.integration.llm.model.UserChatMessageDTO;
-import com.shane.orchestragent.prompt.model.PromptTypeEnum;
 import com.shane.orchestragent.prompt.service.PromptService;
 import org.apache.commons.lang3.StringUtils;
 
@@ -20,7 +18,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 战略任务规划智能体 (修复原代码潜在 NPE，支持动态智能体池注入)
+ * 战略任务规划智能体 (严格基于配置中心渲染，Fail-Fast 治理)
  *
  * @author Shane
  */
@@ -34,9 +32,9 @@ public class PlannerAgent extends BaseLlmAgent<StrategyContext> {
     protected SystemChatMessageDTO buildSystemPrompt(StrategyContext context) throws BizException {
         Map<String, Object> properties = new HashMap<>(context.getProperties());
 
-        // 注入可用的 Worker 智能体列表描述
+        // 注入可用的业务专精 Worker 与外部 Tool 列表描述 (伴生 RAG 由底层自愈调度，不向规划器暴露)
         List<Map<String, String>> agentDescriptions = context.getAgents().values().stream()
-                .filter(a -> a.getType() == AgentTypeEnum.WORKER || a.getType() == AgentTypeEnum.TOOL || a.getType() == AgentTypeEnum.RAG)
+                .filter(a -> a.getType() == AgentTypeEnum.WORKER || a.getType() == AgentTypeEnum.TOOL)
                 .map(a -> {
                     Map<String, String> map = new HashMap<>();
                     map.put("name", a.getName());
@@ -45,14 +43,11 @@ public class PlannerAgent extends BaseLlmAgent<StrategyContext> {
                 })
                 .collect(Collectors.toList());
         properties.put("agent_list", JsonUtils.toJsonString(agentDescriptions));
+        properties.put("strategy_target", context.getStrategyTarget());
 
-        String template = getLlmConfig().getPromptTemplates() != null ?
-                getLlmConfig().getPromptTemplates().get(PromptTypeEnum.PLANNER_SYSTEM_PROMPT) : null;
-        if (StringUtils.isEmpty(template)) {
-            template = promptService.loadClasspathTemplate("planner");
-        }
-        if (StringUtils.isEmpty(template)) {
-            template = "# PlannerAgent\n请分析目标，输出规划步骤: {\"steps\": [{\"step\": 1, \"agent\": \"...\", \"description\": \"...\"}]}";
+        String template = llmConfig != null ? llmConfig.getSystemPrompt() : null;
+        if (StringUtils.isBlank(template)) {
+            throw BizErrorFactory.getInstance().agentSystemPromptMissing("PLANNER");
         }
         String prompt = promptService.renderPrompt(template, properties);
         return new SystemChatMessageDTO(prompt);
@@ -61,10 +56,20 @@ public class PlannerAgent extends BaseLlmAgent<StrategyContext> {
     @Override
     protected List<ChatMessageDTO> buildMessages(StrategyContext context) throws BizException {
         String strategyTarget = context.getStrategyTarget();
-        // 防御性检查：杜绝老项目中直接 .toString() 抛出的 NPE
         if (StringUtils.isBlank(strategyTarget)) {
             throw BizErrorFactory.getInstance().plannerTargetNotFound();
         }
-        return Collections.singletonList(new UserChatMessageDTO("战略目标: " + strategyTarget));
+
+        Map<String, Object> properties = new HashMap<>(context.getProperties());
+        properties.put("strategy_target", strategyTarget);
+        properties.put("strategyTarget", strategyTarget);
+
+        String userTemplate = llmConfig != null ? llmConfig.getUserPrompt() : null;
+        if (StringUtils.isBlank(userTemplate)) {
+            throw BizErrorFactory.getInstance().agentUserPromptMissing("PLANNER");
+        }
+
+        String userContent = promptService.renderPrompt(userTemplate, properties);
+        return Collections.singletonList(new UserChatMessageDTO(userContent));
     }
 }

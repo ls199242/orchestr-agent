@@ -72,8 +72,8 @@ public interface DictRepository extends Repository<DictDO> {
         int DEFAULT_LOG_STREAM_MAX_LINES = 1000;
         /** 默认实时日志流轮询时间间隔：200 毫秒 */
         int DEFAULT_LOG_STREAM_POLL_INTERVAL_MS = 200;
-        /** 默认模型编码：gpt-4o */
-        String DEFAULT_LLM_MODEL = "gpt-4o";
+        /** 默认模型编码：Deepseek */
+        String DEFAULT_LLM_MODEL = "Deepseek";
         /** 默认系统智能体温度：0.7 */
         double DEFAULT_SYSTEM_AGENT_TEMP = 0.7;
         /** 默认业务 Worker 智能体温度：0.3 */

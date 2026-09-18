@@ -69,19 +69,90 @@ def get_dict_configs():
     return _mng_resp(config_store.get_category("dict"))
 
 
-@app.get("/api/prompt")
-def get_prompt_configs():
-    return _mng_resp(config_store.get_category("prompts"))
-
-
-@app.get("/api/prompt-group")
-def get_prompt_group_configs():
-    return _mng_resp(config_store.get_category("promptGroups"))
-
-
 # ==========================================
 # 2. 仿真业务工具 Mock 端点
 # ==========================================
+
+@app.post("/mock/tools/weather")
+def mock_weather_tool(payload: Dict[str, Any]):
+    city = payload.get("city", "上海")
+    airport_code = payload.get("airportCode", "SHA")
+    # 模拟真实落地夜间下雨场景
+    return {
+        "city": city,
+        "airportCode": airport_code,
+        "weather": "RAINY",
+        "temperature": 18.5,
+        "isNight": True,
+        "description": "夜间阴有中雨，气温 18.5°C，东风 3 级，路面湿滑，建议提前规划接驳交通"
+    }
+
+
+@app.post("/mock/tools/user-profile")
+def mock_user_profile_tool(payload: Dict[str, Any]):
+    user_id = payload.get("userId", "U8801")
+    return {
+        "userId": user_id,
+        "preferenceType": "PRICE_FIRST",
+        "historicalSpendingLevel": "LOW",
+        "frequentHotelStar": 3,
+        "tags": ["价格敏感", "高性价比偏好", "偏好拼车/特惠接送"]
+    }
+
+
+@app.post("/mock/tools/arrival-services")
+def mock_arrival_services_tool(payload: Dict[str, Any]):
+    airport_code = payload.get("airportCode", "SHA")
+    return {
+        "airportCode": airport_code,
+        "pickupServices": [
+            {
+                "serviceId": "pickup_car_economy_01",
+                "carType": "ECONOMY",
+                "title": "虹桥机场直达专车 · 经济特惠型",
+                "price": 58.0,
+                "features": "即走免等、雨夜特惠、比现场打车便宜 25%"
+            },
+            {
+                "serviceId": "pickup_car_comfort_02",
+                "carType": "COMFORT",
+                "title": "虹桥机场尊享接机 · 舒适商务型",
+                "price": 168.0,
+                "features": "司机举牌迎接、免费等待60分钟、宽敞静音座驾"
+            }
+        ],
+        "hotels": [
+            {
+                "hotelId": "hotel_budget_01",
+                "name": "如家精选酒店 (上海虹桥枢纽店)",
+                "star": 3,
+                "distanceKm": 1.8,
+                "price": 239.0
+            },
+            {
+                "hotelId": "hotel_luxury_02",
+                "name": "上海虹桥康得思酒店 (航站楼直连)",
+                "star": 5,
+                "distanceKm": 0.5,
+                "price": 899.0
+            }
+        ],
+        "attractions": [
+            {
+                "ticketId": "ticket_disney_01",
+                "name": "上海迪士尼度假区门票 (次日特惠票)",
+                "price": 435.0,
+                "tag": "提前订立减 50 元"
+            },
+            {
+                "ticketId": "ticket_bund_cruise_02",
+                "name": "黄浦江夜游游船票 (含接驳)",
+                "price": 128.0,
+                "tag": "外滩夜景优选"
+            }
+        ]
+    }
+
 
 @app.post("/mock/tools/flights")
 def mock_flight_search(payload: Dict[str, Any]):
@@ -136,8 +207,6 @@ def save_config_item(req: SaveItemRequest):
         "tools": "name",
         "models": "code",
         "dict": "key",
-        "prompts": "name",
-        "promptGroups": "code",
     }
     field = req.key_field or key_field_map.get(req.category, "name")
     saved = config_store.save_item(req.category, req.item, key_field=field)
@@ -152,8 +221,6 @@ def delete_config_item(category: str, key_val: str):
         "tools": "name",
         "models": "code",
         "dict": "key",
-        "prompts": "name",
-        "promptGroups": "code",
     }
     field = key_field_map.get(category, "name")
     deleted = config_store.delete_item(category, key_val, key_field=field)

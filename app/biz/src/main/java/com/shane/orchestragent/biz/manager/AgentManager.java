@@ -49,7 +49,7 @@ public interface AgentManager {
     AgentInvokeResponseVO testInvoke(AgentInvokeRequestVO request) throws BizException;
 
     /**
-     * 策略推荐调度流程 (兼容旧版调用)
+     * 策略推荐调度流程 (通用编排推荐执行)
      *
      * @param request 协同推荐请求
      * @return 响应结果

@@ -144,6 +144,14 @@ public abstract class BaseLlmAgent<CONTEXT extends AgentContext> extends BaseAge
         return messages;
     }
 
+    public SystemChatMessageDTO formatSystemMessage(CONTEXT context) throws BizException {
+        return buildSystemPrompt(context);
+    }
+
+    public List<ChatMessageDTO> formatMessages(CONTEXT context) throws BizException {
+        return buildChatMessages(context);
+    }
+
     protected String afterExtensionHandler(CONTEXT context, String response) throws BizException {
         Object result = afterExtension(response, context);
         return result != null ? result.toString().trim() : "";

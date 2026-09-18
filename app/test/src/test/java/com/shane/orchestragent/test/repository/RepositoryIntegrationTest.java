@@ -46,10 +46,6 @@ public class RepositoryIntegrationTest {
     private ToolConfigRepositoryImpl toolRepo;
     /** 数据字典仓储实例 */
     private DictRepositoryImpl dictRepo;
-    /** 提示词模板仓储实例 */
-    private PromptRepositoryImpl promptRepo;
-    /** 提示词分组仓储实例 */
-    private PromptGroupRepositoryImpl promptGroupRepo;
     /** 大模型配置仓储实例 */
     private ModelConfigRepositoryImpl modelRepo;
 
@@ -66,12 +62,6 @@ public class RepositoryIntegrationTest {
 
         dictRepo = new DictRepositoryImpl();
         dictRepo.afterPropertiesSet();
-
-        promptRepo = new PromptRepositoryImpl();
-        promptRepo.afterPropertiesSet();
-
-        promptGroupRepo = new PromptGroupRepositoryImpl();
-        promptGroupRepo.afterPropertiesSet();
 
         modelRepo = new ModelConfigRepositoryImpl();
         modelRepo.afterPropertiesSet();
@@ -95,7 +85,7 @@ public class RepositoryIntegrationTest {
                 .name("自定义测试策略")
                 .flowTopologyType("REACT")
                 .maxStep(15)
-                .workers(List.of(StrategyWorkerDO.builder().name("search_worker").build()))
+                .workerCodes(List.of("search_worker"))
                 .build();
 
         StrategyConfigDO chatStrategy = StrategyConfigDO.builder()
@@ -113,6 +103,7 @@ public class RepositoryIntegrationTest {
         assertEquals(custom, strategyRepo.getById("custom_test_01"));
         assertEquals(custom, strategyRepo.findStrategyByCode("custom_code_01"));
         assertEquals(custom, strategyRepo.findStrategyById("custom_test_01"));
+        assertEquals(List.of("search_worker"), strategyRepo.getById("custom_test_01").getWorkerCodes());
         assertEquals("MULTIPLE_CHAT", strategyRepo.findStrategyByCode("multi_chat_strategy").getFlowTopologyType());
         assertTrue(strategyRepo.findStrategyByCode("multi_chat_strategy").getStream());
         assertEquals(2, strategyRepo.getAll().size());
@@ -129,20 +120,24 @@ public class RepositoryIntegrationTest {
         assertTrue(agentRepo.getAll().isEmpty());
 
         // 模拟远程下发标准智能体
-        AgentConfigDO router = AgentConfigDO.builder().name("ROUTER").model("gpt-4o").build();
-        AgentConfigDO planner = AgentConfigDO.builder().name("PLANNER").model("gpt-4o").build();
-        AgentConfigDO conductor = AgentConfigDO.builder().name("CONDUCTOR").model("gpt-4o").build();
-        AgentConfigDO worker = AgentConfigDO.builder().name("search_worker").model("gpt-4o").build();
+        AgentConfigDO router = AgentConfigDO.builder().name("ROUTER").code("router_code").model("gpt-4o").build();
+        AgentConfigDO planner = AgentConfigDO.builder().name("PLANNER").code("planner_code").model("gpt-4o").build();
+        AgentConfigDO conductor = AgentConfigDO.builder().name("CONDUCTOR").code("conductor_code").model("gpt-4o").build();
+        AgentConfigDO worker = AgentConfigDO.builder().name("search_worker").code("search_worker_code").model("gpt-4o").build();
 
         AgentConfigApiClient mockAgentClient = () -> List.of(router, planner, conductor, worker);
         ReflectionTestUtils.setField(agentRepo, "agentConfigApiClient", mockAgentClient);
         agentRepo.reload();
 
-        // 验证检索
+        // 验证检索（按 name 和按 code）
         assertEquals(router, agentRepo.getByName("ROUTER"));
+        assertEquals(router, agentRepo.getByCode("router_code"));
         assertEquals(planner, agentRepo.getAgent("PLANNER"));
+        assertEquals(planner, agentRepo.getByCode("planner_code"));
         assertEquals(conductor, agentRepo.getByName("CONDUCTOR"));
+        assertEquals(conductor, agentRepo.getByCode("conductor_code"));
         assertEquals(worker, agentRepo.getByName("search_worker"));
+        assertEquals(worker, agentRepo.getByCode("search_worker_code"));
         assertEquals(4, agentRepo.getAll().size());
 
         // 验证未注册的智能体返回 null
@@ -209,43 +204,39 @@ public class RepositoryIntegrationTest {
     }
 
     @Test
-    @DisplayName("5. 验证 PromptRepository 与 PromptGroupRepository: 无数据不生成兜底模板")
-    public void testPromptAndPromptGroupRepository() {
-        assertEquals("promptConfigRepository", promptRepo.name());
-        assertEquals("promptGroupRepository", promptGroupRepo.name());
+    @DisplayName("5. 验证 AgentConfigRepository: systemPrompt 与 userPrompt 纯配置驱动且无数据不兜底")
+    public void testAgentConfigPrompts() {
+        assertEquals("agentConfigRepository", agentRepo.name());
 
         // 验证初始状态无数据返回 null (严格不兜底)
-        assertNull(promptRepo.get("PLANNER_SYSTEM"));
-        assertNull(promptRepo.findByCode("conductor_system"));
-        assertNull(promptGroupRepo.getByStrategyCode("react_default_strategy", "REACT"));
+        assertNull(agentRepo.getByName("PLANNER_PROMPT_TEST"));
 
-        // 模拟远程下发 Prompt 模板
-        PromptConfigApiClient mockPromptClient = () -> List.of(
-                PromptConfigDO.builder().name("PLANNER_SYSTEM").code("planner_system").prompt("PlannerAgent System Prompt").build(),
-                PromptConfigDO.builder().name("CONDUCTOR_SYSTEM").code("conductor_system").prompt("ConductorAgent System Prompt").build()
-        );
-        ReflectionTestUtils.setField(promptRepo, "promptConfigApiClient", mockPromptClient);
-        promptRepo.reload();
-
-        PromptConfigDO plannerPrompt = promptRepo.get("PLANNER_SYSTEM");
-        assertNotNull(plannerPrompt);
-        assertEquals("PlannerAgent System Prompt", plannerPrompt.getPrompt());
-        assertEquals(plannerPrompt, promptRepo.findByCode("planner_system"));
-
-        // 模拟远程下发 Prompt 分组绑定
-        PromptGroupConfigApiClient mockGroupClient = () -> List.of(
-                PromptGroupConfigDO.builder()
-                        .strategyCode("react_default_strategy")
-                        .flowType("REACT")
-                        .promptBindings(Map.of("PLANNER", "planner_system"))
+        // 模拟远程下发包含 systemPrompt 和 userPrompt 的智能体配置
+        AgentConfigApiClient mockAgentClient = () -> List.of(
+                AgentConfigDO.builder()
+                        .name("PLANNER_PROMPT_TEST")
+                        .model("gpt-4o")
+                        .systemPrompt("你是专业的任务规划专家")
+                        .userPrompt("请针对以下目标进行拆解: ${strategy_target}")
+                        .build(),
+                AgentConfigDO.builder()
+                        .name("WORKER_PROMPT_TEST")
+                        .model("gpt-4o")
+                        .systemPrompt("你是专业的工作执行节点")
                         .build()
         );
-        ReflectionTestUtils.setField(promptGroupRepo, "promptGroupConfigApiClient", mockGroupClient);
-        promptGroupRepo.reload();
+        ReflectionTestUtils.setField(agentRepo, "agentConfigApiClient", mockAgentClient);
+        agentRepo.reload();
 
-        PromptGroupConfigDO retrieved = promptGroupRepo.getByStrategyCode("react_default_strategy", "REACT");
-        assertNotNull(retrieved);
-        assertEquals("planner_system", retrieved.getPromptBindings().get("PLANNER"));
+        AgentConfigDO planner = agentRepo.getByName("PLANNER_PROMPT_TEST");
+        assertNotNull(planner);
+        assertEquals("你是专业的任务规划专家", planner.getEffectiveSystemPrompt());
+        assertEquals("请针对以下目标进行拆解: ${strategy_target}", planner.getEffectiveUserPrompt());
+
+        AgentConfigDO worker = agentRepo.getByName("WORKER_PROMPT_TEST");
+        assertNotNull(worker);
+        assertEquals("你是专业的工作执行节点", worker.getEffectiveSystemPrompt());
+        assertNull(worker.getEffectiveUserPrompt());
     }
 
     @Test
@@ -270,6 +261,10 @@ public class RepositoryIntegrationTest {
         assertEquals("gpt-4o", modelRepo.getDefaultModel().getCode());
         assertNotNull(modelRepo.findByCode("deepseek-chat"));
         assertEquals("deepseek-chat", modelRepo.findByCode("deepseek-chat").getCode());
+        assertNotNull(modelRepo.findByName("DeepSeek"));
+        assertEquals("deepseek-chat", modelRepo.findByName("DeepSeek").getCode());
+        assertNotNull(modelRepo.findByNameOrCode("deepseek"));
+        assertEquals("deepseek-chat", modelRepo.findByNameOrCode("deepseek").getCode());
 
         // 验证未知模型不回退默认模型，严格返回 null 避免隐式兜底
         assertNull(modelRepo.findByCode("unknown-custom-model"));
@@ -363,5 +358,51 @@ public class RepositoryIntegrationTest {
         BizException chatEx = assertThrows(BizException.class, () -> agentManager.chat(chatReq));
         assertEquals(BizErrorFactory.STRATEGY_NOT_FOUND, chatEx.getErrorCode());
         assertTrue(chatEx.getMessage().contains("non_existent_chat_strategy"));
+    }
+
+    @Test
+    @DisplayName("9. 验证 DeepSeek 模型配置解析与实际模型名称映射")
+    public void testDeepseekModelConfigResolution() throws Exception {
+        ModelConfigApiClient mockClient = () -> List.of(
+                ModelConfigDO.builder()
+                        .code("Deepseek")
+                        .name("Deepseek")
+                        .modelName("deepseek-flash")
+                        .endpoint("https://api.deepseek.com")
+                        .apiKey("sk-a4077ed8bd294ebf86bb8e6a75658f81")
+                        .build()
+        );
+        ReflectionTestUtils.setField(modelRepo, "modelConfigApiClient", mockClient);
+        modelRepo.reload();
+
+        // 通过配置名称 "Deepseek" 获取
+        ModelConfigDO resolved = modelRepo.findByName("Deepseek");
+        assertNotNull(resolved);
+        assertEquals("Deepseek", resolved.getName());
+        assertEquals("deepseek-flash", resolved.getActualModelName());
+
+        // 验证默认模型也是该模型
+        ModelConfigDO defaultModel = modelRepo.getDefaultModel();
+        assertNotNull(defaultModel);
+        assertEquals("Deepseek", defaultModel.getName());
+        assertEquals("deepseek-flash", defaultModel.getActualModelName());
+
+        // 验证大小写不敏感与编码查询
+        assertNotNull(modelRepo.findByCode("deepseek"));
+        assertNotNull(modelRepo.findByNameOrCode("deepseek-flash"));
+
+        // 验证 OpenAiCompatibleLlmClient 端到端加载并调用 Deepseek
+        OpenAiCompatibleLlmClient client = new OpenAiCompatibleLlmClient();
+        client.setModelConfigRepository(modelRepo);
+        com.shane.orchestragent.integration.llm.model.ChatResponseVO resp = client.chat(
+                com.shane.orchestragent.integration.llm.model.ChatRequestDTO.builder()
+                        .model("Deepseek")
+                        .messages(java.util.List.of(com.shane.orchestragent.integration.llm.model.ChatMessageDTO.builder().role("user").content("1+1=? 请只输出数字结果").build()))
+                        .build()
+        );
+        assertNotNull(resp);
+        assertNotNull(resp.getFirstMessage());
+        assertNotNull(resp.getFirstMessage().getContent());
+        assertTrue(resp.getFirstMessage().getContent().contains("2"));
     }
 }

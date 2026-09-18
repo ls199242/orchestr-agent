@@ -7,12 +7,12 @@ import com.shane.orchestragent.biz.model.agent.LlmConfig;
 import com.shane.orchestragent.biz.model.flow.EvaluatorResult;
 import com.shane.orchestragent.biz.service.LlmService;
 import com.shane.orchestragent.common.enums.AgentTypeEnum;
+import com.shane.orchestragent.common.exception.BizErrorFactory;
 import com.shane.orchestragent.common.exception.BizException;
 import com.shane.orchestragent.common.utils.JsonUtils;
 import com.shane.orchestragent.integration.llm.model.ChatMessageDTO;
 import com.shane.orchestragent.integration.llm.model.SystemChatMessageDTO;
 import com.shane.orchestragent.integration.llm.model.UserChatMessageDTO;
-import com.shane.orchestragent.prompt.model.PromptTypeEnum;
 import com.shane.orchestragent.prompt.service.PromptService;
 import org.apache.commons.lang3.StringUtils;
 
@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 战略目标审查与自愈评估智能体 (全新引入: 负责宏观战略对齐、事实性抗幻觉审查与自愈批判)
+ * 战略目标审查与自愈评估智能体 (严格基于配置中心渲染，负责宏观战略对齐与自愈批判)
  *
  * @author Shane
  */
@@ -39,13 +39,9 @@ public class EvaluatorAgent extends BaseLlmAgent<StrategyContext> {
         properties.put("plan_steps", context.getPlanResult() != null ? JsonUtils.toJsonString(context.getPlanResult().getSteps()) : "[]");
         properties.put("execution_trace", JsonUtils.toJsonString(context.getChatMessages()));
 
-        String template = getLlmConfig().getPromptTemplates() != null ?
-                getLlmConfig().getPromptTemplates().get(PromptTypeEnum.EVALUATOR_SYSTEM_PROMPT) : null;
-        if (StringUtils.isEmpty(template)) {
-            template = promptService.loadClasspathTemplate("evaluator");
-        }
-        if (StringUtils.isEmpty(template)) {
-            template = "# EvaluatorAgent\n请对比原始战略目标与实际执行产物，严格审计完整度与事实性。\n输出 JSON: {\"pass\": true/false, \"score\": 0-100, \"critique\": \"...\", \"suggestedRemedy\": \"...\"}";
+        String template = llmConfig != null ? llmConfig.getSystemPrompt() : null;
+        if (StringUtils.isBlank(template)) {
+            throw BizErrorFactory.getInstance().agentSystemPromptMissing("EVALUATOR");
         }
         String prompt = promptService.renderPrompt(template, properties);
         return new SystemChatMessageDTO(prompt);
@@ -53,8 +49,18 @@ public class EvaluatorAgent extends BaseLlmAgent<StrategyContext> {
 
     @Override
     protected List<ChatMessageDTO> buildMessages(StrategyContext context) throws BizException {
-        String query = "请对当前执行结果进行终局战略目标验收。对比目标: " + context.getStrategyTarget();
-        return Collections.singletonList(new UserChatMessageDTO(query));
+        Map<String, Object> properties = new HashMap<>(context.getProperties());
+        properties.put("strategy_target", context.getStrategyTarget());
+        properties.put("strategyTarget", context.getStrategyTarget());
+        properties.put("allAgentOutputs", JsonUtils.toJsonString(context.getChatMessages()));
+
+        String userTemplate = llmConfig != null ? llmConfig.getUserPrompt() : null;
+        if (StringUtils.isBlank(userTemplate)) {
+            throw BizErrorFactory.getInstance().agentUserPromptMissing("EVALUATOR");
+        }
+
+        String userContent = promptService.renderPrompt(userTemplate, properties);
+        return Collections.singletonList(new UserChatMessageDTO(userContent));
     }
 
     /**
@@ -63,12 +69,12 @@ public class EvaluatorAgent extends BaseLlmAgent<StrategyContext> {
     public EvaluatorResult evaluate(StrategyContext context) throws BizException {
         AgentResult result = execute(context);
         if (result == null || StringUtils.isBlank(result.getOutput())) {
-            return EvaluatorResult.defaultPass();
+            throw new BizException("EVALUATOR_RESULT_EMPTY", "战略目标审查智能体返回内容为空");
         }
 
         EvaluatorResult evaluatorResult = JsonUtils.parseObject(result.getOutput(), EvaluatorResult.class);
         if (evaluatorResult == null) {
-            evaluatorResult = EvaluatorResult.defaultPass();
+            throw new BizException("EVALUATOR_PARSE_ERROR", "战略目标审查智能体返回内容无法解析为有效验收结果: " + result.getOutput());
         }
         context.setLastEvaluatorResult(evaluatorResult);
         return evaluatorResult;
