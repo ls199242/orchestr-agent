@@ -10,6 +10,9 @@
    - 当前工作区为多项目环境（包含 `laiye-expert-core` 与 `orchestr-agent`）。
    - **绝对禁止修改任何 `laiye-expert-core`（expert）的代码与文件**。
    - 所有需求实现、接口调用、功能重构均只能在 `orchestr-agent` 仓库范围内闭环。
+2. **严禁主动探查 expert 代码与状态**：
+   - 除非用户在当前对话中明确说要查看或比对 `laiye-expert-core`（expert）的代码，否则**严禁主动对 expert 目录执行任何文件查看、代码检索、目录遍历或 git 状态查询**。
+   - 所有日常任务的上下文检索、执行、状态确认及代码改动仅限在 `orchestr-agent` 仓库内独立进行。
 
 ---
 

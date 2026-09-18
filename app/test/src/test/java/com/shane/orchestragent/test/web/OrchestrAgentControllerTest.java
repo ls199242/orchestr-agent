@@ -245,4 +245,62 @@ public class OrchestrAgentControllerTest {
         BizException ex3 = Assertions.assertThrows(BizException.class, () -> controller.testInvoke(null));
         Assertions.assertEquals("REQUEST_NULL", ex3.getErrorCode());
     }
+
+    @Test
+    @DisplayName("测试 getFlowStatus: 异步流程启动后根据 flowId 查询状态与执行结果")
+    public void testGetFlowStatusSuccess() throws Exception {
+        AgentInvokeRequestDTO request = AgentInvokeRequestDTO.builder()
+                .strategyId("biz_travel")
+                .message("规划从北京到杭州的出差行程")
+                .sessionId("test-session-flow-query-1")
+                .userId("user-flow-1")
+                .build();
+
+        BaseResult<AgentInvokeResponseDTO> invokeResult = controller.invoke(request);
+        Assertions.assertNotNull(invokeResult);
+        Assertions.assertTrue(invokeResult.isSuccess());
+
+        String flowId = invokeResult.getData().getFlowId();
+        Assertions.assertNotNull(flowId);
+
+        // 立即根据 flowId 查询
+        BaseResult<AgentInvokeResponseDTO> statusInitial = controller.getFlowStatus(flowId);
+        Assertions.assertNotNull(statusInitial);
+        Assertions.assertTrue(statusInitial.isSuccess());
+        Assertions.assertEquals(flowId, statusInitial.getData().getFlowId());
+
+        // 轮询直到流程完成
+        long start = System.currentTimeMillis();
+        BaseResult<AgentInvokeResponseDTO> statusFinal = null;
+        while (System.currentTimeMillis() - start < 3000) {
+            statusFinal = controller.getFlowStatus(flowId);
+            if ("FINISHED".equals(statusFinal.getData().getState()) || "ERROR".equals(statusFinal.getData().getState())) {
+                break;
+            }
+            Thread.sleep(50);
+        }
+
+        Assertions.assertNotNull(statusFinal);
+        Assertions.assertEquals("FINISHED", statusFinal.getData().getState());
+        Assertions.assertNotNull(statusFinal.getData().getReply());
+        Assertions.assertNotNull(statusFinal.getData().getEvaluation());
+        Assertions.assertNotNull(statusFinal.getData().getProcessTexts());
+
+        // 测试直接使用 POST /invoke 并仅传递 flowId 进行查询
+        AgentInvokeRequestDTO queryRequest = AgentInvokeRequestDTO.builder()
+                .flowId(flowId)
+                .build();
+        BaseResult<AgentInvokeResponseDTO> queryByInvoke = controller.invoke(queryRequest);
+        Assertions.assertNotNull(queryByInvoke);
+        Assertions.assertTrue(queryByInvoke.isSuccess());
+        Assertions.assertEquals("FINISHED", queryByInvoke.getData().getState());
+        Assertions.assertEquals(statusFinal.getData().getReply(), queryByInvoke.getData().getReply());
+    }
+
+    @Test
+    @DisplayName("测试 getFlowStatus 不存在的 flowId 抛出 BizException")
+    public void testGetFlowStatusNotFound() {
+        BizException ex = Assertions.assertThrows(BizException.class, () -> controller.getFlowStatus("non-existent-flow-id"));
+        Assertions.assertEquals("FLOW_NOT_FOUND", ex.getErrorCode());
+    }
 }

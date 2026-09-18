@@ -66,6 +66,14 @@ public class BizErrorFactory {
         return new BizException("TOOL_NOT_FOUND", "未能找到指定工具配置: " + toolCode);
     }
 
+    public BizException toolEndpointMissing(String toolName) {
+        return new BizException("TOOL_ENDPOINT_MISSING", "工具 [" + toolName + "] 未配置调用端点 (endpoint)");
+    }
+
+    public BizException toolExecutionError(String toolName, String detail) {
+        return new BizException("TOOL_EXECUTION_ERROR", "工具 [" + toolName + "] 执行异常: " + detail);
+    }
+
     public BizException conductorDecisionEmpty() {
         return new BizException("CONDUCTOR_DECISION_EMPTY", "指挥调度器决策异常: 未能指定下一步执行动作或节点");
     }

@@ -69,27 +69,34 @@ def get_dict_configs():
     return _mng_resp(config_store.get_category("dict"))
 
 
+from mock_store import mock_rule_store
+
 # ==========================================
-# 2. 仿真业务工具 Mock 端点
+# 2. 仿真业务工具 Mock 端点 (支持基于不同入参动态匹配 Mock 规则)
 # ==========================================
 
 @app.post("/mock/tools/weather")
 def mock_weather_tool(payload: Dict[str, Any]):
+    matched = mock_rule_store.match_rule("query_weather_tool", payload)
+    if matched:
+        return JSONResponse(status_code=matched.get("responseStatus", 200), content=matched.get("responseData", {}))
     city = payload.get("city", "上海")
     airport_code = payload.get("airportCode", "SHA")
-    # 模拟真实落地夜间下雨场景
     return {
         "city": city,
         "airportCode": airport_code,
         "weather": "RAINY",
         "temperature": 18.5,
         "isNight": True,
-        "description": "夜间阴有中雨，气温 18.5°C，东风 3 级，路面湿滑，建议提前规划接驳交通"
+        "description": f"{city}落地时刻阴有中雨，气温 18.5°C，东风 3 级，路面湿滑，建议提前规划接驳交通"
     }
 
 
 @app.post("/mock/tools/user-profile")
 def mock_user_profile_tool(payload: Dict[str, Any]):
+    matched = mock_rule_store.match_rule("query_user_profile_tool", payload)
+    if matched:
+        return JSONResponse(status_code=matched.get("responseStatus", 200), content=matched.get("responseData", {}))
     user_id = payload.get("userId", "U8801")
     return {
         "userId": user_id,
@@ -102,6 +109,9 @@ def mock_user_profile_tool(payload: Dict[str, Any]):
 
 @app.post("/mock/tools/arrival-services")
 def mock_arrival_services_tool(payload: Dict[str, Any]):
+    matched = mock_rule_store.match_rule("query_arrival_services_tool", payload)
+    if matched:
+        return JSONResponse(status_code=matched.get("responseStatus", 200), content=matched.get("responseData", {}))
     airport_code = payload.get("airportCode", "SHA")
     return {
         "airportCode": airport_code,
@@ -109,53 +119,29 @@ def mock_arrival_services_tool(payload: Dict[str, Any]):
             {
                 "serviceId": "pickup_car_economy_01",
                 "carType": "ECONOMY",
-                "title": "虹桥机场直达专车 · 经济特惠型",
+                "title": f"{airport_code} 机场直达专车 · 经济特惠型",
                 "price": 58.0,
                 "features": "即走免等、雨夜特惠、比现场打车便宜 25%"
-            },
-            {
-                "serviceId": "pickup_car_comfort_02",
-                "carType": "COMFORT",
-                "title": "虹桥机场尊享接机 · 舒适商务型",
-                "price": 168.0,
-                "features": "司机举牌迎接、免费等待60分钟、宽敞静音座驾"
             }
         ],
         "hotels": [
             {
                 "hotelId": "hotel_budget_01",
-                "name": "如家精选酒店 (上海虹桥枢纽店)",
+                "name": f"如家精选酒店 ({airport_code}枢纽店)",
                 "star": 3,
                 "distanceKm": 1.8,
                 "price": 239.0
-            },
-            {
-                "hotelId": "hotel_luxury_02",
-                "name": "上海虹桥康得思酒店 (航站楼直连)",
-                "star": 5,
-                "distanceKm": 0.5,
-                "price": 899.0
             }
         ],
-        "attractions": [
-            {
-                "ticketId": "ticket_disney_01",
-                "name": "上海迪士尼度假区门票 (次日特惠票)",
-                "price": 435.0,
-                "tag": "提前订立减 50 元"
-            },
-            {
-                "ticketId": "ticket_bund_cruise_02",
-                "name": "黄浦江夜游游船票 (含接驳)",
-                "price": 128.0,
-                "tag": "外滩夜景优选"
-            }
-        ]
+        "attractions": []
     }
 
 
 @app.post("/mock/tools/flights")
 def mock_flight_search(payload: Dict[str, Any]):
+    matched = mock_rule_store.match_rule("query_flights_tool", payload)
+    if matched:
+        return JSONResponse(status_code=matched.get("responseStatus", 200), content=matched.get("responseData", {}))
     origin = payload.get("origin", "北京")
     dest = payload.get("destination", "上海")
     return [
@@ -167,9 +153,11 @@ def mock_flight_search(payload: Dict[str, Any]):
 
 @app.post("/mock/tools/calc")
 def mock_calculator(payload: Dict[str, Any]):
+    matched = mock_rule_store.match_rule("calc_tool", payload)
+    if matched:
+        return JSONResponse(status_code=matched.get("responseStatus", 200), content=matched.get("responseData", {}))
     expr = payload.get("expression", "0")
     try:
-        # 安全计算基础数学公式
         allowed = set("0123456789+-*/(). ")
         if all(c in allowed for c in expr):
             res = eval(expr)
@@ -177,6 +165,58 @@ def mock_calculator(payload: Dict[str, Any]):
         return {"result": 0, "error": "表达式包含不支持字符"}
     except Exception as e:
         return {"result": 0, "error": str(e)}
+
+
+# ==========================================
+# 2.1 Mock 规则中心管理 API
+# ==========================================
+
+@app.get("/admin/mocks")
+def get_mock_rules(toolCode: Optional[str] = None):
+    return {"success": True, "data": mock_rule_store.get_all(tool_code=toolCode)}
+
+
+@app.post("/admin/mocks")
+def save_mock_rule(rule: Dict[str, Any]):
+    saved = mock_rule_store.save_rule(rule)
+    return {"success": True, "data": saved}
+
+
+@app.delete("/admin/mocks/{rule_id}")
+def delete_mock_rule(rule_id: str):
+    deleted = mock_rule_store.delete_rule(rule_id)
+    return {"success": deleted}
+
+
+@app.post("/admin/mocks/reset")
+def reset_mock_rules():
+    rules = mock_rule_store.reset()
+    return {"success": True, "data": rules}
+
+
+class TestMockRequest(BaseModel):
+    toolCode: str
+    payload: Dict[str, Any]
+
+
+@app.post("/admin/mocks/test")
+def test_mock_rule(req: TestMockRequest):
+    matched = mock_rule_store.match_rule(req.toolCode, req.payload)
+    if matched:
+        return {
+            "matched": True,
+            "ruleId": matched.get("id"),
+            "description": matched.get("description"),
+            "responseStatus": matched.get("responseStatus", 200),
+            "responseData": matched.get("responseData"),
+        }
+    return {
+        "matched": False,
+        "ruleId": None,
+        "description": "未命中任何特定规则，将回退至动态默认兜底逻辑",
+        "responseStatus": 200,
+        "responseData": None,
+    }
 
 
 # ==========================================
@@ -237,6 +277,19 @@ async def proxy_invoke(payload: Dict[str, Any]):
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(url, json=payload)
+            return resp.json()
+    except httpx.ConnectError:
+        raise HTTPException(status_code=502, detail=f"无法连接到 Java 服务 ({JAVA_BACKEND_URL})，请确认 Java 应用已启动在 8080 端口")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/proxy/flow/{flow_id}")
+async def proxy_get_flow(flow_id: str):
+    url = f"{JAVA_BACKEND_URL}/api/agent/flow/{flow_id}"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url)
             return resp.json()
     except httpx.ConnectError:
         raise HTTPException(status_code=502, detail=f"无法连接到 Java 服务 ({JAVA_BACKEND_URL})，请确认 Java 应用已启动在 8080 端口")

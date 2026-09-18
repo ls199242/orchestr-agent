@@ -14,6 +14,8 @@ import com.shane.orchestragent.web.dto.AgentChatRequestDTO;
 import com.shane.orchestragent.web.dto.AgentInvokeRequestDTO;
 import com.shane.orchestragent.web.dto.AgentInvokeResponseDTO;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -102,6 +104,21 @@ public class OrchestrAgentController {
         AgentInvokeResponseVO responseVO = agentManager.testInvoke(requestVO);
 
         // 3. 将结果 VO 转换为传输 DTO 并返回
+        return BaseResult.ok(apiMapping.v2dto(responseVO));
+    }
+
+    /**
+     * 4. 异步流程状态与结果查询入口 (getFlowStatus)
+     * 根据 flowId 实时查询异步工作流的运行状态、节点步骤明细、Evaluator质检结果及最终交付产物
+     *
+     * @param flowId 流程唯一标识
+     * @return 包含当前执行状态、步骤文案、自愈质检反馈与最终结果的响应统一包装结果 (BaseResult)
+     * @throws BizException 业务异常
+     */
+    @GetMapping("/flow/{flowId}")
+    @Api(logModule = LogModuleEnum.API_INVOKE, desc = "查询流程状态与执行结果")
+    public BaseResult<AgentInvokeResponseDTO> getFlowStatus(@PathVariable("flowId") String flowId) throws BizException {
+        AgentInvokeResponseVO responseVO = agentManager.getFlow(flowId);
         return BaseResult.ok(apiMapping.v2dto(responseVO));
     }
 }

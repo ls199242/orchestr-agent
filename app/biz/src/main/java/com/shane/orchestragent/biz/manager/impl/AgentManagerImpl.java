@@ -4,9 +4,11 @@ import com.shane.orchestragent.biz.context.StrategyContext;
 import com.shane.orchestragent.biz.context.impl.DefaultStrategyContext;
 import com.shane.orchestragent.biz.flow.StrategyFlow;
 import com.shane.orchestragent.biz.flow.StrategyFlowFactory;
+import com.shane.orchestragent.biz.flow.store.FlowStore;
 import com.shane.orchestragent.biz.manager.AgentManager;
 import com.shane.orchestragent.biz.model.enums.FlowTopologyTypeEnum;
 import com.shane.orchestragent.biz.model.enums.ResultCacheTypeEnum;
+import com.shane.orchestragent.biz.model.flow.EvaluatorResult;
 import com.shane.orchestragent.biz.model.flow.FlowProcessText;
 import com.shane.orchestragent.biz.model.request.RecommendRequestVO;
 import com.shane.orchestragent.biz.model.response.RecommendResponseVO;
@@ -99,6 +101,11 @@ public class AgentManagerImpl implements AgentManager {
             throw new BizException("REQUEST_NULL", "请求参数不能为空");
         }
 
+        // 0. 支持入参仅指定 flowId 且未指定 strategyId 时直接查询状态与执行结果
+        if (StringUtils.isNotBlank(request.getFlowId()) && StringUtils.isBlank(request.getStrategyId())) {
+            return getFlow(request.getFlowId());
+        }
+
         // 1. 获取策略元数据配置
         StrategyConfigDO strategyConfig = getStrategyConfigById(request.getStrategyId());
 
@@ -109,6 +116,8 @@ public class AgentManagerImpl implements AgentManager {
         // 3. 组装策略运行上下文环境
         StrategyContext context = buildContext(strategyConfig, flowId, sessionId, request.getMessage(),
                 request.getBizData(), request.getProperties(), request.getUserId(), request.getTraceId());
+        long startTime = System.currentTimeMillis();
+        context.setProperties("startTime", startTime);
         log.info("[FLOW: {}][INPUT] 异步流程上下文初始化完成: sessionId={}, userId={}, target='{}'",
                 flowId, sessionId, request.getUserId(), context.getStrategyTarget());
 
@@ -125,10 +134,14 @@ public class AgentManagerImpl implements AgentManager {
         VirtualThreadExecutors.get().execute(() -> {
             try {
                 String reply = strategyFlow.execute();
+                long costMs = System.currentTimeMillis() - startTime;
+                context.setProperties("costMs", costMs);
                 persistMemory(context, context.getStrategyTarget(), reply);
-                log.info("[FLOW: {}][FINISH] 异步工作流执行完成，最终产出字数: {}", flowId, reply != null ? reply.length() : 0);
+                log.info("[FLOW: {}][FINISH] 异步工作流执行完成，耗时: {}ms, 最终产出字数: {}", flowId, costMs, reply != null ? reply.length() : 0);
             } catch (Exception e) {
-                log.error("[AgentManager] 异步 invoke 流程执行异常: flowId={}", flowId, e);
+                long costMs = System.currentTimeMillis() - startTime;
+                context.setProperties("costMs", costMs);
+                log.error("[AgentManager] 异步 invoke 流程执行异常: flowId={}, 耗时: {}ms", flowId, costMs, e);
             }
         });
 
@@ -281,6 +294,61 @@ public class AgentManagerImpl implements AgentManager {
         VirtualThreadExecutors.get().execute(strategyFlow::start);
 
         return RecommendResponseVO.buildResponse(flowId, context.getSessionId(), strategyFlow.getState(), null, null, ResultCacheTypeEnum.NONE);
+    }
+
+    /**
+     * 根据流程唯一标识查询异步工作流当前运行状态与执行结果
+     */
+    @Override
+    public AgentInvokeResponseVO getFlow(String flowId) throws BizException {
+        if (StringUtils.isBlank(flowId)) {
+            throw new BizException("FLOW_ID_BLANK", "流程唯一标识 (flowId) 不能为空");
+        }
+
+        FlowStateEnum state = (flowService != null) ? flowService.getState(flowId) : FlowStateEnum.NONE;
+        StrategyFlow strategyFlow = FlowStore.get(flowId);
+
+        if ((state == null || state == FlowStateEnum.NONE) && strategyFlow == null) {
+            throw new BizException("FLOW_NOT_FOUND", "未找到流程实例: " + flowId);
+        }
+
+        if (strategyFlow != null && (state == null || state == FlowStateEnum.NONE)) {
+            state = strategyFlow.getState();
+        }
+
+        String reply = (flowService != null) ? flowService.getResult(flowId) : null;
+        List<FlowProcessText> processTexts = (flowService != null) ? flowService.getProcessTexts(flowId) : null;
+        EvaluatorResult evaluation = null;
+        String sessionId = null;
+        Long costMs = null;
+
+        if (strategyFlow != null && strategyFlow.getContext() != null) {
+            StrategyContext context = strategyFlow.getContext();
+            sessionId = context.getSessionId();
+            if (StringUtils.isBlank(reply)) {
+                reply = context.getRecommendResult();
+            }
+            evaluation = context.getLastEvaluatorResult();
+            Object costObj = context.getProperty("costMs");
+            if (costObj instanceof Number number) {
+                costMs = number.longValue();
+            } else {
+                Object startObj = context.getProperty("startTime");
+                if (startObj instanceof Number startNum) {
+                    costMs = System.currentTimeMillis() - startNum.longValue();
+                }
+            }
+        }
+
+        return AgentInvokeResponseVO.builder()
+                .flowId(flowId)
+                .sessionId(sessionId)
+                .reply(reply)
+                .state(state != null ? state.name() : FlowStateEnum.NONE.name())
+                .evaluation(evaluation)
+                .processTexts(processTexts)
+                .costMs(costMs)
+                .build();
     }
 
     private StrategyConfigDO getStrategyConfig(RecommendRequestVO request) throws BizException {

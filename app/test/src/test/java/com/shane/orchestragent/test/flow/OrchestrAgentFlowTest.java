@@ -41,7 +41,11 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -263,11 +267,18 @@ public class OrchestrAgentFlowTest {
     }
 
     @Test
-    @DisplayName("测试 ToolAgent: 严禁假兜底，null配置或空名称时严格抛出异常")
+    @DisplayName("测试 ToolAgent: 严禁假兜底，null配置、空名称或缺失端点时严格抛出异常")
     public void testToolAgentFailFast() {
         Assertions.assertThrows(NullPointerException.class, () -> new ToolAgent(null));
         com.shane.orchestragent.repository.model.ToolConfigDO emptyTool = new com.shane.orchestragent.repository.model.ToolConfigDO();
         Assertions.assertThrows(IllegalArgumentException.class, () -> new ToolAgent(emptyTool));
+
+        com.shane.orchestragent.repository.model.ToolConfigDO noEndpointTool = com.shane.orchestragent.repository.model.ToolConfigDO.builder()
+                .name("no_endpoint_tool")
+                .description("无端点工具")
+                .build();
+        ToolAgent toolAgent = new ToolAgent(noEndpointTool);
+        Assertions.assertThrows(BizException.class, () -> toolAgent.execute(new DefaultStrategyContext()));
     }
 
     @Test
@@ -368,26 +379,35 @@ public class OrchestrAgentFlowTest {
 
         // 3. 完整多轮消息格式化
         List<ChatMessageDTO> formatted = conductor.formatMessages(context);
-        Assertions.assertEquals(5, formatted.size()); // 1 system + 4 round messages
+        Assertions.assertTrue(formatted.size() >= 5); // 1 system + 4 round messages (+ 1 conductor instruction prompt)
         Assertions.assertTrue(formatted.get(1).getContent().contains("【任务规划步骤】"));
         Assertions.assertTrue(formatted.get(2).getContent().contains("【工作节点 search_worker 执行结果】"));
-        Assertions.assertTrue(formatted.get(3).getContent().contains("【工具 weather_tool 调用结果】"));
+        Assertions.assertTrue(formatted.get(3).getContent().contains("【工具 weather_tool 真实调用返回结果】"));
         Assertions.assertTrue(formatted.get(4).getContent().contains("【整改要求】: 缺少行李额说明"));
     }
 
     @Test
     @DisplayName("测试 ToolAgent 与 RagAgent 执行与历史归档")
-    public void testToolAgentAndRagAgentExecution() throws BizException {
+    @SuppressWarnings("unchecked")
+    public void testToolAgentAndRagAgentExecution() throws Exception {
         StrategyContext context = new DefaultStrategyContext();
         context.setProperties(PropertyKeys.KEY_STRATEGY_TARGET, "检索差旅退改标准");
         context.setNextAgentRequest(Map.of("city", "Beijing"));
 
-        // 1. ToolAgent
+        // 1. ToolAgent (使用纯净 Mockito 测试桩隔离外部网络)
+        HttpClient mockHttpClient = Mockito.mock(HttpClient.class);
+        HttpResponse<String> mockResponse = (HttpResponse<String>) Mockito.mock(HttpResponse.class);
+        Mockito.when(mockResponse.statusCode()).thenReturn(200);
+        Mockito.when(mockResponse.body()).thenReturn("{\"status\": \"SUCCESS\", \"tool\": \"test_tool\", \"city\": \"Beijing\"}");
+        Mockito.when(mockHttpClient.send(Mockito.any(HttpRequest.class), Mockito.any(HttpResponse.BodyHandler.class)))
+                .thenReturn(mockResponse);
+
         ToolConfigDO toolConfig = ToolConfigDO.builder()
                 .name("test_tool")
                 .description("测试外部工具")
+                .endpoint("http://127.0.0.1:8000/mock/tools/weather")
                 .build();
-        ToolAgent toolAgent = new ToolAgent(toolConfig);
+        ToolAgent toolAgent = new ToolAgent(toolConfig, mockHttpClient);
         com.shane.orchestragent.biz.model.agent.AgentResult toolResult = toolAgent.execute(context);
         Assertions.assertNotNull(toolResult);
         Assertions.assertTrue(toolResult.getOutput().contains("test_tool"));

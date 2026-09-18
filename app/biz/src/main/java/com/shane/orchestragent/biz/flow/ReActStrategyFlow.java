@@ -68,7 +68,11 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
             ConductorResult conductorResult = conduct();
 
             if (conductorResult.isError()) {
-                throw BizErrorFactory.getInstance().conductorReturnError();
+                String errorReason = conductorResult.getRequest() != null && conductorResult.getRequest().get("reason") != null
+                        ? String.valueOf(conductorResult.getRequest().get("reason"))
+                        : "调度器检测到前序步骤或系统异常中断流程";
+                log.error("[Flow: {}] Conductor 调度器检测到异常中断流程: {}", getFlowId(), errorReason);
+                throw new BizException("CONDUCTOR_RETURN_ERROR", "指挥调度器检测到异常中断流程: " + errorReason);
             }
 
             // 当指挥官判定流程可结束时，由 Evaluator 进行终局战略目标审计
@@ -164,11 +168,14 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
         // 2. 调度执行目标节点 (WorkerAgent 或 ToolAgent)
         log.info("[Flow: {}][FLOW_AGENT_EXEC] 调度节点 [{}] (类型: {}) 执行工单...", getFlowId(), nextAgentName, targetAgent.getType());
         String output = (String) executeStep(targetAgent, String.class);
-        validWorkerResult(targetAgent, output);
+        validStepResult(targetAgent, output);
         getContext().setLastAgentResult(output);
     }
 
-    private void validWorkerResult(Agent agent, String output) throws BizException {
+    private void validStepResult(Agent agent, String output) throws BizException {
+        if (StringUtils.isBlank(output)) {
+            throw BizErrorFactory.getInstance().toolExecutionError(agent.getName(), "节点产出结果为空");
+        }
         if (agent.getType() == AgentTypeEnum.WORKER) {
             WorkerErrorAgentResult errorResult = WorkerErrorAgentResult.format(output);
             if (errorResult != null) {

@@ -45,6 +45,24 @@ public class ConductorAgent extends BaseLlmAgent<StrategyContext> {
 
         properties.put("history_messages", JsonUtils.toJsonString(context.getChatMessages()));
 
+        // 提取当前流程中挂载的所有外部工具定义与入参 Schema
+        List<Map<String, Object>> toolList = new ArrayList<>();
+        if (context.getAgents() != null) {
+            for (com.shane.orchestragent.biz.agent.Agent agent : context.getAgents().values()) {
+                if (agent.getType() == AgentTypeEnum.TOOL && agent instanceof ToolAgent toolAgent) {
+                    Map<String, Object> toolMap = new HashMap<>();
+                    toolMap.put("name", toolAgent.getName());
+                    toolMap.put("description", toolAgent.getDescription());
+                    if (toolAgent.getToolConfig() != null) {
+                        toolMap.put("title", toolAgent.getToolConfig().getTitle());
+                        toolMap.put("requestJsonSchema", toolAgent.getToolConfig().getRequestJsonSchema());
+                    }
+                    toolList.add(toolMap);
+                }
+            }
+        }
+        properties.put("tool_list", JsonUtils.toJsonString(toolList));
+
         // 注入来自 Evaluator 的打回批评反馈 (如有)
         String feedback = context.getEvaluationFeedback();
         properties.put("evaluator_feedback", StringUtils.isNotEmpty(feedback) ? feedback : "无 (前序执行正常)");
@@ -70,7 +88,7 @@ public class ConductorAgent extends BaseLlmAgent<StrategyContext> {
                     chatMessages.add(new UserChatMessageDTO("【任务规划步骤】: " + chatMessage.getOutput()));
                 }
                 case TOOL -> {
-                    chatMessages.add(new UserChatMessageDTO("【工具 " + chatMessage.getAgentName() + " 调用结果】: " + chatMessage.getOutput()));
+                    chatMessages.add(new UserChatMessageDTO("【工具 " + chatMessage.getAgentName() + " 真实调用返回结果】: " + chatMessage.getOutput()));
                 }
                 case CONDUCTOR -> {
                     chatMessages.add(new AssistantChatMessageDTO(chatMessage.getOutput()));
@@ -98,12 +116,11 @@ public class ConductorAgent extends BaseLlmAgent<StrategyContext> {
             }
         }
 
-        if (chatMessages.isEmpty()) {
-            String defaultPrompt = llmConfig != null ? llmConfig.getUserPrompt() : null;
-            if (StringUtils.isBlank(defaultPrompt)) {
-                throw BizErrorFactory.getInstance().agentUserPromptMissing("CONDUCTOR");
-            }
-            chatMessages.add(new UserChatMessageDTO(defaultPrompt));
+        String conductorPrompt = llmConfig != null ? llmConfig.getUserPrompt() : null;
+        if (StringUtils.isNotBlank(conductorPrompt)) {
+            chatMessages.add(new UserChatMessageDTO("【调度指令与核验提醒】: " + conductorPrompt));
+        } else if (chatMessages.isEmpty()) {
+            throw BizErrorFactory.getInstance().agentUserPromptMissing("CONDUCTOR");
         }
 
         return chatMessages;

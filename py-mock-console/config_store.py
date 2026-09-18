@@ -46,7 +46,21 @@ def should_overwrite_on_startup() -> bool:
 class ConfigStore:
     def __init__(self):
         os.makedirs(DATA_DIR, exist_ok=True)
+        self._last_mtime = 0.0
         self.data = self._load()
+
+    def reload_if_changed(self):
+        """若检测到本地 configs.json 发生变动（如被外部编辑或 Git 变更），自动重新读取最新配置"""
+        if os.path.exists(DATA_FILE):
+            try:
+                mtime = os.path.getmtime(DATA_FILE)
+                if mtime > self._last_mtime:
+                    with open(DATA_FILE, "r", encoding="utf-8") as f:
+                        self.data = json.load(f)
+                        self._last_mtime = mtime
+                        print(f"[ConfigStore] 检测到 {DATA_FILE} 更新，已热重载最新配置到内存")
+            except Exception as e:
+                print(f"[ConfigStore] 自动热重载 {DATA_FILE} 异常: {e}")
 
     def _load(self) -> Dict[str, Any]:
         overwrite = should_overwrite_on_startup()
@@ -54,6 +68,7 @@ class ConfigStore:
             try:
                 with open(DATA_FILE, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                    self._last_mtime = os.path.getmtime(DATA_FILE)
                     print(f"[ConfigStore] 成功从本地运行时文件 {DATA_FILE} 加载数据")
                     return data
             except Exception as e:
@@ -68,6 +83,7 @@ class ConfigStore:
         try:
             with open(DATA_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
+            self._last_mtime = os.path.getmtime(DATA_FILE)
         except Exception as e:
             print(f"[ConfigStore] 写入 {DATA_FILE} 异常: {e}")
 
@@ -76,7 +92,6 @@ class ConfigStore:
 
     def reset(self):
         """重置为 config.py 中配置的默认数据"""
-        # 尝试重载 config 模块以获取 config.py 的最新变动
         try:
             import config
             importlib.reload(config)
@@ -88,9 +103,11 @@ class ConfigStore:
         return self.data
 
     def get_all(self) -> Dict[str, Any]:
+        self.reload_if_changed()
         return self.data
 
     def get_category(self, category: str) -> List[Any]:
+        self.reload_if_changed()
         return self.data.get(category, [])
 
     def save_item(self, category: str, item: Dict[str, Any], key_field: str = "name") -> Dict[str, Any]:

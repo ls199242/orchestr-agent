@@ -56,4 +56,13 @@ public interface AgentManager {
      * @throws BizException 业务异常
      */
     RecommendResponseVO process(RecommendRequestVO request) throws BizException;
+
+    /**
+     * 根据流程唯一标识查询异步工作流当前运行状态与执行结果
+     *
+     * @param flowId 流程唯一标识
+     * @return 包含当前状态、各节点处理文案明细、Evaluator质检自愈报告及最终产出成果的响应业务对象
+     * @throws BizException 业务异常 (如流程不存在)
+     */
+    AgentInvokeResponseVO getFlow(String flowId) throws BizException;
 }
