@@ -427,6 +427,47 @@ public class OrchestrAgentFlowTest {
     }
 
     @Test
+    @DisplayName("测试 ToolAgent 请求序列化与强制 HTTP_1_1 版本防 422")
+    @SuppressWarnings("unchecked")
+    public void testToolAgentRequestSerializationAndHttpVersion() throws Exception {
+        HttpClient mockHttpClient = Mockito.mock(HttpClient.class);
+        HttpResponse<String> mockResponse = (HttpResponse<String>) Mockito.mock(HttpResponse.class);
+        Mockito.when(mockResponse.statusCode()).thenReturn(200);
+        Mockito.when(mockResponse.body()).thenReturn("{\"status\":\"OK\"}");
+
+        org.mockito.ArgumentCaptor<HttpRequest> captor = org.mockito.ArgumentCaptor.forClass(HttpRequest.class);
+        Mockito.when(mockHttpClient.send(captor.capture(), Mockito.any(HttpResponse.BodyHandler.class)))
+                .thenReturn(mockResponse);
+
+        ToolConfigDO toolConfig = ToolConfigDO.builder()
+                .name("query_user_profile_tool")
+                .description("旅客偏好查询")
+                .endpoint("http://127.0.0.1:8000/mock/tools/user-profile")
+                .build();
+        ToolAgent toolAgent = new ToolAgent(toolConfig, mockHttpClient);
+
+        // 1. null 请求，兜底为 "{}" 且 HTTP 版本为 HTTP_1_1
+        StrategyContext context = new DefaultStrategyContext();
+        context.setNextAgentRequest(null);
+        toolAgent.execute(context);
+        HttpRequest req1 = captor.getValue();
+        Assertions.assertEquals(HttpClient.Version.HTTP_1_1, req1.version().orElse(null));
+
+        // 2. 正常 Map 请求
+        context.setNextAgentRequest(Map.of("userId", "U8801"));
+        toolAgent.execute(context);
+        HttpRequest req2 = captor.getValue();
+        Assertions.assertEquals(HttpClient.Version.HTTP_1_1, req2.version().orElse(null));
+
+        // 3. 字符串格式 JSON 请求
+        context.setNextAgentRequest(null);
+        context.setProperties("agentRequest", "{\"userId\":\"U8801\"}");
+        toolAgent.execute(context);
+        HttpRequest req3 = captor.getValue();
+        Assertions.assertEquals(HttpClient.Version.HTTP_1_1, req3.version().orElse(null));
+    }
+
+    @Test
     @DisplayName("测试智能体提示词缺失时严格 Fail-Fast 阻断执行（无代码保底字符串）")
     public void testAgentFailFastWhenMissingPrompt() {
         StrategyContext context = new DefaultStrategyContext();

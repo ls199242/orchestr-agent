@@ -1,6 +1,6 @@
 import os
 import httpx
-from fastapi import FastAPI, Request, HTTPException, Response
+from fastapi import FastAPI, Request, HTTPException, Response, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -76,7 +76,8 @@ from mock_store import mock_rule_store
 # ==========================================
 
 @app.post("/mock/tools/weather")
-def mock_weather_tool(payload: Dict[str, Any]):
+def mock_weather_tool(payload: Optional[Dict[str, Any]] = Body(default=None)):
+    payload = payload or {}
     matched = mock_rule_store.match_rule("query_weather_tool", payload)
     if matched:
         return JSONResponse(status_code=matched.get("responseStatus", 200), content=matched.get("responseData", {}))
@@ -93,7 +94,8 @@ def mock_weather_tool(payload: Dict[str, Any]):
 
 
 @app.post("/mock/tools/user-profile")
-def mock_user_profile_tool(payload: Dict[str, Any]):
+def mock_user_profile_tool(payload: Optional[Dict[str, Any]] = Body(default=None)):
+    payload = payload or {}
     matched = mock_rule_store.match_rule("query_user_profile_tool", payload)
     if matched:
         return JSONResponse(status_code=matched.get("responseStatus", 200), content=matched.get("responseData", {}))
@@ -108,7 +110,8 @@ def mock_user_profile_tool(payload: Dict[str, Any]):
 
 
 @app.post("/mock/tools/arrival-services")
-def mock_arrival_services_tool(payload: Dict[str, Any]):
+def mock_arrival_services_tool(payload: Optional[Dict[str, Any]] = Body(default=None)):
+    payload = payload or {}
     matched = mock_rule_store.match_rule("query_arrival_services_tool", payload)
     if matched:
         return JSONResponse(status_code=matched.get("responseStatus", 200), content=matched.get("responseData", {}))
@@ -138,7 +141,8 @@ def mock_arrival_services_tool(payload: Dict[str, Any]):
 
 
 @app.post("/mock/tools/flights")
-def mock_flight_search(payload: Dict[str, Any]):
+def mock_flight_search(payload: Optional[Dict[str, Any]] = Body(default=None)):
+    payload = payload or {}
     matched = mock_rule_store.match_rule("query_flights_tool", payload)
     if matched:
         return JSONResponse(status_code=matched.get("responseStatus", 200), content=matched.get("responseData", {}))
@@ -152,7 +156,8 @@ def mock_flight_search(payload: Dict[str, Any]):
 
 
 @app.post("/mock/tools/calc")
-def mock_calculator(payload: Dict[str, Any]):
+def mock_calculator(payload: Optional[Dict[str, Any]] = Body(default=None)):
+    payload = payload or {}
     matched = mock_rule_store.match_rule("calc_tool", payload)
     if matched:
         return JSONResponse(status_code=matched.get("responseStatus", 200), content=matched.get("responseData", {}))

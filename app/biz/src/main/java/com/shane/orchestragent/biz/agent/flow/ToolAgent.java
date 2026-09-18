@@ -39,6 +39,7 @@ public class ToolAgent extends BaseAgent<AgentContext> {
 
     public ToolAgent(ToolConfigDO toolConfig) {
         this(toolConfig, HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(15))
                 .build());
     }
@@ -64,7 +65,20 @@ public class ToolAgent extends BaseAgent<AgentContext> {
         if (request == null && context instanceof StrategyContext strategyContext) {
             request = strategyContext.getNextAgentRequest();
         }
-        String requestJson = request != null ? JsonUtils.toJsonString(request) : "{}";
+        String requestJson;
+        if (request == null) {
+            requestJson = "{}";
+        } else if (request instanceof String str) {
+            String trimmed = str.trim();
+            if (trimmed.isEmpty() || "null".equalsIgnoreCase(trimmed)) {
+                requestJson = "{}";
+            } else {
+                requestJson = trimmed;
+            }
+        } else {
+            String json = JsonUtils.toJsonString(request);
+            requestJson = (StringUtils.isBlank(json) || "null".equalsIgnoreCase(json.trim())) ? "{}" : json;
+        }
 
         String output = callTool(requestJson, context);
 
@@ -91,6 +105,7 @@ public class ToolAgent extends BaseAgent<AgentContext> {
 
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(endpoint))
+                .version(HttpClient.Version.HTTP_1_1)
                 .timeout(Duration.ofSeconds(20))
                 .header("Content-Type", "application/json; charset=UTF-8")
                 .header("Accept", "application/json")
