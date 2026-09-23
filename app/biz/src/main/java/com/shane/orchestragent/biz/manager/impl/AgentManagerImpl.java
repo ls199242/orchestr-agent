@@ -15,7 +15,6 @@ import com.shane.orchestragent.biz.model.vo.AgentInvokeResponseVO;
 import com.shane.orchestragent.biz.service.FlowService;
 import com.shane.orchestragent.biz.service.SseService;
 import com.shane.orchestragent.biz.sse.SseEmitterUTF8;
-import com.shane.orchestragent.biz.tool.VirtualThreadExecutors;
 import com.shane.orchestragent.common.constant.PropertyKeys;
 import com.shane.orchestragent.common.enums.FlowStateEnum;
 import com.shane.orchestragent.common.exception.BizErrorFactory;
@@ -112,9 +111,9 @@ public class AgentManagerImpl implements AgentManager {
             flowService.markState(flowId, FlowStateEnum.INITIAL);
         }
 
-        // 6. 提交虚拟线程池异步启动执行
+        // 6. 提交虚拟线程异步启动执行
         log.info("[FLOW: {}][START] 提交异步线程启动 ReAct 工作流...", flowId);
-        VirtualThreadExecutors.get().execute(strategyFlow::execute);
+        Thread.ofVirtual().name("flow-exec-" + flowId).start(strategyFlow::execute);
 
         // 7. 立即返回异步执行标识
         return AgentInvokeResponseVO.builder()
@@ -156,9 +155,9 @@ public class AgentManagerImpl implements AgentManager {
                 ? sseService.attachFlow(strategyFlow)
                 : new SseEmitterUTF8(60000L);
 
-        // 6. 虚拟线程池异步启动流程（逻辑完全内化，与 invoke 对齐）
+        // 6. 虚拟线程异步启动流程（逻辑完全内化，与 invoke 对齐）
         log.info("[FLOW: {}][START] 启动 MultipleChat 意图分流与会话流水线...", flowId);
-        VirtualThreadExecutors.get().execute(strategyFlow::execute);
+        Thread.ofVirtual().name("flow-chat-" + flowId).start(strategyFlow::execute);
 
         return emitter;
     }

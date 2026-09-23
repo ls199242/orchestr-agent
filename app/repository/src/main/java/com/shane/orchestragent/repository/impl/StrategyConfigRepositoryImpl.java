@@ -28,9 +28,6 @@ public class StrategyConfigRepositoryImpl extends AbstractConfigRepository<Strat
     /** 全量策略列表不可变快照 */
     private volatile List<StrategyConfigDO> dataList = Collections.emptyList();
 
-    /** 按策略主键 ID 索引字典快照 */
-    private volatile Map<String, StrategyConfigDO> dataMapById = Collections.emptyMap();
-
     /** 按策略编码 Code 索引字典快照 */
     private volatile Map<String, StrategyConfigDO> dataMapByCode = Collections.emptyMap();
 
@@ -40,23 +37,6 @@ public class StrategyConfigRepositoryImpl extends AbstractConfigRepository<Strat
             return null;
         }
         return dataMapByCode.get(code);
-    }
-
-    @Override
-    public StrategyConfigDO getById(String strategyId) {
-        if (StringUtils.isBlank(strategyId)) {
-            return null;
-        }
-        StrategyConfigDO found = dataMapByCode.get(strategyId);
-        if (found != null) {
-            return found;
-        }
-        return dataMapById.get(strategyId);
-    }
-
-    @Override
-    public StrategyConfigDO findStrategyByCode(String code) {
-        return getByCode(code);
     }
 
     @Override
@@ -81,25 +61,14 @@ public class StrategyConfigRepositoryImpl extends AbstractConfigRepository<Strat
             return false;
         }
 
-        Map<String, StrategyConfigDO> mapById = new HashMap<>();
         Map<String, StrategyConfigDO> mapByCode = new HashMap<>();
         for (StrategyConfigDO cfg : remoteList) {
-            if (cfg != null) {
-                String code = StringUtils.isNotBlank(cfg.getCode()) ? cfg.getCode() : cfg.getStrategyId();
-                if (StringUtils.isNotBlank(code)) {
-                    if (StringUtils.isBlank(cfg.getCode())) {
-                        cfg.setCode(code);
-                    }
-                    mapByCode.put(code, cfg);
-                }
-                if (StringUtils.isNotBlank(cfg.getStrategyId())) {
-                    mapById.put(cfg.getStrategyId(), cfg);
-                }
+            if (cfg != null && StringUtils.isNotBlank(cfg.getCode())) {
+                mapByCode.put(cfg.getCode(), cfg);
             }
         }
 
         this.dataList = Collections.unmodifiableList(new ArrayList<>(remoteList));
-        this.dataMapById = Collections.unmodifiableMap(mapById);
         this.dataMapByCode = Collections.unmodifiableMap(mapByCode);
         logger.info("[StrategyConfigRepository] 从远程接口成功加载 {} 条策略配置", remoteList.size());
         return true;

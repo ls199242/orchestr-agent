@@ -61,19 +61,4 @@ public class AgentConfigDO implements Serializable {
 
     /** 额外扩展属性表 */
     private Map<String, Object> extraProperties;
-
-    public String getEffectiveSystemPrompt() {
-        return systemPrompt;
-    }
-
-    public String getEffectiveUserPrompt() {
-        return userPrompt;
-    }
-
-    public String getCode() {
-        if (code != null && !code.isBlank()) {
-            return code;
-        }
-        return name;
-    }
 }

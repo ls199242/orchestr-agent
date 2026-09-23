@@ -60,6 +60,9 @@ public class ModelConfigDO implements Serializable {
         if (code != null && !code.isBlank()) {
             return code.trim();
         }
-        return name != null ? name.trim() : "deepseek-flash";
+        if (name != null && !name.isBlank()) {
+            return name.trim();
+        }
+        return null;
     }
 }

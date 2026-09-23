@@ -239,6 +239,7 @@ public class OrchestrAgentFlowTest {
     public void testMultipleChatRouterEmptyReplyFailFast() {
         StrategyConfigDO config = StrategyConfigDO.builder()
                 .strategyId("chat_strategy")
+                .code("chat_strategy")
                 .name("客服多轮问答策略")
                 .maxStep(10)
                 .flowTopologyType("MULTIPLE_CHAT")
@@ -457,6 +458,7 @@ public class OrchestrAgentFlowTest {
 
         StrategyConfigDO config = StrategyConfigDO.builder()
                 .strategyId("companion_rag_strat")
+                .code("companion_rag_strat")
                 .flowTopologyType("REACT")
                 .maxStep(10)
                 .toolCodes(List.of("weather_tool"))
@@ -492,6 +494,7 @@ public class OrchestrAgentFlowTest {
 
         StrategyConfigDO config = StrategyConfigDO.builder()
                 .strategyId("pure_worker_codes_strat")
+                .code("pure_worker_codes_strat")
                 .flowTopologyType("REACT")
                 .maxStep(10)
                 .toolCodes(List.of("weather_tool"))

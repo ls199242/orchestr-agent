@@ -73,8 +73,8 @@ public class RepositoryIntegrationTest {
         assertEquals("strategyConfigRepository", strategyRepo.name());
 
         // 验证无数据时不兜底伪造策略，直接返回 null
-        assertNull(strategyRepo.getById("default_react_strategy"), "无远程数据时严禁默认兜底生成策略");
-        assertNull(strategyRepo.findStrategyByCode("react_default_strategy"));
+        assertNull(strategyRepo.getByCode("default_react_strategy"), "无远程数据时严禁默认兜底生成策略");
+        assertNull(strategyRepo.getByCode("react_default_strategy"));
         assertTrue(strategyRepo.getAll().isEmpty(), "初始策略快照应为空列表");
 
         // 模拟远程下发策略并 reload
@@ -100,8 +100,6 @@ public class RepositoryIntegrationTest {
         strategyRepo.reload();
 
         assertEquals(custom, strategyRepo.getByCode("custom_code_01"));
-        assertEquals(custom, strategyRepo.findStrategyByCode("custom_code_01"));
-        assertEquals(custom, strategyRepo.getById("custom_test_01"));
         assertEquals(List.of("search_worker"), strategyRepo.getByCode("custom_code_01").getWorkerCodes());
         assertEquals("MULTIPLE_CHAT", strategyRepo.getByCode("multi_chat_strategy").getFlowTopologyType());
         assertTrue(strategyRepo.getByCode("multi_chat_strategy").getStream());
@@ -115,8 +113,8 @@ public class RepositoryIntegrationTest {
         assertEquals("agentConfigRepository", agentRepo.name());
 
         // 验证初始状态下无兜底数据
-        assertNull(agentRepo.getByName("ROUTER"), "无外部配置时严禁自动填充默认智能体");
-        assertNull(agentRepo.getAgent("PLANNER"));
+        assertNull(agentRepo.getByCode("ROUTER"), "无外部配置时严禁自动填充默认智能体");
+        assertNull(agentRepo.getByCode("PLANNER"));
         assertTrue(agentRepo.getAll().isEmpty());
 
         // 模拟远程下发标准智能体
@@ -129,21 +127,16 @@ public class RepositoryIntegrationTest {
         ReflectionTestUtils.setField(agentRepo, "agentConfigApiClient", mockAgentClient);
         agentRepo.reload();
 
-        // 验证检索（按 code 和按 name）
+        // 验证检索（按 code）
         assertEquals(router, agentRepo.getByCode("router_code"));
-        assertEquals(router, agentRepo.getByName("ROUTER"));
         assertEquals(planner, agentRepo.getByCode("planner_code"));
-        assertEquals(planner, agentRepo.getAgent("PLANNER"));
         assertEquals(conductor, agentRepo.getByCode("conductor_code"));
-        assertEquals(conductor, agentRepo.getByName("CONDUCTOR"));
         assertEquals(worker, agentRepo.getByCode("search_worker_code"));
-        assertEquals(worker, agentRepo.getByName("search_worker"));
         assertEquals(4, agentRepo.getAll().size());
         assertTrue(agentRepo.getMap().containsKey("router_code"));
 
         // 验证未注册的智能体返回 null
         assertNull(agentRepo.getByCode("NON_EXISTENT_CODE"));
-        assertNull(agentRepo.getByName("NON_EXISTENT_AGENT"));
     }
 
     @Test
@@ -183,20 +176,17 @@ public class RepositoryIntegrationTest {
         // 仓储中无对应 key 时，按参数传入的调用方 fallback 返回
         int fallbackStep = dictRepo.getValue(DictRepository.Keys.KEY_FLOW_MAX_STEP, 10);
         assertEquals(10, fallbackStep);
-        assertEquals(10, dictRepo.getDict(DictRepository.Keys.KEY_FLOW_MAX_STEP, 10));
 
         long fallbackTimeout = dictRepo.getValue(DictRepository.Keys.KEY_LLM_MAX_WAIT_TIME, 5000L);
         assertEquals(5000L, fallbackTimeout);
-        assertEquals(5000L, dictRepo.getDict(DictRepository.Keys.KEY_LLM_MAX_WAIT_TIME, 5000L));
 
         boolean fallbackFlag = dictRepo.getValue(DictRepository.Keys.KEY_LOG_FLAGS, true);
         assertTrue(fallbackFlag);
-        assertTrue(dictRepo.getDict(DictRepository.Keys.KEY_LOG_FLAGS, true));
 
-        double fallbackTemp = dictRepo.getDict(DictRepository.Keys.KEY_DEFAULT_SYSTEM_AGENT_TEMP, 0.7);
+        double fallbackTemp = dictRepo.getValue(DictRepository.Keys.KEY_DEFAULT_SYSTEM_AGENT_TEMP, 0.7);
         assertEquals(0.7, fallbackTemp, 0.001);
 
-        String fallbackModel = dictRepo.getDict(DictRepository.Keys.KEY_DEFAULT_LLM_MODEL, "fallback-model");
+        String fallbackModel = dictRepo.getValue(DictRepository.Keys.KEY_DEFAULT_LLM_MODEL, "fallback-model");
         assertEquals("fallback-model", fallbackModel);
 
         // 模拟远程客户端返回字典配置并 reload
@@ -212,13 +202,10 @@ public class RepositoryIntegrationTest {
 
         // 重新读取已同步的配置
         assertEquals(20, dictRepo.getValue(DictRepository.Keys.KEY_FLOW_MAX_STEP, 10));
-        assertEquals(20, dictRepo.getDict(DictRepository.Keys.KEY_FLOW_MAX_STEP, 10));
         assertEquals(30000L, dictRepo.getValue(DictRepository.Keys.KEY_LLM_MAX_WAIT_TIME, 5000L));
-        assertEquals(30000L, dictRepo.getDict(DictRepository.Keys.KEY_LLM_MAX_WAIT_TIME, 5000L));
         assertFalse(dictRepo.getValue(DictRepository.Keys.KEY_LOG_FLAGS, true));
-        assertFalse(dictRepo.getDict(DictRepository.Keys.KEY_LOG_FLAGS, true));
-        assertEquals(0.5, dictRepo.getDict(DictRepository.Keys.KEY_DEFAULT_SYSTEM_AGENT_TEMP, 0.7), 0.001);
-        assertEquals("Deepseek-R1", dictRepo.getDict(DictRepository.Keys.KEY_DEFAULT_LLM_MODEL, "fallback-model"));
+        assertEquals(0.5, dictRepo.getValue(DictRepository.Keys.KEY_DEFAULT_SYSTEM_AGENT_TEMP, 0.7), 0.001);
+        assertEquals("Deepseek-R1", dictRepo.getValue(DictRepository.Keys.KEY_DEFAULT_LLM_MODEL, "fallback-model"));
     }
 
     @Test
@@ -227,18 +214,20 @@ public class RepositoryIntegrationTest {
         assertEquals("agentConfigRepository", agentRepo.name());
 
         // 验证初始状态无数据返回 null (严格不兜底)
-        assertNull(agentRepo.getByName("PLANNER_PROMPT_TEST"));
+        assertNull(agentRepo.getByCode("PLANNER_PROMPT_TEST"));
 
         // 模拟远程下发包含 systemPrompt 和 userPrompt 的智能体配置
         AgentConfigApiClient mockAgentClient = () -> List.of(
                 AgentConfigDO.builder()
                         .name("PLANNER_PROMPT_TEST")
+                        .code("PLANNER_PROMPT_TEST")
                         .model("gpt-4o")
                         .systemPrompt("你是专业的任务规划专家")
                         .userPrompt("请针对以下目标进行拆解: ${strategy_target}")
                         .build(),
                 AgentConfigDO.builder()
                         .name("WORKER_PROMPT_TEST")
+                        .code("WORKER_PROMPT_TEST")
                         .model("gpt-4o")
                         .systemPrompt("你是专业的工作执行节点")
                         .build()
@@ -246,15 +235,15 @@ public class RepositoryIntegrationTest {
         ReflectionTestUtils.setField(agentRepo, "agentConfigApiClient", mockAgentClient);
         agentRepo.reload();
 
-        AgentConfigDO planner = agentRepo.getByName("PLANNER_PROMPT_TEST");
+        AgentConfigDO planner = agentRepo.getByCode("PLANNER_PROMPT_TEST");
         assertNotNull(planner);
-        assertEquals("你是专业的任务规划专家", planner.getEffectiveSystemPrompt());
-        assertEquals("请针对以下目标进行拆解: ${strategy_target}", planner.getEffectiveUserPrompt());
+        assertEquals("你是专业的任务规划专家", planner.getSystemPrompt());
+        assertEquals("请针对以下目标进行拆解: ${strategy_target}", planner.getUserPrompt());
 
-        AgentConfigDO worker = agentRepo.getByName("WORKER_PROMPT_TEST");
+        AgentConfigDO worker = agentRepo.getByCode("WORKER_PROMPT_TEST");
         assertNotNull(worker);
-        assertEquals("你是专业的工作执行节点", worker.getEffectiveSystemPrompt());
-        assertNull(worker.getEffectiveUserPrompt());
+        assertEquals("你是专业的工作执行节点", worker.getSystemPrompt());
+        assertNull(worker.getUserPrompt());
     }
 
     @Test
@@ -264,7 +253,7 @@ public class RepositoryIntegrationTest {
 
         // 验证无数据返回 null
         assertNull(modelRepo.getDefaultModel());
-        assertNull(modelRepo.findByCode("gpt-4o"));
+        assertNull(modelRepo.getByCode("gpt-4o"));
 
         // 模拟远程加载模型配置
         ModelConfigApiClient mockModelClient = () -> List.of(
@@ -279,15 +268,9 @@ public class RepositoryIntegrationTest {
         assertEquals("gpt-4o", modelRepo.getDefaultModel().getCode());
         assertNotNull(modelRepo.getByCode("deepseek-chat"));
         assertEquals("deepseek-chat", modelRepo.getByCode("deepseek-chat").getCode());
-        assertEquals("deepseek-chat", modelRepo.findByCode("deepseek-chat").getCode());
-        assertNotNull(modelRepo.findByName("DeepSeek"));
-        assertEquals("deepseek-chat", modelRepo.findByName("DeepSeek").getCode());
-        assertNotNull(modelRepo.findByNameOrCode("deepseek"));
-        assertEquals("deepseek-chat", modelRepo.findByNameOrCode("deepseek").getCode());
 
         // 验证未知模型不回退默认模型，严格返回 null 避免隐式兜底
         assertNull(modelRepo.getByCode("unknown-custom-model"));
-        assertNull(modelRepo.findByCode("unknown-custom-model"));
     }
 
     @Test
@@ -331,7 +314,6 @@ public class RepositoryIntegrationTest {
         assertNotNull(reloaded, "应当能够通过 code 获取到远程下发的全新策略");
         assertEquals(35, reloaded.getMaxStep());
         assertEquals("remote_code_999", reloaded.getCode());
-        assertEquals(reloaded, strategyRepo.getById("remote_strategy_999"));
 
         // 测试移除回调
         strategyRepo.removeCallback(callback);
@@ -390,8 +372,8 @@ public class RepositoryIntegrationTest {
         ReflectionTestUtils.setField(modelRepo, "modelConfigApiClient", mockClient);
         modelRepo.reload();
 
-        // 通过配置名称 "Deepseek" 获取
-        ModelConfigDO resolved = modelRepo.findByName("Deepseek");
+        // 通过编码 "Deepseek" 获取
+        ModelConfigDO resolved = modelRepo.getByCode("Deepseek");
         assertNotNull(resolved);
         assertEquals("Deepseek", resolved.getName());
         assertEquals("deepseek-flash", resolved.getActualModelName());
@@ -402,9 +384,8 @@ public class RepositoryIntegrationTest {
         assertEquals("Deepseek", defaultModel.getName());
         assertEquals("deepseek-flash", defaultModel.getActualModelName());
 
-        // 验证大小写不敏感与编码查询
-        assertNotNull(modelRepo.findByCode("deepseek"));
-        assertNotNull(modelRepo.findByNameOrCode("deepseek-flash"));
+        // 验证大小写不敏感编码查询
+        assertNotNull(modelRepo.getByCode("deepseek"));
 
         // 验证 OpenAiCompatibleLlmClient 端到端加载并调用 Deepseek
         OpenAiCompatibleLlmClient client = new OpenAiCompatibleLlmClient();

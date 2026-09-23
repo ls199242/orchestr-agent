@@ -21,34 +21,8 @@ public interface ModelConfigRepository extends Repository<ModelConfigDO> {
      * @param code 模型代码（如 "gpt-4o", "Deepseek", "deepseek-flash"）
      * @return 模型配置实体
      */
-    ModelConfigDO findByCode(String code);
-
-    /**
-     * 根据模型唯一编码查询模型接入配置（通用契约规范）
-     *
-     * @param code 模型代码
-     * @return 模型配置实体
-     */
     @Override
-    default ModelConfigDO getByCode(String code) {
-        return findByCode(code);
-    }
-
-    /**
-     * 根据模型配置名称查询模型接入配置（大小写不敏感）
-     *
-     * @param name 模型配置展示名称（如 "Deepseek"）
-     * @return 模型配置实体
-     */
-    ModelConfigDO findByName(String name);
-
-    /**
-     * 根据配置名称或模型编码查询模型接入配置（大小写不敏感）
-     *
-     * @param nameOrCode 模型配置名称或唯一编码（如 "Deepseek", "deepseek-flash"）
-     * @return 模型配置实体
-     */
-    ModelConfigDO findByNameOrCode(String nameOrCode);
+    ModelConfigDO getByCode(String code);
 
     /**
      * 获取系统当前默认推荐的大模型配置

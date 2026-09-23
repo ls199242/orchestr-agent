@@ -86,8 +86,8 @@ public class StrategyFlowFactory {
         this.toolConfigRepository = toolConfigRepository;
 
         if (dictRepository != null) {
-            int expireMins = dictRepository.getDict(DictRepository.Keys.KEY_FLOW_INSTANCE_EXPIRE_MINUTES, DictRepository.Defaults.DEFAULT_FLOW_INSTANCE_EXPIRE_MINUTES);
-            int maxCap = dictRepository.getDict(DictRepository.Keys.KEY_FLOW_INSTANCE_MAX_CAPACITY, DictRepository.Defaults.DEFAULT_FLOW_INSTANCE_MAX_CAPACITY);
+            int expireMins = dictRepository.getValue(DictRepository.Keys.KEY_FLOW_INSTANCE_EXPIRE_MINUTES, DictRepository.Defaults.DEFAULT_FLOW_INSTANCE_EXPIRE_MINUTES);
+            int maxCap = dictRepository.getValue(DictRepository.Keys.KEY_FLOW_INSTANCE_MAX_CAPACITY, DictRepository.Defaults.DEFAULT_FLOW_INSTANCE_MAX_CAPACITY);
             com.shane.orchestragent.biz.flow.store.FlowStore.configure(expireMins, maxCap);
         }
     }
@@ -95,8 +95,8 @@ public class StrategyFlowFactory {
     public void setDictRepository(DictRepository dictRepository) {
         this.dictRepository = dictRepository;
         if (dictRepository != null) {
-            int expireMins = dictRepository.getDict(DictRepository.Keys.KEY_FLOW_INSTANCE_EXPIRE_MINUTES, DictRepository.Defaults.DEFAULT_FLOW_INSTANCE_EXPIRE_MINUTES);
-            int maxCap = dictRepository.getDict(DictRepository.Keys.KEY_FLOW_INSTANCE_MAX_CAPACITY, DictRepository.Defaults.DEFAULT_FLOW_INSTANCE_MAX_CAPACITY);
+            int expireMins = dictRepository.getValue(DictRepository.Keys.KEY_FLOW_INSTANCE_EXPIRE_MINUTES, DictRepository.Defaults.DEFAULT_FLOW_INSTANCE_EXPIRE_MINUTES);
+            int maxCap = dictRepository.getValue(DictRepository.Keys.KEY_FLOW_INSTANCE_MAX_CAPACITY, DictRepository.Defaults.DEFAULT_FLOW_INSTANCE_MAX_CAPACITY);
             com.shane.orchestragent.biz.flow.store.FlowStore.configure(expireMins, maxCap);
         }
     }
@@ -181,7 +181,7 @@ public class StrategyFlowFactory {
             return strategyConfig.getMaxStep();
         }
         return dictRepository != null
-                ? dictRepository.getDict(DictRepository.Keys.KEY_FLOW_MAX_STEP, DictRepository.Defaults.DEFAULT_FLOW_MAX_STEP)
+                ? dictRepository.getValue(DictRepository.Keys.KEY_FLOW_MAX_STEP, DictRepository.Defaults.DEFAULT_FLOW_MAX_STEP)
                 : DictRepository.Defaults.DEFAULT_FLOW_MAX_STEP;
     }
 
@@ -190,7 +190,7 @@ public class StrategyFlowFactory {
      */
     private int resolveMaxEvalRetry() {
         return dictRepository != null
-                ? dictRepository.getDict(DictRepository.Keys.KEY_FLOW_EVAL_MAX_RETRY, DictRepository.Defaults.DEFAULT_FLOW_EVAL_MAX_RETRY)
+                ? dictRepository.getValue(DictRepository.Keys.KEY_FLOW_EVAL_MAX_RETRY, DictRepository.Defaults.DEFAULT_FLOW_EVAL_MAX_RETRY)
                 : DictRepository.Defaults.DEFAULT_FLOW_EVAL_MAX_RETRY;
     }
 
@@ -243,14 +243,14 @@ public class StrategyFlowFactory {
 
         // 若配置库未指定模型，读取字典全局默认模型
         if (StringUtils.isBlank(model) && dictRepository != null) {
-            model = dictRepository.getDict(DictRepository.Keys.KEY_DEFAULT_LLM_MODEL, null);
+            model = dictRepository.getValue(DictRepository.Keys.KEY_DEFAULT_LLM_MODEL, null);
         }
         if (StringUtils.isBlank(model)) {
             throw new BizException("LLM_MODEL_NOT_CONFIGURED", "系统智能体 [" + type.name() + "] 未配置大模型名称 (model)");
         }
         if (temp == null) {
             temp = dictRepository != null
-                    ? dictRepository.getDict(DictRepository.Keys.KEY_DEFAULT_SYSTEM_AGENT_TEMP, fallbackTemp)
+                    ? dictRepository.getValue(DictRepository.Keys.KEY_DEFAULT_SYSTEM_AGENT_TEMP, fallbackTemp)
                     : fallbackTemp;
         }
 
@@ -330,14 +330,14 @@ public class StrategyFlowFactory {
         String userPrompt = agentDO != null ? agentDO.getUserPrompt() : null;
 
         if (StringUtils.isBlank(model) && dictRepository != null) {
-            model = dictRepository.getDict(DictRepository.Keys.KEY_DEFAULT_LLM_MODEL, null);
+            model = dictRepository.getValue(DictRepository.Keys.KEY_DEFAULT_LLM_MODEL, null);
         }
         if (StringUtils.isBlank(model)) {
             throw new BizException("LLM_MODEL_NOT_CONFIGURED", "业务智能体 [" + (agentDO != null ? agentDO.getName() : "unknown") + "] 未配置大模型名称 (model)");
         }
         if (temp == null) {
             temp = dictRepository != null
-                    ? dictRepository.getDict(DictRepository.Keys.KEY_DEFAULT_WORKER_AGENT_TEMP, DictRepository.Defaults.DEFAULT_WORKER_AGENT_TEMP)
+                    ? dictRepository.getValue(DictRepository.Keys.KEY_DEFAULT_WORKER_AGENT_TEMP, DictRepository.Defaults.DEFAULT_WORKER_AGENT_TEMP)
                     : DictRepository.Defaults.DEFAULT_WORKER_AGENT_TEMP;
         }
 

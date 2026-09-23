@@ -58,36 +58,42 @@ public class OrchestrAgentControllerTest {
         List<AgentConfigDO> systemAgents = List.of(
                 AgentConfigDO.builder()
                         .name("PLANNER")
+                        .code("PLANNER")
                         .model("Deepseek")
                         .systemPrompt("# PlannerAgent\n请分析目标，输出规划步骤: {\"steps\": [{\"step\": 1, \"agent\": \"search_worker\", \"description\": \"查询\"}]}")
                         .userPrompt("目标: ${strategy_target}")
                         .build(),
                 AgentConfigDO.builder()
                         .name("CONDUCTOR")
+                        .code("CONDUCTOR")
                         .model("Deepseek")
                         .systemPrompt("# ConductorAgent\n调度下一步。输出: {\"next\": \"FINISH\", \"request\": {}}")
                         .userPrompt("默认调度指令")
                         .build(),
                 AgentConfigDO.builder()
                         .name("EVALUATOR")
+                        .code("EVALUATOR")
                         .model("Deepseek")
                         .systemPrompt("# EvaluatorAgent\n验收输出: {\"pass\": true, \"score\": 100, \"critique\": \"\", \"suggestedRemedy\": \"\"}")
                         .userPrompt("【目标】: ${strategy_target}\n【执行结果汇总】: ${allAgentOutputs}")
                         .build(),
                 AgentConfigDO.builder()
                         .name("REPORTER")
+                        .code("REPORTER")
                         .model("Deepseek")
                         .systemPrompt("# ReporterAgent\n汇总结果")
                         .userPrompt("请根据执行总结输出最终回复:\n${flowExecutionSummary}")
                         .build(),
                 AgentConfigDO.builder()
                         .name("ROUTER")
+                        .code("ROUTER")
                         .model("Deepseek")
                         .systemPrompt("# RouterAgent\n分析意图: {\"handoffToPlanner\": true, \"reply\": \"\"}")
                         .userPrompt("用户诉求: ${strategy_target}")
                         .build(),
                 AgentConfigDO.builder()
                         .name("CHAT_SUMMARY")
+                        .code("SUMMARY")
                         .model("Deepseek")
                         .systemPrompt("# ChatSummaryAgent\n摘要压缩")
                         .build(),
@@ -116,6 +122,7 @@ public class OrchestrAgentControllerTest {
         StrategyConfigRepositoryImpl strategyRepo = new StrategyConfigRepositoryImpl();
         StrategyConfigDO configDO = StrategyConfigDO.builder()
                 .strategyId("biz_travel")
+                .code("biz_travel")
                 .name("商务差旅推荐策略")
                 .maxStep(10)
                 .flowTopologyType("REACT")

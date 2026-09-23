@@ -140,60 +140,6 @@ public interface DictRepository extends Repository<DictDO> {
         }
     }
 
-    /**
-     * 获取整型字典值
-     *
-     * @param key          字典键名
-     * @param defaultValue 不存在或解析异常时的保底默认值
-     * @return 字典整型取值
-     */
-    default int getDict(String key, int defaultValue) {
-        return getValue(key, defaultValue);
-    }
-
-    /**
-     * 获取双精度浮点类型字典值
-     *
-     * @param key          字典键名
-     * @param defaultValue 不存在或解析异常时的保底默认值
-     * @return 字典浮点取值
-     */
-    default double getDict(String key, double defaultValue) {
-        return getValue(key, defaultValue);
-    }
-
-    /**
-     * 获取字符串类型字典值
-     *
-     * @param key          字典键名
-     * @param defaultValue 不存在或解析异常时的保底默认值
-     * @return 字典字符串取值
-     */
-    default String getDict(String key, String defaultValue) {
-        return getValue(key, defaultValue);
-    }
-
-    /**
-     * 获取布尔类型字典值
-     *
-     * @param key          字典键名
-     * @param defaultValue 不存在或解析异常时的保底默认值
-     * @return 字典布尔取值
-     */
-    default boolean getDict(String key, boolean defaultValue) {
-        return getValue(key, defaultValue);
-    }
-
-    /**
-     * 获取长整型字典值
-     *
-     * @param key          字典键名
-     * @param defaultValue 不存在或解析异常时的保底默认值
-     * @return 字典长整型取值
-     */
-    default long getDict(String key, long defaultValue) {
-        return getValue(key, defaultValue);
-    }
 
     /**
      * 获取当前字典的原始 Map 视图

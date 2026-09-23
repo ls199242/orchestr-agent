@@ -108,6 +108,7 @@ public class FlowStopTest {
         this.strategyRepo = new StrategyConfigRepositoryImpl();
         StrategyConfigDO configDO = StrategyConfigDO.builder()
                 .strategyId("test_stop_strat")
+                .code("test_stop_strat")
                 .name("测试终止策略")
                 .maxStep(10)
                 .flowTopologyType("REACT")
