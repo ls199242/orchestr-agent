@@ -39,11 +39,12 @@ public class ModelConfigRepositoryImpl extends AbstractConfigRepository<ModelCon
             return null;
         }
         String key = code.toLowerCase().trim();
-        ModelConfigDO model = dataMapByCode.get(key);
-        if (model != null) {
-            return model;
-        }
-        return dataMapByName.get(key);
+        return dataMapByCode.get(key);
+    }
+
+    @Override
+    public ModelConfigDO getByCode(String code) {
+        return findByCode(code);
     }
 
     @Override
@@ -98,8 +99,12 @@ public class ModelConfigRepositoryImpl extends AbstractConfigRepository<ModelCon
         Map<String, ModelConfigDO> mapByName = new HashMap<>();
         for (ModelConfigDO model : remoteList) {
             if (model != null) {
-                if (StringUtils.isNotBlank(model.getCode())) {
-                    mapByCode.put(model.getCode().toLowerCase().trim(), model);
+                String code = StringUtils.isNotBlank(model.getCode()) ? model.getCode() : model.getName();
+                if (StringUtils.isNotBlank(code)) {
+                    if (StringUtils.isBlank(model.getCode())) {
+                        model.setCode(code);
+                    }
+                    mapByCode.put(code.toLowerCase().trim(), model);
                 }
                 if (StringUtils.isNotBlank(model.getName())) {
                     mapByName.put(model.getName().toLowerCase().trim(), model);

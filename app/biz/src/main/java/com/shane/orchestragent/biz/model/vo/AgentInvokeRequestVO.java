@@ -19,8 +19,8 @@ import java.util.Map;
 @AllArgsConstructor
 public class AgentInvokeRequestVO implements Serializable {
 
-    /** 目标策略唯一编码标识，用于定位具体的策略配置与工作流拓扑 */
-    private String strategyId;
+    /** 目标策略业务编码，用于直接定位策略配置与工作流拓扑 */
+    private String strategyCode;
 
     /** 用户本次输入的提示词、自然语言指令或对话核心内容 */
     private String message;
@@ -34,7 +34,7 @@ public class AgentInvokeRequestVO implements Serializable {
     /** 全链路追踪唯一标识 (TraceId)，用于日志全链路串联与可观测性 */
     private String traceId;
 
-    /** 流程执行唯一标识，支持调用方指定或用于幂等查询与断点恢复 */
+    /** 流程执行唯一标识，支持调用方指定或断点恢复 */
     private String flowId;
 
     /** 自定义编排上下文运行属性字典，支持动态向智能体注入上下文变量 */

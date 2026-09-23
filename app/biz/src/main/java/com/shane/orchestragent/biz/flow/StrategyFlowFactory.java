@@ -44,7 +44,7 @@ public class StrategyFlowFactory {
     private final LlmService llmService;
     private final PromptService promptService;
 
-    private final DictRepository dictRepository;
+    private DictRepository dictRepository;
     private final FlowService flowService;
     private final FlowExecutionRecorder flowExecutionRecorder;
     private AgentConfigRepository agentConfigRepository;
@@ -86,8 +86,17 @@ public class StrategyFlowFactory {
         this.toolConfigRepository = toolConfigRepository;
 
         if (dictRepository != null) {
-            int expireMins = dictRepository.getValue(DictRepository.Keys.KEY_FLOW_INSTANCE_EXPIRE_MINUTES, DictRepository.Defaults.DEFAULT_FLOW_INSTANCE_EXPIRE_MINUTES);
-            int maxCap = dictRepository.getValue(DictRepository.Keys.KEY_FLOW_INSTANCE_MAX_CAPACITY, DictRepository.Defaults.DEFAULT_FLOW_INSTANCE_MAX_CAPACITY);
+            int expireMins = dictRepository.getDict(DictRepository.Keys.KEY_FLOW_INSTANCE_EXPIRE_MINUTES, DictRepository.Defaults.DEFAULT_FLOW_INSTANCE_EXPIRE_MINUTES);
+            int maxCap = dictRepository.getDict(DictRepository.Keys.KEY_FLOW_INSTANCE_MAX_CAPACITY, DictRepository.Defaults.DEFAULT_FLOW_INSTANCE_MAX_CAPACITY);
+            com.shane.orchestragent.biz.flow.store.FlowStore.configure(expireMins, maxCap);
+        }
+    }
+
+    public void setDictRepository(DictRepository dictRepository) {
+        this.dictRepository = dictRepository;
+        if (dictRepository != null) {
+            int expireMins = dictRepository.getDict(DictRepository.Keys.KEY_FLOW_INSTANCE_EXPIRE_MINUTES, DictRepository.Defaults.DEFAULT_FLOW_INSTANCE_EXPIRE_MINUTES);
+            int maxCap = dictRepository.getDict(DictRepository.Keys.KEY_FLOW_INSTANCE_MAX_CAPACITY, DictRepository.Defaults.DEFAULT_FLOW_INSTANCE_MAX_CAPACITY);
             com.shane.orchestragent.biz.flow.store.FlowStore.configure(expireMins, maxCap);
         }
     }
@@ -126,19 +135,14 @@ public class StrategyFlowFactory {
      * @return ReAct 策略流程实例
      */
     public StrategyFlow createReActFlow(StrategyConfigDO strategyConfig, StrategyContext context) throws BizException {
-        Map<AgentTypeEnum, Agent> systemAgents = buildSystemAgents(strategyConfig);
-        int defaultMaxStep = dictRepository != null ? dictRepository.getValue(DictRepository.Keys.KEY_FLOW_MAX_STEP, 20) : 20;
-        int maxStep = (strategyConfig != null && strategyConfig.getMaxStep() != null) ? strategyConfig.getMaxStep() : defaultMaxStep;
-        int maxEvalRetry = dictRepository != null ? dictRepository.getValue(DictRepository.Keys.KEY_FLOW_EVAL_MAX_RETRY, 2) : 2;
-        log.info("[FLOW_FACTORY][BUILD] 创建纯 ReAct 策略流程: flowId={}, maxStep={} (dict保底={}), maxEvalRetry={}, workersCount={}, toolsCount={}",
-                context.getFlowId(), maxStep, defaultMaxStep, maxEvalRetry,
-                getWorkerCount(strategyConfig),
-                (strategyConfig != null && strategyConfig.getToolCodes() != null) ? strategyConfig.getToolCodes().size() : 0);
+        int maxStep = resolveMaxStep(strategyConfig);
+        int maxEvalRetry = resolveMaxEvalRetry();
+        log.info("[FLOW_FACTORY][BUILD] 创建纯 ReAct 策略流程: flowId={}, maxStep={}, maxEvalRetry={}, workersCount={}, toolsCount={}",
+                context.getFlowId(), maxStep, maxEvalRetry,
+                getWorkerCount(strategyConfig), getToolCount(strategyConfig));
 
-        ReActStrategyFlow flow = new ReActStrategyFlow(context, systemAgents, maxStep, maxEvalRetry);
-        registerTools(flow, strategyConfig);
-        registerWorkers(flow, strategyConfig);
-        decorateFlow(flow);
+        ReActStrategyFlow flow = new ReActStrategyFlow(context, buildSystemAgents(), maxStep, maxEvalRetry);
+        assembleFlow(flow, strategyConfig);
         return flow;
     }
 
@@ -150,19 +154,44 @@ public class StrategyFlowFactory {
      * @return 多轮会话流程实例
      */
     public StrategyFlow createMultipleChatFlow(StrategyConfigDO strategyConfig, StrategyContext context) throws BizException {
-        Map<AgentTypeEnum, Agent> systemAgents = buildSystemAgents(strategyConfig);
-        int defaultMaxStep = dictRepository != null ? dictRepository.getValue(DictRepository.Keys.KEY_FLOW_MAX_STEP, 20) : 20;
-        int maxStep = (strategyConfig != null && strategyConfig.getMaxStep() != null) ? strategyConfig.getMaxStep() : defaultMaxStep;
-        log.info("[FLOW_FACTORY][BUILD] 创建 MultipleChat 策略流程: flowId={}, maxStep={} (dict保底={}), workersCount={}, toolsCount={}",
-                context.getFlowId(), maxStep, defaultMaxStep,
-                getWorkerCount(strategyConfig),
-                (strategyConfig != null && strategyConfig.getToolCodes() != null) ? strategyConfig.getToolCodes().size() : 0);
+        int maxStep = resolveMaxStep(strategyConfig);
+        log.info("[FLOW_FACTORY][BUILD] 创建 MultipleChat 策略流程: flowId={}, maxStep={}, workersCount={}, toolsCount={}",
+                context.getFlowId(), maxStep,
+                getWorkerCount(strategyConfig), getToolCount(strategyConfig));
 
-        MultipleChatStrategyFlow flow = new MultipleChatStrategyFlow(context, systemAgents, maxStep);
+        MultipleChatStrategyFlow flow = new MultipleChatStrategyFlow(context, buildSystemAgents(), maxStep);
+        assembleFlow(flow, strategyConfig);
+        return flow;
+    }
+
+    /**
+     * 统一流程拓扑装配：挂载工具、注册业务 Worker 及伴生 RAG、挂载执行监听器与记录器
+     */
+    private void assembleFlow(BaseStrategyFlow flow, StrategyConfigDO strategyConfig) throws BizException {
         registerTools(flow, strategyConfig);
         registerWorkers(flow, strategyConfig);
         decorateFlow(flow);
-        return flow;
+    }
+
+    /**
+     * 解析流程最大步数：策略配置指定优先，未指定则读取全局字典，兜底使用系统默认值
+     */
+    private int resolveMaxStep(StrategyConfigDO strategyConfig) {
+        if (strategyConfig != null && strategyConfig.getMaxStep() != null) {
+            return strategyConfig.getMaxStep();
+        }
+        return dictRepository != null
+                ? dictRepository.getDict(DictRepository.Keys.KEY_FLOW_MAX_STEP, DictRepository.Defaults.DEFAULT_FLOW_MAX_STEP)
+                : DictRepository.Defaults.DEFAULT_FLOW_MAX_STEP;
+    }
+
+    /**
+     * 解析 Evaluator 验收最大重试次数：读取全局字典，兜底使用系统默认值
+     */
+    private int resolveMaxEvalRetry() {
+        return dictRepository != null
+                ? dictRepository.getDict(DictRepository.Keys.KEY_FLOW_EVAL_MAX_RETRY, DictRepository.Defaults.DEFAULT_FLOW_EVAL_MAX_RETRY)
+                : DictRepository.Defaults.DEFAULT_FLOW_EVAL_MAX_RETRY;
     }
 
     /**
@@ -182,9 +211,8 @@ public class StrategyFlowFactory {
         }
     }
 
-    private Map<AgentTypeEnum, Agent> buildSystemAgents(StrategyConfigDO strategyConfig) throws BizException {
+    private Map<AgentTypeEnum, Agent> buildSystemAgents() throws BizException {
         Map<AgentTypeEnum, Agent> map = new HashMap<>();
-
         map.put(AgentTypeEnum.ROUTER, new RouterAgent(resolveSystemAgentLlmConfig(AgentTypeEnum.ROUTER, 0.1), llmService, promptService));
         map.put(AgentTypeEnum.PLANNER, new PlannerAgent(resolveSystemAgentLlmConfig(AgentTypeEnum.PLANNER, 0.2), llmService, promptService));
         map.put(AgentTypeEnum.CONDUCTOR, new ConductorAgent(resolveSystemAgentLlmConfig(AgentTypeEnum.CONDUCTOR, 0.2), llmService, promptService));
@@ -202,7 +230,7 @@ public class StrategyFlowFactory {
         String userPrompt = null;
 
         if (agentConfigRepository != null) {
-            AgentConfigDO agentDO = agentConfigRepository.getByName(type.name());
+            AgentConfigDO agentDO = agentConfigRepository.getByCode(type.getCode());
             if (agentDO != null) {
                 model = agentDO.getModel();
                 temp = agentDO.getTemperature();
@@ -213,25 +241,24 @@ public class StrategyFlowFactory {
             }
         }
 
-        // 若配置库未就绪，使用字典配置
+        // 若配置库未指定模型，读取字典全局默认模型
         if (StringUtils.isBlank(model) && dictRepository != null) {
-            model = dictRepository.getValue(DictRepository.Keys.KEY_DEFAULT_LLM_MODEL, null);
+            model = dictRepository.getDict(DictRepository.Keys.KEY_DEFAULT_LLM_MODEL, null);
         }
         if (StringUtils.isBlank(model)) {
             throw new BizException("LLM_MODEL_NOT_CONFIGURED", "系统智能体 [" + type.name() + "] 未配置大模型名称 (model)");
         }
-        if (temp == null && dictRepository != null) {
-            temp = dictRepository.getValue(DictRepository.Keys.KEY_DEFAULT_SYSTEM_AGENT_TEMP, fallbackTemp);
-        }
         if (temp == null) {
-            temp = fallbackTemp;
+            temp = dictRepository != null
+                    ? dictRepository.getDict(DictRepository.Keys.KEY_DEFAULT_SYSTEM_AGENT_TEMP, fallbackTemp)
+                    : fallbackTemp;
         }
 
         return LlmConfig.builder()
                 .model(model)
                 .temperature(temp)
                 .maxTokens(maxTokens)
-                .nodeWaitTime(timeout != null ? timeout : 30000L)
+                .nodeWaitTime(timeout != null ? timeout : (long) DictRepository.Defaults.DEFAULT_LLM_MAX_WAIT_TIME)
                 .systemPrompt(systemPrompt)
                 .userPrompt(userPrompt)
                 .build();
@@ -244,10 +271,7 @@ public class StrategyFlowFactory {
         for (String toolCode : strategyConfig.getToolCodes()) {
             ToolConfigDO toolConfig = null;
             if (toolConfigRepository != null) {
-                toolConfig = toolConfigRepository.findToolById(toolCode);
-                if (toolConfig == null) {
-                    toolConfig = toolConfigRepository.findByCode(toolCode);
-                }
+                toolConfig = toolConfigRepository.getByCode(toolCode);
             }
             if (toolConfig == null) {
                 throw BizErrorFactory.getInstance().toolNotFound(toolCode);
@@ -259,10 +283,11 @@ public class StrategyFlowFactory {
     }
 
     private int getWorkerCount(StrategyConfigDO strategyConfig) {
-        if (strategyConfig == null || strategyConfig.getWorkerCodes() == null) {
-            return 0;
-        }
-        return strategyConfig.getWorkerCodes().size();
+        return (strategyConfig != null && strategyConfig.getWorkerCodes() != null) ? strategyConfig.getWorkerCodes().size() : 0;
+    }
+
+    private int getToolCount(StrategyConfigDO strategyConfig) {
+        return (strategyConfig != null && strategyConfig.getToolCodes() != null) ? strategyConfig.getToolCodes().size() : 0;
     }
 
     private void registerWorkers(BaseStrategyFlow flow, StrategyConfigDO strategyConfig) throws BizException {
@@ -274,9 +299,6 @@ public class StrategyFlowFactory {
             AgentConfigDO agentConfig = null;
             if (agentConfigRepository != null) {
                 agentConfig = agentConfigRepository.getByCode(workerCode);
-                if (agentConfig == null) {
-                    agentConfig = agentConfigRepository.getByName(workerCode);
-                }
             }
             if (agentConfig == null) {
                 throw BizErrorFactory.getInstance().agentNotFound(workerCode);
@@ -308,20 +330,22 @@ public class StrategyFlowFactory {
         String userPrompt = agentDO != null ? agentDO.getUserPrompt() : null;
 
         if (StringUtils.isBlank(model) && dictRepository != null) {
-            model = dictRepository.getValue(DictRepository.Keys.KEY_DEFAULT_LLM_MODEL, null);
+            model = dictRepository.getDict(DictRepository.Keys.KEY_DEFAULT_LLM_MODEL, null);
         }
         if (StringUtils.isBlank(model)) {
             throw new BizException("LLM_MODEL_NOT_CONFIGURED", "业务智能体 [" + (agentDO != null ? agentDO.getName() : "unknown") + "] 未配置大模型名称 (model)");
         }
-        if (temp == null && dictRepository != null) {
-            temp = dictRepository.getValue(DictRepository.Keys.KEY_DEFAULT_WORKER_AGENT_TEMP, 0.3);
+        if (temp == null) {
+            temp = dictRepository != null
+                    ? dictRepository.getDict(DictRepository.Keys.KEY_DEFAULT_WORKER_AGENT_TEMP, DictRepository.Defaults.DEFAULT_WORKER_AGENT_TEMP)
+                    : DictRepository.Defaults.DEFAULT_WORKER_AGENT_TEMP;
         }
 
         return LlmConfig.builder()
                 .model(model)
-                .temperature(temp != null ? temp : 0.3)
+                .temperature(temp)
                 .maxTokens(maxTokens)
-                .nodeWaitTime(waitTime != null ? waitTime : 30000L)
+                .nodeWaitTime(waitTime != null ? waitTime : (long) DictRepository.Defaults.DEFAULT_LLM_MAX_WAIT_TIME)
                 .systemPrompt(systemPrompt)
                 .userPrompt(userPrompt)
                 .build();

@@ -15,15 +15,17 @@ public interface StrategyFlow {
 
     void initialize() throws BizException;
 
-    void start();
-
-    String execute() throws BizException;
+    void execute();
 
     void stop();
+
+    boolean isStopped();
 
     void addStreamListener(com.shane.orchestragent.biz.listener.FlowStreamListener listener);
 
     void addAgentEventListener(com.shane.orchestragent.biz.listener.FlowAgentEventListener listener);
+
+    void addStateChangeListener(com.shane.orchestragent.biz.listener.FlowStateChangeListener listener);
 
     FlowStateEnum getState();
 

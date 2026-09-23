@@ -85,6 +85,19 @@ public class DictRepositoryImpl extends AbstractConfigRepository<DictDO> impleme
     }
 
     @Override
+    public DictDO getByCode(String code) {
+        if (StringUtils.isBlank(code)) {
+            return null;
+        }
+        for (DictDO dict : this.dataList) {
+            if (dict != null && code.equalsIgnoreCase(dict.getKey())) {
+                return dict;
+            }
+        }
+        return null;
+    }
+
+    @Override
     public List<DictDO> getAll() {
         return this.dataList;
     }

@@ -89,4 +89,8 @@ public class BizErrorFactory {
     public BizException strategyNotFound(String strategyId) {
         return new BizException("STRATEGY_NOT_FOUND", "未能获取到指定策略配置: " + strategyId);
     }
+
+    public FlowStoppedException strategyFlowStopped() {
+        return new FlowStoppedException();
+    }
 }

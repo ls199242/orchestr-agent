@@ -18,9 +18,6 @@ public enum LogModuleEnum {
     /** 流式对话入口 */
     API_CHAT("API", "CHAT"),
 
-    /** 同步测试入口 */
-    API_TEST_INVOKE("API", "TEST_INVOKE"),
-
     /** 仓储配置管理入口 */
     API_CONFIG("API", "CONFIG"),
 

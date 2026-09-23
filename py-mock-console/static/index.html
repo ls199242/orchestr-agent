@@ -81,13 +81,9 @@
             <i class="fa-regular fa-comments"></i>
             <span>1. SSE 流式会话 (POST /chat)</span>
           </button>
-          <button @click="ctlSubTab = 'testInvoke'" :class="ctlSubTab === 'testInvoke' ? 'border-b-2 border-indigo-500 text-indigo-400 font-semibold' : 'text-slate-400 hover:text-slate-200'" class="pb-2 px-1 text-sm flex items-center space-x-2 transition">
-            <i class="fa-solid fa-bolt"></i>
-            <span>2. 同步全流程测试 (POST /testInvoke)</span>
-          </button>
           <button @click="ctlSubTab = 'invoke'" :class="ctlSubTab === 'invoke' ? 'border-b-2 border-indigo-500 text-indigo-400 font-semibold' : 'text-slate-400 hover:text-slate-200'" class="pb-2 px-1 text-sm flex items-center space-x-2 transition">
             <i class="fa-solid fa-rocket"></i>
-            <span>3. 异步流程启动 (POST /invoke)</span>
+            <span>2. 异步流程启动 (POST /invoke)</span>
           </button>
         </div>
 
@@ -201,132 +197,7 @@
         </div>
       </div>
 
-      <!-- 1.2 同步测试调用 testInvoke -->
-      <div x-show="ctlSubTab === 'testInvoke'" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5 space-y-4 shadow-xl">
-          <h3 class="font-semibold text-slate-200 flex items-center space-x-2">
-            <i class="fa-solid fa-bolt text-indigo-400"></i>
-            <span>同步调用入参 (POST /api/agent/testInvoke)</span>
-          </h3>
-
-          <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1">编排策略 (strategyId)</label>
-            <select x-model="testInvokeForm.strategyId" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
-              <template x-for="s in (configs.strategies || [])" :key="s.strategyId">
-                <option :value="s.strategyId" x-text="s.name + ' (' + s.strategyId + ')'"></option>
-              </template>
-            </select>
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1">用户指令 / 目标 (message)</label>
-            <textarea x-model="testInvokeForm.message" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
-          </div>
-
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1">Session ID</label>
-              <input type="text" x-model="testInvokeForm.sessionId" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1">User ID</label>
-              <input type="text" x-model="testInvokeForm.userId" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1">业务扩展数据 (bizData JSON)</label>
-            <textarea x-model="testInvokeForm.bizDataJson" rows="2" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
-          </div>
-
-          <button @click="sendTestInvoke()" :disabled="isTestInvoking"
-                  class="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 text-white font-medium rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-indigo-500/20">
-            <i class="fa-solid fa-play text-xs" :class="isTestInvoking ? 'fa-spin' : ''"></i>
-            <span x-text="isTestInvoking ? '正在执行全流程协同质检...' : '触发同步测试执行 (阻塞等待)'"></span>
-          </button>
-        </div>
-
-        <!-- 同步测试结果展示 -->
-        <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5 space-y-4 shadow-xl flex flex-col">
-          <h3 class="font-semibold text-slate-200 flex items-center justify-between">
-            <span class="flex items-center space-x-2">
-              <i class="fa-solid fa-clipboard-check text-emerald-400"></i>
-              <span>执行结果与 Evaluator 质检</span>
-            </span>
-            <template x-if="testInvokeResult">
-              <span class="text-xs px-2.5 py-0.5 rounded-full"
-                    :class="testInvokeResult.success ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'"
-                    x-text="testInvokeResult.success ? '调用成功' : '调用失败'"></span>
-            </template>
-          </h3>
-
-          <div class="flex-1 bg-slate-900 border border-slate-700/80 rounded-xl p-4 overflow-y-auto space-y-3">
-            <template x-if="!testInvokeResult && !isTestInvoking">
-              <div class="h-64 flex flex-col items-center justify-center text-slate-500 space-y-2">
-                <i class="fa-solid fa-code text-3xl"></i>
-                <p class="text-sm">点击左侧“触发同步测试执行”查看完整产出及质检评分</p>
-              </div>
-            </template>
-
-            <template x-if="isTestInvoking">
-              <div class="h-64 flex flex-col items-center justify-center text-indigo-400 space-y-3">
-                <i class="fa-solid fa-circle-notch fa-spin text-3xl"></i>
-                <p class="text-sm animate-pulse">ReAct 协同中 (Planner -> Conductor -> Worker -> Evaluator -> Reporter)...</p>
-              </div>
-            </template>
-
-            <template x-if="testInvokeResult && testInvokeResult.data">
-              <div class="space-y-4">
-                <!-- 核心指标卡 -->
-                <div class="grid grid-cols-3 gap-2 text-center">
-                  <div class="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700/60">
-                    <div class="text-[10px] text-slate-400 uppercase">流程状态</div>
-                    <div class="text-sm font-bold text-emerald-400" x-text="testInvokeResult.data.state || 'FINISHED'"></div>
-                  </div>
-                  <div class="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700/60">
-                    <div class="text-[10px] text-slate-400 uppercase">质检得分</div>
-                    <div class="text-sm font-bold"
-                         :class="(testInvokeResult.data.evaluation && testInvokeResult.data.evaluation.pass) ? 'text-emerald-400' : 'text-amber-400'"
-                         x-text="(testInvokeResult.data.evaluation ? testInvokeResult.data.evaluation.score : '-') + ' 分'"></div>
-                  </div>
-                  <div class="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700/60">
-                    <div class="text-[10px] text-slate-400 uppercase">总耗时</div>
-                    <div class="text-sm font-bold text-indigo-300" x-text="(testInvokeResult.data.costMs || 0) + ' ms'"></div>
-                  </div>
-                </div>
-
-                <!-- 最终产物 -->
-                <div>
-                  <div class="text-xs font-semibold text-slate-300 mb-1">最终输出结果 (Reply):</div>
-                  <div class="bg-slate-800 p-3 rounded-lg text-sm text-slate-200 whitespace-pre-wrap border border-slate-700" x-text="testInvokeResult.data.reply"></div>
-                </div>
-
-                <!-- Evaluator 评估详情 -->
-                <template x-if="testInvokeResult.data.evaluation">
-                  <div class="bg-slate-800/90 border border-slate-700 rounded-lg p-3 space-y-2">
-                    <div class="text-xs font-semibold text-slate-300 flex items-center justify-between">
-                      <span>Evaluator 质检报告</span>
-                      <span class="text-xs px-2 py-0.5 rounded"
-                            :class="testInvokeResult.data.evaluation.pass ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'"
-                            x-text="testInvokeResult.data.evaluation.pass ? '验收通过' : '验收未通过'"></span>
-                    </div>
-                    <div class="text-xs text-slate-400" x-text="'诊断意见: ' + (testInvokeResult.data.evaluation.critique || '无')"></div>
-                    <div class="text-xs text-slate-400" x-text="'自愈建议: ' + (testInvokeResult.data.evaluation.suggestedRemedy || '无')"></div>
-                  </div>
-                </template>
-
-                <!-- 原始 JSON 快照 -->
-                <details class="text-xs text-slate-400">
-                  <summary class="cursor-pointer hover:text-slate-200">查看完整原始响应 JSON</summary>
-                  <pre class="mt-2 bg-slate-950 p-2.5 rounded overflow-x-auto text-[11px] text-emerald-400" x-text="JSON.stringify(testInvokeResult, null, 2)"></pre>
-                </details>
-              </div>
-            </template>
-          </div>
-        </div>
-      </div>
-
-      <!-- 1.3 异步调用 invoke -->
+      <!-- 1.2 异步调用 invoke -->
       <div x-show="ctlSubTab === 'invoke'" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- 左侧：异步流程发起表单 -->
         <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5 space-y-4 shadow-xl flex flex-col justify-between">
@@ -380,14 +251,21 @@
                 <span class="text-[10px] text-slate-400 font-mono" x-text="new Date().toLocaleTimeString()"></span>
               </div>
               <template x-if="invokeResult.data">
-                <div class="flex items-center justify-between pt-1">
-                  <span class="text-slate-400">分配 Flow ID:</span>
-                  <div class="flex items-center space-x-1.5 font-mono text-indigo-300 font-bold">
-                    <span x-text="invokeResult.data.flowId"></span>
-                    <button @click="copyJson(invokeResult.data.flowId)" class="text-slate-400 hover:text-white" title="复制">
-                      <i class="fa-regular fa-copy"></i>
-                    </button>
+                <div class="space-y-2 pt-1">
+                  <div class="flex items-center justify-between">
+                    <span class="text-slate-400">分配 Flow ID:</span>
+                    <div class="flex items-center space-x-1.5 font-mono text-indigo-300 font-bold">
+                      <span x-text="invokeResult.data.flowId"></span>
+                      <button @click="copyJson(invokeResult.data.flowId)" class="text-slate-400 hover:text-white" title="复制">
+                        <i class="fa-regular fa-copy"></i>
+                      </button>
+                    </div>
                   </div>
+                  <button @click="stopFlow(invokeResult.data.flowId)" :disabled="isStoppingFlow"
+                          class="w-full py-1.5 px-3 bg-rose-600/80 hover:bg-rose-600 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition flex items-center justify-center space-x-1.5 shadow">
+                    <i class="fa-solid" :class="isStoppingFlow ? 'fa-spinner fa-spin' : 'fa-stop'"></i>
+                    <span x-text="isStoppingFlow ? '正在终止...' : '主动终止此流程 (Stop)'"></span>
+                  </button>
                 </div>
               </template>
             </div>
@@ -508,6 +386,21 @@
                              x-text="(flowDetailResult.data.costMs !== null && flowDetailResult.data.costMs !== undefined) ? (flowDetailResult.data.costMs + ' ms') : '-'"></div>
                       </div>
                     </div>
+
+                    <!-- 操作控制栏 (当处于未完成状态时允许主动停止) -->
+                    <template x-if="flowDetailResult.data.state === 'RUNNING' || flowDetailResult.data.state === 'INITIAL'">
+                      <div class="flex items-center justify-between p-2.5 bg-rose-500/10 border border-rose-500/30 rounded-lg">
+                        <span class="text-xs text-rose-300 font-medium flex items-center space-x-1.5">
+                          <i class="fa-solid fa-bolt text-rose-400"></i>
+                          <span>流程在后台运行中，可随时终止</span>
+                        </span>
+                        <button @click="stopFlow(flowDetailResult.data.flowId)" :disabled="isStoppingFlow"
+                                class="px-3 py-1 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition flex items-center space-x-1.5 shadow">
+                          <i class="fa-solid" :class="isStoppingFlow ? 'fa-spinner fa-spin' : 'fa-stop'"></i>
+                          <span x-text="isStoppingFlow ? '终止中...' : '终止流程 (Stop)'"></span>
+                        </button>
+                      </div>
+                    </template>
 
                     <!-- 实例标识信息 -->
                     <div class="p-2.5 bg-slate-800/70 border border-slate-700/50 rounded-lg space-y-1 text-xs">
@@ -1127,7 +1020,7 @@
                   <template x-for="t in (configs.tools || [])" :key="t.name">
                     <button type="button" @click="toggleToolCode(t.name)"
                             class="px-2 py-0.5 rounded text-[11px] border transition"
-                            :class="formData.toolCodesInput.includes(t.name) ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
+                            :class="(formData.toolCodesInput || '').includes(t.name) ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
                             x-text="t.name + (t.title ? ' (' + t.title + ')' : '')"></button>
                   </template>
                 </div>
@@ -1571,16 +1464,6 @@
         currentStreamChunk: '',
         isChatStreaming: false,
 
-        testInvokeForm: {
-          strategyId: 'flight_arrival_cross_sell',
-          message: '航班MU5101刚在上海虹桥落地，请帮我规划推荐服务',
-          sessionId: 'session-' + Math.floor(Math.random() * 10000),
-          userId: 'U8801',
-          bizDataJson: '{"flightNo": "MU5101", "userId": "U8801", "arrivalCity": "上海", "arrivalAirport": "SHA"}'
-        },
-        testInvokeResult: null,
-        isTestInvoking: false,
-
         invokeForm: {
           strategyId: 'flight_arrival_cross_sell',
           message: '航班MU5101落地推荐执行',
@@ -1593,6 +1476,7 @@
         // Flow 异步状态查询与轮询
         queryFlowId: '',
         isQueryingFlow: false,
+        isStoppingFlow: false,
         flowDetailResult: null,
         isAutoPolling: false,
         pollTimer: null,
@@ -1616,7 +1500,16 @@
         isEditMode: false,
         formModalTab: 'form', // 'form' | 'preview' | 'raw'
         editingJsonStr: '',
-        formData: {},
+        formData: {
+          strategyId: '',
+          name: '',
+          code: '',
+          description: '',
+          prompt: '',
+          toolCodesInput: '',
+          workerCodesInput: '',
+          propertiesJson: '{}'
+        },
 
         // Mock 规则中心状态
         mockRules: [],
@@ -1890,7 +1783,7 @@
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                strategyId: this.chatForm.strategyId,
+                strategyCode: this.chatForm.strategyId,
                 message: userMsg,
                 sessionId: this.chatForm.sessionId,
                 userId: this.chatForm.userId,
@@ -1935,35 +1828,6 @@
           this.currentStreamChunk = '';
         },
 
-        // testInvoke
-        async sendTestInvoke() {
-          this.isTestInvoking = true;
-          this.testInvokeResult = null;
-          let bizData = {};
-          try {
-            bizData = JSON.parse(this.testInvokeForm.bizDataJson || '{}');
-          } catch (e) {}
-
-          try {
-            const res = await fetch('/proxy/testInvoke', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                strategyId: this.testInvokeForm.strategyId,
-                message: this.testInvokeForm.message,
-                sessionId: this.testInvokeForm.sessionId,
-                userId: this.testInvokeForm.userId,
-                bizData: bizData
-              })
-            });
-            this.testInvokeResult = await res.json();
-          } catch (e) {
-            this.testInvokeResult = { success: false, message: e.message };
-          } finally {
-            this.isTestInvoking = false;
-          }
-        },
-
         // invoke 异步启动
         async sendInvoke() {
           this.isInvoking = true;
@@ -1974,7 +1838,7 @@
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                strategyId: this.invokeForm.strategyId,
+                strategyCode: this.invokeForm.strategyId,
                 message: this.invokeForm.message,
                 sessionId: this.invokeForm.sessionId,
                 userId: this.invokeForm.userId,
@@ -2038,6 +1902,31 @@
           if (this.pollTimer) {
             clearInterval(this.pollTimer);
             this.pollTimer = null;
+          }
+        },
+
+        // 主动终止/取消流程
+        async stopFlow(flowId) {
+          const targetId = flowId || this.queryFlowId;
+          if (!targetId || !targetId.trim()) {
+            this.showToast('请输入或指定要终止的 flowId');
+            return;
+          }
+          this.isStoppingFlow = true;
+          try {
+            const res = await fetch(`/proxy/stop/${encodeURIComponent(targetId.trim())}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+              this.showToast('已向流程发送终止指令');
+              this.stopAutoPoll();
+              await this.fetchFlowStatus(targetId.trim());
+            } else {
+              this.showToast('终止失败: ' + (data.message || '未知错误'));
+            }
+          } catch (e) {
+            this.showToast('终止异常: ' + e.message);
+          } finally {
+            this.isStoppingFlow = false;
           }
         },
 

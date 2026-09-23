@@ -56,4 +56,11 @@ public class StrategyConfigDO implements Serializable {
 
     /** 扩展属性配置表 */
     private Map<String, Object> properties;
+
+    public String getCode() {
+        if (code != null && !code.isBlank()) {
+            return code;
+        }
+        return strategyId;
+    }
 }

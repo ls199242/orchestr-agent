@@ -43,11 +43,7 @@ public class RagAgent extends BaseAgent<StrategyContext> {
     }
 
     @Override
-    public AgentResult execute(StrategyContext context) throws BizException {
-        if (isStopped()) {
-            return null;
-        }
-
+    protected AgentResult doExecute(StrategyContext context) throws BizException {
         String target = context.getStrategyTarget();
         String ragResult = retrieveKnowledge(target, context);
 

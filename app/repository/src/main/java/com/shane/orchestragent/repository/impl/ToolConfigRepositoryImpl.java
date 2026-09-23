@@ -28,25 +28,11 @@ public class ToolConfigRepositoryImpl extends AbstractConfigRepository<ToolConfi
     /** 全量工具列表快照 */
     private volatile List<ToolConfigDO> dataList = Collections.emptyList();
 
-    /** 按名称索引快照 */
-    private volatile Map<String, ToolConfigDO> dataMapByName = Collections.emptyMap();
-
     /** 按编码索引快照 */
     private volatile Map<String, ToolConfigDO> dataMapByCode = Collections.emptyMap();
 
     @Override
-    public ToolConfigDO getByName(String name) {
-        if (StringUtils.isBlank(name)) {
-            return null;
-        }
-        if (dataMapByName.containsKey(name)) {
-            return dataMapByName.get(name);
-        }
-        return dataMapByCode.get(name);
-    }
-
-    @Override
-    public ToolConfigDO findByCode(String code) {
+    public ToolConfigDO getByCode(String code) {
         if (StringUtils.isBlank(code)) {
             return null;
         }
@@ -55,7 +41,7 @@ public class ToolConfigRepositoryImpl extends AbstractConfigRepository<ToolConfi
 
     @Override
     public Map<String, ToolConfigDO> getMap() {
-        return this.dataMapByName;
+        return this.dataMapByCode;
     }
 
     @Override
@@ -75,21 +61,14 @@ public class ToolConfigRepositoryImpl extends AbstractConfigRepository<ToolConfi
             return false;
         }
 
-        Map<String, ToolConfigDO> mapByName = new HashMap<>();
         Map<String, ToolConfigDO> mapByCode = new HashMap<>();
         for (ToolConfigDO tool : remoteList) {
-            if (tool != null) {
-                if (StringUtils.isNotBlank(tool.getName())) {
-                    mapByName.put(tool.getName(), tool);
-                }
-                if (StringUtils.isNotBlank(tool.getCode())) {
-                    mapByCode.put(tool.getCode(), tool);
-                }
+            if (tool != null && StringUtils.isNotBlank(tool.getCode())) {
+                mapByCode.put(tool.getCode(), tool);
             }
         }
 
         this.dataList = Collections.unmodifiableList(new ArrayList<>(remoteList));
-        this.dataMapByName = Collections.unmodifiableMap(mapByName);
         this.dataMapByCode = Collections.unmodifiableMap(mapByCode);
         logger.info("[ToolConfigRepository] 从远程接口成功加载 {} 条工具配置", remoteList.size());
         return true;

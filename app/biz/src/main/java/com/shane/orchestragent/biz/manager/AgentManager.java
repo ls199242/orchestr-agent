@@ -1,7 +1,5 @@
 package com.shane.orchestragent.biz.manager;
 
-import com.shane.orchestragent.biz.model.request.RecommendRequestVO;
-import com.shane.orchestragent.biz.model.response.RecommendResponseVO;
 import com.shane.orchestragent.biz.model.vo.AgentChatRequestVO;
 import com.shane.orchestragent.biz.model.vo.AgentInvokeRequestVO;
 import com.shane.orchestragent.biz.model.vo.AgentInvokeResponseVO;
@@ -39,25 +37,6 @@ public interface AgentManager {
     SseEmitterUTF8 chat(AgentChatRequestVO request) throws BizException;
 
     /**
-     * 同步测试调用入口
-     * 同步阻塞触发与 invoke 相同的 ReAct 协同执行流水线，等待全流程执行完毕并返回完整产物、Evaluator 自愈质检评分与总耗时
-     *
-     * @param request 测试调用请求业务对象
-     * @return 包含最终交付成果与质量评估反馈的完整响应业务对象
-     * @throws BizException 业务异常
-     */
-    AgentInvokeResponseVO testInvoke(AgentInvokeRequestVO request) throws BizException;
-
-    /**
-     * 策略推荐调度流程 (通用编排推荐执行)
-     *
-     * @param request 协同推荐请求
-     * @return 响应结果
-     * @throws BizException 业务异常
-     */
-    RecommendResponseVO process(RecommendRequestVO request) throws BizException;
-
-    /**
      * 根据流程唯一标识查询异步工作流当前运行状态与执行结果
      *
      * @param flowId 流程唯一标识
@@ -65,4 +44,13 @@ public interface AgentManager {
      * @throws BizException 业务异常 (如流程不存在)
      */
     AgentInvokeResponseVO getFlow(String flowId) throws BizException;
+
+    /**
+     * 主动终止/取消指定流程
+     *
+     * @param flowId 流程唯一标识
+     * @return 是否成功触发终止
+     * @throws BizException 业务异常
+     */
+    boolean stopFlow(String flowId) throws BizException;
 }

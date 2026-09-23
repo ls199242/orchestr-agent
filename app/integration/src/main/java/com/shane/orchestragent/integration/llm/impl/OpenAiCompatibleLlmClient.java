@@ -91,7 +91,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         ModelConfigDO modelConfig = null;
         if (modelConfigRepository != null) {
             if (StringUtils.isNotBlank(modelIdentifier)) {
-                modelConfig = modelConfigRepository.findByNameOrCode(modelIdentifier);
+                modelConfig = modelConfigRepository.getByCode(modelIdentifier);
             }
             if (modelConfig == null) {
                 modelConfig = modelConfigRepository.getDefaultModel();

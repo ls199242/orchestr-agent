@@ -7,22 +7,17 @@ import com.shane.orchestragent.biz.context.impl.DefaultStrategyContext;
 import com.shane.orchestragent.biz.flow.MultipleChatStrategyFlow;
 import com.shane.orchestragent.biz.flow.ReActStrategyFlow;
 import com.shane.orchestragent.biz.flow.StrategyFlowFactory;
-import com.shane.orchestragent.biz.manager.AgentManager;
-import com.shane.orchestragent.biz.manager.impl.AgentManagerImpl;
 import com.shane.orchestragent.biz.model.agent.AgentResult;
 import com.shane.orchestragent.biz.model.agent.LlmConfig;
 import com.shane.orchestragent.biz.model.flow.FlowAgentMessage;
-import com.shane.orchestragent.biz.model.request.RecommendRequestVO;
-import com.shane.orchestragent.biz.model.response.RecommendResponseVO;
 import com.shane.orchestragent.biz.recorder.impl.FlowExecutionRecorderImpl;
-import com.shane.orchestragent.biz.service.FlowCacheService;
 import com.shane.orchestragent.biz.service.FlowService;
 import com.shane.orchestragent.biz.service.LlmService;
-import com.shane.orchestragent.biz.service.impl.FlowCacheServiceImpl;
 import com.shane.orchestragent.biz.service.impl.FlowServiceImpl;
 import com.shane.orchestragent.biz.service.impl.LlmServiceImpl;
 import com.shane.orchestragent.common.constant.PropertyKeys;
 import com.shane.orchestragent.common.enums.AgentTypeEnum;
+import com.shane.orchestragent.common.enums.FlowStateEnum;
 import com.shane.orchestragent.common.exception.BizException;
 import com.shane.orchestragent.integration.llm.LlmClient;
 import com.shane.orchestragent.test.support.MockLlmClient;
@@ -155,7 +150,8 @@ public class OrchestrAgentFlowTest {
         WorkerAgent worker = new WorkerAgent(workerDO, defaultConfig, llmService, promptService);
         flow.addAgent(worker);
 
-        String result = flow.execute();
+        flow.execute();
+        String result = context.getRecommendResult();
 
         Assertions.assertNotNull(result);
         Assertions.assertTrue(result.contains("OrchestrAgent") || result.contains("完成"));
@@ -197,7 +193,8 @@ public class OrchestrAgentFlowTest {
                 .build();
         flow.addAgent(new WorkerAgent(workerDO, defaultConfig, llmService, promptService));
 
-        String result = flow.execute();
+        flow.execute();
+        String result = context.getRecommendResult();
 
         Assertions.assertNotNull(result);
         Assertions.assertEquals(2, context.getEvaluationRetryCount());
@@ -230,7 +227,8 @@ public class OrchestrAgentFlowTest {
         systemAgents.put(AgentTypeEnum.REPORTER, new ReporterAgent(reporterConfig, llmService, promptService));
 
         MultipleChatStrategyFlow flow = new MultipleChatStrategyFlow(context, systemAgents, 10);
-        String reply = flow.execute();
+        flow.execute();
+        String reply = context.getRecommendResult();
 
         Assertions.assertEquals("您好！我是 OrchestrAgent，很高兴为您服务。", reply);
         Assertions.assertNull(context.getPlanResult());
@@ -262,8 +260,11 @@ public class OrchestrAgentFlowTest {
         systemAgents.put(AgentTypeEnum.REPORTER, new ReporterAgent(reporterConfig, llmService, promptService));
 
         MultipleChatStrategyFlow flow = new MultipleChatStrategyFlow(context, systemAgents, 10);
-        BizException ex = Assertions.assertThrows(BizException.class, flow::execute);
-        Assertions.assertEquals("ROUTER_REPLY_EMPTY", ex.getErrorCode());
+        flow.execute();
+        Assertions.assertEquals(FlowStateEnum.ERROR, flow.getState());
+        Throwable lastError = (Throwable) context.getProperty("lastError");
+        Assertions.assertTrue(lastError instanceof BizException);
+        Assertions.assertEquals("ROUTER_REPLY_EMPTY", ((BizException) lastError).getErrorCode());
     }
 
     @Test
@@ -275,72 +276,11 @@ public class OrchestrAgentFlowTest {
 
         com.shane.orchestragent.repository.model.ToolConfigDO noEndpointTool = com.shane.orchestragent.repository.model.ToolConfigDO.builder()
                 .name("no_endpoint_tool")
+                .code("no_endpoint_tool")
                 .description("无端点工具")
                 .build();
         ToolAgent toolAgent = new ToolAgent(noEndpointTool);
         Assertions.assertThrows(BizException.class, () -> toolAgent.execute(new DefaultStrategyContext()));
-    }
-
-    @Test
-    @DisplayName("测试 AgentManager 整体生命周期调度与结果缓存")
-    public void testAgentManagerProcessAndCache() throws Exception {
-        FlowService flowService = new FlowServiceImpl();
-        FlowCacheService flowCacheService = new FlowCacheServiceImpl();
-        FlowExecutionRecorderImpl recorder = new FlowExecutionRecorderImpl(flowService);
-
-        StrategyFlowFactory flowFactory = new StrategyFlowFactory(llmService, promptService, flowService, recorder);
-        flowFactory.setAgentConfigRepository(agentRepo);
-
-        StrategyConfigRepositoryImpl strategyRepo = new StrategyConfigRepositoryImpl();
-        StrategyConfigDO configDO = StrategyConfigDO.builder()
-                .strategyId("biz_travel")
-                .name("商务差旅推荐策略")
-                .maxStep(10)
-                .flowTopologyType("REACT")
-                .workerCodes(List.of("search_worker"))
-                .build();
-        org.springframework.test.util.ReflectionTestUtils.setField(strategyRepo, "strategyConfigApiClient", (com.shane.orchestragent.repository.client.StrategyConfigApiClient) () -> List.of(configDO));
-        strategyRepo.afterPropertiesSet();
-
-        AgentManager agentManager = new AgentManagerImpl(flowFactory, strategyRepo, flowService, flowCacheService);
-
-        Map<String, String> bizData = new HashMap<>();
-        bizData.put("query", "预订上海到深圳的机票");
-
-        RecommendRequestVO request = RecommendRequestVO.builder()
-                .code("biz_travel")
-                .bizData(bizData)
-                .build();
-
-        RecommendResponseVO response = agentManager.process(request);
-        Assertions.assertNotNull(response);
-        Assertions.assertNotNull(response.getFlowId());
-        String flowId = response.getFlowId();
-
-        long start = System.currentTimeMillis();
-        while (System.currentTimeMillis() - start < 3000) {
-            com.shane.orchestragent.common.enums.FlowStateEnum state = flowService.getState(flowId);
-            if (state == com.shane.orchestragent.common.enums.FlowStateEnum.FINISHED ||
-                    state == com.shane.orchestragent.common.enums.FlowStateEnum.ERROR) {
-                break;
-            }
-            Thread.sleep(50);
-        }
-
-        Assertions.assertEquals(com.shane.orchestragent.common.enums.FlowStateEnum.FINISHED, flowService.getState(flowId));
-        String result = flowService.getResult(flowId);
-        Assertions.assertNotNull(result);
-        Assertions.assertTrue(result.contains("OrchestrAgent") || result.contains("完成"));
-
-        RecommendRequestVO request2 = RecommendRequestVO.builder()
-                .flowId(flowId)
-                .code("biz_travel")
-                .bizData(bizData)
-                .build();
-        RecommendResponseVO response2 = agentManager.process(request2);
-        Assertions.assertNotNull(response2);
-        Assertions.assertEquals(com.shane.orchestragent.common.enums.FlowStateEnum.FINISHED, response2.getState());
-        Assertions.assertEquals(result, response2.getResult());
     }
 
     @Test
@@ -404,6 +344,7 @@ public class OrchestrAgentFlowTest {
 
         ToolConfigDO toolConfig = ToolConfigDO.builder()
                 .name("test_tool")
+                .code("test_tool")
                 .description("测试外部工具")
                 .endpoint("http://127.0.0.1:8000/mock/tools/weather")
                 .build();
@@ -441,6 +382,7 @@ public class OrchestrAgentFlowTest {
 
         ToolConfigDO toolConfig = ToolConfigDO.builder()
                 .name("query_user_profile_tool")
+                .code("query_user_profile_tool")
                 .description("旅客偏好查询")
                 .endpoint("http://127.0.0.1:8000/mock/tools/user-profile")
                 .build();
@@ -502,6 +444,7 @@ public class OrchestrAgentFlowTest {
         ToolConfigRepositoryImpl toolRepo = new ToolConfigRepositoryImpl();
         ToolConfigDO weatherTool = ToolConfigDO.builder()
                 .name("weather_tool")
+                .code("weather_tool")
                 .title("天气查询工具")
                 .description("查询指定城市天气")
                 .build();
@@ -536,6 +479,7 @@ public class OrchestrAgentFlowTest {
         List<ToolConfigDO> tools = List.of(
                 ToolConfigDO.builder()
                         .name("weather_tool")
+                        .code("weather_tool")
                         .title("实时天气")
                         .build()
         );

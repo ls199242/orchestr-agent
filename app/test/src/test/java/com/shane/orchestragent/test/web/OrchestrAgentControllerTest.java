@@ -4,11 +4,9 @@ import com.shane.orchestragent.biz.flow.StrategyFlowFactory;
 import com.shane.orchestragent.biz.manager.AgentManager;
 import com.shane.orchestragent.biz.manager.impl.AgentManagerImpl;
 import com.shane.orchestragent.biz.recorder.impl.FlowExecutionRecorderImpl;
-import com.shane.orchestragent.biz.service.FlowCacheService;
 import com.shane.orchestragent.biz.service.FlowService;
 import com.shane.orchestragent.biz.service.LlmService;
 import com.shane.orchestragent.biz.service.SseService;
-import com.shane.orchestragent.biz.service.impl.FlowCacheServiceImpl;
 import com.shane.orchestragent.biz.service.impl.FlowServiceImpl;
 import com.shane.orchestragent.biz.service.impl.LlmServiceImpl;
 import com.shane.orchestragent.biz.service.impl.SseServiceImpl;
@@ -42,7 +40,7 @@ import java.util.Map;
 
 /**
  * OrchestrAgentController 核心方法单元测试
- * 针对 Controller 的 invoke (异步)、chat (SSE 流式)、testInvoke (同步) 三个端点进行全面测试验证
+ * 针对 Controller 的 invoke (异步)、chat (SSE 流式)、getFlowStatus (状态查询) 与 stopFlow (主动终止) 端点进行全面测试验证
  *
  * @author Shane
  */
@@ -111,7 +109,6 @@ public class OrchestrAgentControllerTest {
         PromptService promptService = new PromptServiceImpl(new TemplateRender());
 
         flowService = new FlowServiceImpl();
-        FlowCacheService flowCacheService = new FlowCacheServiceImpl();
         FlowExecutionRecorderImpl recorder = new FlowExecutionRecorderImpl(flowService);
 
         StrategyFlowFactory flowFactory = new StrategyFlowFactory(llmService, promptService, flowService, recorder);
@@ -131,7 +128,7 @@ public class OrchestrAgentControllerTest {
             throw new RuntimeException(e);
         }
 
-        AgentManagerImpl agentManagerImpl = new AgentManagerImpl(flowFactory, strategyRepo, flowService, flowCacheService);
+        AgentManagerImpl agentManagerImpl = new AgentManagerImpl(flowFactory, strategyRepo, flowService);
         CaffeineMemoryContext memoryContext = new CaffeineMemoryContext();
         SseService sseService = new SseServiceImpl();
         agentManagerImpl.setMemoryContext(memoryContext);
@@ -145,7 +142,7 @@ public class OrchestrAgentControllerTest {
     @DisplayName("测试 invoke 异步调用: 直接触发 Plan+ReAct 流程并在后台异步运行，立即返回 flowId")
     public void testInvokeAsyncSuccess() throws Exception {
         AgentInvokeRequestDTO request = AgentInvokeRequestDTO.builder()
-                .strategyId("biz_travel")
+                .strategyCode("biz_travel")
                 .message("预订北京到上海的最优航班")
                 .sessionId("test-session-invoke-1")
                 .userId("user-001")
@@ -181,7 +178,7 @@ public class OrchestrAgentControllerTest {
     @DisplayName("测试 chat 流式会话: 调用 Router 进行意图识别分流，并返回 SseEmitterUTF8")
     public void testChatSseStreamSuccess() throws BizException {
         AgentChatRequestDTO request = AgentChatRequestDTO.builder()
-                .strategyId("biz_travel")
+                .strategyCode("biz_travel")
                 .message("请问有什么差旅推荐？")
                 .sessionId("test-session-chat-1")
                 .userId("user-002")
@@ -192,65 +189,20 @@ public class OrchestrAgentControllerTest {
     }
 
     @Test
-    @DisplayName("测试 testInvoke 同步测试接口: 同步阻塞触发 ReAct 循环，返回完整产出与质检评估")
-    public void testTestInvokeSyncSuccess() throws BizException {
-        AgentInvokeRequestDTO request = AgentInvokeRequestDTO.builder()
-                .strategyId("biz_travel")
-                .message("预订北京到上海的最优航班")
-                .sessionId("test-session-testInvoke-1")
-                .userId("user-003")
-                .build();
-
-        BaseResult<AgentInvokeResponseDTO> result = controller.testInvoke(request);
-        Assertions.assertNotNull(result);
-        Assertions.assertTrue(result.isSuccess());
-
-        AgentInvokeResponseDTO response = result.getData();
-        Assertions.assertNotNull(response);
-        Assertions.assertEquals("test-session-testInvoke-1", response.getSessionId());
-        Assertions.assertNotNull(response.getFlowId());
-        Assertions.assertNotNull(response.getReply());
-        Assertions.assertTrue(response.getReply().contains("OrchestrAgent") || response.getReply().contains("完成"));
-        Assertions.assertEquals("FINISHED", response.getState());
-        Assertions.assertNotNull(response.getEvaluation());
-        Assertions.assertTrue(response.getEvaluation().isPass());
-        Assertions.assertNotNull(response.getCostMs());
-        Assertions.assertTrue(response.getCostMs() >= 0);
-    }
-
-    @Test
-    @DisplayName("测试 testInvoke 业务参数兼容: 支持从 bizData.query 提取用户意图并同步执行")
-    public void testTestInvokeWithBizDataQuery() throws BizException {
-        AgentInvokeRequestDTO request = AgentInvokeRequestDTO.builder()
-                .strategyId("biz_travel")
-                .bizData(Map.of("query", "查询明天上午飞往深圳的航班"))
-                .sessionId("test-session-testInvoke-2")
-                .build();
-
-        BaseResult<AgentInvokeResponseDTO> result = controller.testInvoke(request);
-        Assertions.assertNotNull(result);
-        Assertions.assertTrue(result.isSuccess());
-        Assertions.assertNotNull(result.getData().getReply());
-    }
-
-    @Test
-    @DisplayName("测试入参边界保护: 空参数调用 invoke / chat / testInvoke 抛出 BizException")
+    @DisplayName("测试入参边界保护: 空参数调用 invoke / chat 抛出 BizException")
     public void testInputValidation() {
         BizException ex1 = Assertions.assertThrows(BizException.class, () -> controller.invoke(null));
         Assertions.assertEquals("REQUEST_NULL", ex1.getErrorCode());
 
         BizException ex2 = Assertions.assertThrows(BizException.class, () -> controller.chat(null));
         Assertions.assertEquals("REQUEST_NULL", ex2.getErrorCode());
-
-        BizException ex3 = Assertions.assertThrows(BizException.class, () -> controller.testInvoke(null));
-        Assertions.assertEquals("REQUEST_NULL", ex3.getErrorCode());
     }
 
     @Test
     @DisplayName("测试 getFlowStatus: 异步流程启动后根据 flowId 查询状态与执行结果")
     public void testGetFlowStatusSuccess() throws Exception {
         AgentInvokeRequestDTO request = AgentInvokeRequestDTO.builder()
-                .strategyId("biz_travel")
+                .strategyCode("biz_travel")
                 .message("规划从北京到杭州的出差行程")
                 .sessionId("test-session-flow-query-1")
                 .userId("user-flow-1")
@@ -286,15 +238,12 @@ public class OrchestrAgentControllerTest {
         Assertions.assertNotNull(statusFinal.getData().getEvaluation());
         Assertions.assertNotNull(statusFinal.getData().getProcessTexts());
 
-        // 测试直接使用 POST /invoke 并仅传递 flowId 进行查询
-        AgentInvokeRequestDTO queryRequest = AgentInvokeRequestDTO.builder()
+        // 验证 invoke 接口职责纯粹：仅传 flowId 且未指定策略调用 invoke 时严格 Fail-Fast 抛出 BizException，不再兼具查询逻辑
+        AgentInvokeRequestDTO invalidInvokeRequest = AgentInvokeRequestDTO.builder()
                 .flowId(flowId)
                 .build();
-        BaseResult<AgentInvokeResponseDTO> queryByInvoke = controller.invoke(queryRequest);
-        Assertions.assertNotNull(queryByInvoke);
-        Assertions.assertTrue(queryByInvoke.isSuccess());
-        Assertions.assertEquals("FINISHED", queryByInvoke.getData().getState());
-        Assertions.assertEquals(statusFinal.getData().getReply(), queryByInvoke.getData().getReply());
+        BizException invokeEx = Assertions.assertThrows(BizException.class, () -> controller.invoke(invalidInvokeRequest));
+        Assertions.assertEquals("STRATEGY_NOT_FOUND", invokeEx.getErrorCode());
     }
 
     @Test

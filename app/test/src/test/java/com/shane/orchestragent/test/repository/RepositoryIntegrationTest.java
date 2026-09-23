@@ -5,7 +5,6 @@ import com.shane.orchestragent.biz.manager.impl.AgentManagerImpl;
 import com.shane.orchestragent.biz.model.vo.AgentChatRequestVO;
 import com.shane.orchestragent.biz.model.vo.AgentInvokeRequestVO;
 import com.shane.orchestragent.biz.recorder.impl.FlowExecutionRecorderImpl;
-import com.shane.orchestragent.biz.service.impl.FlowCacheServiceImpl;
 import com.shane.orchestragent.biz.service.impl.FlowServiceImpl;
 import com.shane.orchestragent.biz.service.impl.LlmServiceImpl;
 import com.shane.orchestragent.biz.service.impl.SseServiceImpl;
@@ -100,13 +99,14 @@ public class RepositoryIntegrationTest {
         ReflectionTestUtils.setField(strategyRepo, "strategyConfigApiClient", mockStrategyClient);
         strategyRepo.reload();
 
-        assertEquals(custom, strategyRepo.getById("custom_test_01"));
+        assertEquals(custom, strategyRepo.getByCode("custom_code_01"));
         assertEquals(custom, strategyRepo.findStrategyByCode("custom_code_01"));
-        assertEquals(custom, strategyRepo.findStrategyById("custom_test_01"));
-        assertEquals(List.of("search_worker"), strategyRepo.getById("custom_test_01").getWorkerCodes());
-        assertEquals("MULTIPLE_CHAT", strategyRepo.findStrategyByCode("multi_chat_strategy").getFlowTopologyType());
-        assertTrue(strategyRepo.findStrategyByCode("multi_chat_strategy").getStream());
+        assertEquals(custom, strategyRepo.getById("custom_test_01"));
+        assertEquals(List.of("search_worker"), strategyRepo.getByCode("custom_code_01").getWorkerCodes());
+        assertEquals("MULTIPLE_CHAT", strategyRepo.getByCode("multi_chat_strategy").getFlowTopologyType());
+        assertTrue(strategyRepo.getByCode("multi_chat_strategy").getStream());
         assertEquals(2, strategyRepo.getAll().size());
+        assertTrue(strategyRepo.getMap().containsKey("custom_code_01"));
     }
 
     @Test
@@ -129,18 +129,20 @@ public class RepositoryIntegrationTest {
         ReflectionTestUtils.setField(agentRepo, "agentConfigApiClient", mockAgentClient);
         agentRepo.reload();
 
-        // 验证检索（按 name 和按 code）
-        assertEquals(router, agentRepo.getByName("ROUTER"));
+        // 验证检索（按 code 和按 name）
         assertEquals(router, agentRepo.getByCode("router_code"));
-        assertEquals(planner, agentRepo.getAgent("PLANNER"));
+        assertEquals(router, agentRepo.getByName("ROUTER"));
         assertEquals(planner, agentRepo.getByCode("planner_code"));
-        assertEquals(conductor, agentRepo.getByName("CONDUCTOR"));
+        assertEquals(planner, agentRepo.getAgent("PLANNER"));
         assertEquals(conductor, agentRepo.getByCode("conductor_code"));
-        assertEquals(worker, agentRepo.getByName("search_worker"));
+        assertEquals(conductor, agentRepo.getByName("CONDUCTOR"));
         assertEquals(worker, agentRepo.getByCode("search_worker_code"));
+        assertEquals(worker, agentRepo.getByName("search_worker"));
         assertEquals(4, agentRepo.getAll().size());
+        assertTrue(agentRepo.getMap().containsKey("router_code"));
 
         // 验证未注册的智能体返回 null
+        assertNull(agentRepo.getByCode("NON_EXISTENT_CODE"));
         assertNull(agentRepo.getByName("NON_EXISTENT_AGENT"));
     }
 
@@ -150,8 +152,8 @@ public class RepositoryIntegrationTest {
         assertEquals("toolConfigRepository", toolRepo.name());
 
         // 验证无数据返回 null
-        assertNull(toolRepo.getByName("flight_search"), "无数据时严禁生成默认工具");
-        assertNull(toolRepo.findByCode("calc_tool"));
+        assertNull(toolRepo.getByCode("flight_search"), "无数据时严禁生成默认工具");
+        assertNull(toolRepo.getByCode("calc_tool"));
 
         // 模拟远程拉取工具配置
         ToolConfigDO newTool = ToolConfigDO.builder()
@@ -166,10 +168,10 @@ public class RepositoryIntegrationTest {
         ReflectionTestUtils.setField(toolRepo, "toolConfigApiClient", mockToolClient);
         toolRepo.reload();
 
-        assertEquals(newTool, toolRepo.getByName("calculator"));
-        assertEquals(newTool, toolRepo.findByCode("calc_tool"));
-        assertNotNull(toolRepo.findByCode("calc_tool").getRequestJsonSchema());
+        assertEquals(newTool, toolRepo.getByCode("calc_tool"));
+        assertNotNull(toolRepo.getByCode("calc_tool").getRequestJsonSchema());
         assertEquals(1, toolRepo.getAll().size());
+        assertTrue(toolRepo.getMap().containsKey("calc_tool"));
     }
 
     @Test
@@ -181,26 +183,42 @@ public class RepositoryIntegrationTest {
         // 仓储中无对应 key 时，按参数传入的调用方 fallback 返回
         int fallbackStep = dictRepo.getValue(DictRepository.Keys.KEY_FLOW_MAX_STEP, 10);
         assertEquals(10, fallbackStep);
+        assertEquals(10, dictRepo.getDict(DictRepository.Keys.KEY_FLOW_MAX_STEP, 10));
 
         long fallbackTimeout = dictRepo.getValue(DictRepository.Keys.KEY_LLM_MAX_WAIT_TIME, 5000L);
         assertEquals(5000L, fallbackTimeout);
+        assertEquals(5000L, dictRepo.getDict(DictRepository.Keys.KEY_LLM_MAX_WAIT_TIME, 5000L));
 
         boolean fallbackFlag = dictRepo.getValue(DictRepository.Keys.KEY_LOG_FLAGS, true);
         assertTrue(fallbackFlag);
+        assertTrue(dictRepo.getDict(DictRepository.Keys.KEY_LOG_FLAGS, true));
+
+        double fallbackTemp = dictRepo.getDict(DictRepository.Keys.KEY_DEFAULT_SYSTEM_AGENT_TEMP, 0.7);
+        assertEquals(0.7, fallbackTemp, 0.001);
+
+        String fallbackModel = dictRepo.getDict(DictRepository.Keys.KEY_DEFAULT_LLM_MODEL, "fallback-model");
+        assertEquals("fallback-model", fallbackModel);
 
         // 模拟远程客户端返回字典配置并 reload
         DictApiClient mockDictClient = () -> List.of(
                 DictDO.builder().key(DictRepository.Keys.KEY_FLOW_MAX_STEP).value("20").build(),
                 DictDO.builder().key(DictRepository.Keys.KEY_LLM_MAX_WAIT_TIME).value("30000").build(),
-                DictDO.builder().key(DictRepository.Keys.KEY_LOG_FLAGS).value("false").build()
+                DictDO.builder().key(DictRepository.Keys.KEY_LOG_FLAGS).value("false").build(),
+                DictDO.builder().key(DictRepository.Keys.KEY_DEFAULT_SYSTEM_AGENT_TEMP).value("0.5").build(),
+                DictDO.builder().key(DictRepository.Keys.KEY_DEFAULT_LLM_MODEL).value("Deepseek-R1").build()
         );
         ReflectionTestUtils.setField(dictRepo, "dictApiClient", mockDictClient);
         dictRepo.reload();
 
         // 重新读取已同步的配置
         assertEquals(20, dictRepo.getValue(DictRepository.Keys.KEY_FLOW_MAX_STEP, 10));
+        assertEquals(20, dictRepo.getDict(DictRepository.Keys.KEY_FLOW_MAX_STEP, 10));
         assertEquals(30000L, dictRepo.getValue(DictRepository.Keys.KEY_LLM_MAX_WAIT_TIME, 5000L));
+        assertEquals(30000L, dictRepo.getDict(DictRepository.Keys.KEY_LLM_MAX_WAIT_TIME, 5000L));
         assertFalse(dictRepo.getValue(DictRepository.Keys.KEY_LOG_FLAGS, true));
+        assertFalse(dictRepo.getDict(DictRepository.Keys.KEY_LOG_FLAGS, true));
+        assertEquals(0.5, dictRepo.getDict(DictRepository.Keys.KEY_DEFAULT_SYSTEM_AGENT_TEMP, 0.7), 0.001);
+        assertEquals("Deepseek-R1", dictRepo.getDict(DictRepository.Keys.KEY_DEFAULT_LLM_MODEL, "fallback-model"));
     }
 
     @Test
@@ -259,7 +277,8 @@ public class RepositoryIntegrationTest {
         // 验证查询
         assertNotNull(modelRepo.getDefaultModel());
         assertEquals("gpt-4o", modelRepo.getDefaultModel().getCode());
-        assertNotNull(modelRepo.findByCode("deepseek-chat"));
+        assertNotNull(modelRepo.getByCode("deepseek-chat"));
+        assertEquals("deepseek-chat", modelRepo.getByCode("deepseek-chat").getCode());
         assertEquals("deepseek-chat", modelRepo.findByCode("deepseek-chat").getCode());
         assertNotNull(modelRepo.findByName("DeepSeek"));
         assertEquals("deepseek-chat", modelRepo.findByName("DeepSeek").getCode());
@@ -267,6 +286,7 @@ public class RepositoryIntegrationTest {
         assertEquals("deepseek-chat", modelRepo.findByNameOrCode("deepseek").getCode());
 
         // 验证未知模型不回退默认模型，严格返回 null 避免隐式兜底
+        assertNull(modelRepo.getByCode("unknown-custom-model"));
         assertNull(modelRepo.findByCode("unknown-custom-model"));
     }
 
@@ -307,10 +327,11 @@ public class RepositoryIntegrationTest {
         assertTrue(callbackFired.get(), "reload 后必须触发注册的回调监听器");
 
         // 验证本地快照已替换为远程配置
-        StrategyConfigDO reloaded = strategyRepo.getById("remote_strategy_999");
-        assertNotNull(reloaded, "应当能够获取到远程下发的全新策略");
+        StrategyConfigDO reloaded = strategyRepo.getByCode("remote_code_999");
+        assertNotNull(reloaded, "应当能够通过 code 获取到远程下发的全新策略");
         assertEquals(35, reloaded.getMaxStep());
         assertEquals("remote_code_999", reloaded.getCode());
+        assertEquals(reloaded, strategyRepo.getById("remote_strategy_999"));
 
         // 测试移除回调
         strategyRepo.removeCallback(callback);
@@ -322,7 +343,6 @@ public class RepositoryIntegrationTest {
         // 构建核心执行链路
         OpenAiCompatibleLlmClient llmClient = new OpenAiCompatibleLlmClient();
         FlowServiceImpl flowService = new FlowServiceImpl();
-        FlowCacheServiceImpl flowCacheService = new FlowCacheServiceImpl();
         FlowExecutionRecorderImpl recorder = new FlowExecutionRecorderImpl(flowService);
         StrategyFlowFactory flowFactory = new StrategyFlowFactory(
                 new LlmServiceImpl(llmClient),
@@ -331,12 +351,12 @@ public class RepositoryIntegrationTest {
                 recorder
         );
 
-        AgentManagerImpl agentManager = new AgentManagerImpl(flowFactory, strategyRepo, flowService, flowCacheService);
+        AgentManagerImpl agentManager = new AgentManagerImpl(flowFactory, strategyRepo, flowService);
         agentManager.setSseService(new SseServiceImpl());
 
         // 1. 验证 invoke (异步调用) 在策略不存在时直接抛出异常中断
         AgentInvokeRequestVO invokeReq = AgentInvokeRequestVO.builder()
-                .strategyId("non_existent_strategy_id")
+                .strategyCode("non_existent_strategy_id")
                 .message("测试查询")
                 .sessionId("session-test-01")
                 .build();
@@ -344,14 +364,9 @@ public class RepositoryIntegrationTest {
         assertEquals(BizErrorFactory.STRATEGY_NOT_FOUND, invokeEx.getErrorCode());
         assertTrue(invokeEx.getMessage().contains("non_existent_strategy_id"));
 
-        // 2. 验证 testInvoke (同步调用) 在策略不存在时直接抛出异常中断
-        BizException testInvokeEx = assertThrows(BizException.class, () -> agentManager.testInvoke(invokeReq));
-        assertEquals(BizErrorFactory.STRATEGY_NOT_FOUND, testInvokeEx.getErrorCode());
-        assertTrue(testInvokeEx.getMessage().contains("non_existent_strategy_id"));
-
-        // 3. 验证 chat (流式调用) 在策略不存在时直接抛出异常中断
+        // 2. 验证 chat (流式调用) 在策略不存在时直接抛出异常中断
         AgentChatRequestVO chatReq = AgentChatRequestVO.builder()
-                .strategyId("non_existent_chat_strategy")
+                .strategyCode("non_existent_chat_strategy")
                 .message("你好")
                 .sessionId("session-test-02")
                 .build();

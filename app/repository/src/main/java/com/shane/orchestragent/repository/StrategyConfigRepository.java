@@ -18,34 +18,36 @@ public interface StrategyConfigRepository extends Repository<StrategyConfigDO> {
     }
 
     /**
-     * 根据策略主键 ID 获取策略配置
-     *
-     * @param strategyId 策略唯一 ID
-     * @return 策略配置实体
-     */
-    StrategyConfigDO getById(String strategyId);
-
-    /**
-     * 根据策略主键 ID 查询策略配置（规范别名）
-     *
-     * @param id 策略主键 ID
-     * @return 策略配置实体
-     */
-    default StrategyConfigDO findStrategyById(String id) {
-        return getById(id);
-    }
-
-    /**
      * 根据策略业务编码查询策略配置
      *
      * @param code 策略业务编码（如 "react_default_strategy"）
      * @return 策略配置实体
      */
-    StrategyConfigDO findStrategyByCode(String code);
-
+    @Override
+    StrategyConfigDO getByCode(String code);
 
     /**
-     * 获取全量策略的 Map 视图 (Key: strategyId)
+     * 根据策略业务编码查询策略配置（规范别名）
+     *
+     * @param code 策略业务编码
+     * @return 策略配置实体
+     */
+    default StrategyConfigDO findStrategyByCode(String code) {
+        return getByCode(code);
+    }
+
+    /**
+     * 根据策略主键 ID 获取策略配置（兼容旧有调用，直接转为按 Code 查询）
+     *
+     * @param strategyId 策略唯一标识
+     * @return 策略配置实体
+     */
+    default StrategyConfigDO getById(String strategyId) {
+        return getByCode(strategyId);
+    }
+
+    /**
+     * 获取全量策略的 Map 视图 (Key: code)
      *
      * @return 策略字典
      */

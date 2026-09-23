@@ -3,10 +3,11 @@
 基于 Python FastAPI 的独立测试与配置管理系统，为 `orchestr-agent` (Java) 提供：
 1. **7 大仓储远程 Mock 数据提供端**：提供标准 REST API（`/api/strategy`、`/api/agent`、`/api/tool`、`/api/model`、`/api/dict`、`/api/prompt`、`/api/prompt-group`），供 Java 仓储定时轮询拉取同步。
 2. **Web 交互可视化控制台**：包含现代 Web 前端界面，可在浏览器中便捷查看和在线编辑 7 大仓储配置，配置自动持久化到 `data/configs.json`。
-3. **Java Controller 3 大方法联调交互入口**：
+3. **Java Controller 联调交互入口**：
+   - `POST /api/agent/invoke`：异步工作流启动入口，立即返回分配的 `flowId`。
+   - `GET /api/agent/flow/{flowId}`：流程实时状态与执行结果查询及轮询。
+   - `POST /api/agent/stop/{flowId}`：流程运行主动终止。
    - `POST /api/agent/chat`：SSE 实时打字机流式对话与思考过程展示。
-   - `POST /api/agent/testInvoke`：同步全流程协同执行，展示最终产出与 Evaluator 质检评分。
-   - `POST /api/agent/invoke`：异步任务启动与 flowId 状态查询。
 4. **Java 仓储内存快照与热重载监控**：直连 Java 侧 `/api/agent/config/overview` 与 `/api/agent/config/all`，实时展示 Java 内存中的配置快照，支持一键发送全量热重载指令。
 
 ---

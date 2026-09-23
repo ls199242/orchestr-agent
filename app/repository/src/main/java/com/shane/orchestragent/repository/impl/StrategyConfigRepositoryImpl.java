@@ -35,15 +35,7 @@ public class StrategyConfigRepositoryImpl extends AbstractConfigRepository<Strat
     private volatile Map<String, StrategyConfigDO> dataMapByCode = Collections.emptyMap();
 
     @Override
-    public StrategyConfigDO getById(String strategyId) {
-        if (StringUtils.isBlank(strategyId)) {
-            return null;
-        }
-        return dataMapById.get(strategyId);
-    }
-
-    @Override
-    public StrategyConfigDO findStrategyByCode(String code) {
+    public StrategyConfigDO getByCode(String code) {
         if (StringUtils.isBlank(code)) {
             return null;
         }
@@ -51,8 +43,25 @@ public class StrategyConfigRepositoryImpl extends AbstractConfigRepository<Strat
     }
 
     @Override
+    public StrategyConfigDO getById(String strategyId) {
+        if (StringUtils.isBlank(strategyId)) {
+            return null;
+        }
+        StrategyConfigDO found = dataMapByCode.get(strategyId);
+        if (found != null) {
+            return found;
+        }
+        return dataMapById.get(strategyId);
+    }
+
+    @Override
+    public StrategyConfigDO findStrategyByCode(String code) {
+        return getByCode(code);
+    }
+
+    @Override
     public Map<String, StrategyConfigDO> getMap() {
-        return this.dataMapById;
+        return this.dataMapByCode;
     }
 
     @Override
@@ -76,11 +85,15 @@ public class StrategyConfigRepositoryImpl extends AbstractConfigRepository<Strat
         Map<String, StrategyConfigDO> mapByCode = new HashMap<>();
         for (StrategyConfigDO cfg : remoteList) {
             if (cfg != null) {
+                String code = StringUtils.isNotBlank(cfg.getCode()) ? cfg.getCode() : cfg.getStrategyId();
+                if (StringUtils.isNotBlank(code)) {
+                    if (StringUtils.isBlank(cfg.getCode())) {
+                        cfg.setCode(code);
+                    }
+                    mapByCode.put(code, cfg);
+                }
                 if (StringUtils.isNotBlank(cfg.getStrategyId())) {
                     mapById.put(cfg.getStrategyId(), cfg);
-                }
-                if (StringUtils.isNotBlank(cfg.getCode())) {
-                    mapByCode.put(cfg.getCode(), cfg);
                 }
             }
         }

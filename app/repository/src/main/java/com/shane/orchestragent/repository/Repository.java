@@ -43,4 +43,14 @@ public interface Repository<T> {
      * @param callback 刷新回调实例
      */
     void removeCallback(RepositoryReloadCallback callback);
+
+    /**
+     * 根据业务编码获取配置实体（默认返回 null，各配置仓储具体实现）
+     *
+     * @param code 业务编码
+     * @return 配置实体
+     */
+    default T getByCode(String code) {
+        return null;
+    }
 }

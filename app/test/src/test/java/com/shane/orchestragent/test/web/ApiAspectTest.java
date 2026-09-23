@@ -32,7 +32,7 @@ public class ApiAspectTest {
             return BaseResult.ok("hello: " + input);
         }
 
-        @Api(logModule = LogModuleEnum.API_TEST_INVOKE, desc = "异常接口")
+        @Api(logModule = LogModuleEnum.API_INVOKE, desc = "异常接口")
         public BaseResult<String> errorMethod() {
             throw new RuntimeException("业务模拟异常");
         }

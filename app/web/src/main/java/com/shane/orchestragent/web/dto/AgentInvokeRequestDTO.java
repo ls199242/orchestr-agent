@@ -20,8 +20,8 @@ import java.util.Map;
 @AllArgsConstructor
 public class AgentInvokeRequestDTO implements Serializable {
 
-    /** 目标策略编码标识 (如: default, biz_travel 等) */
-    private String strategyId;
+    /** 目标策略业务编码 (如: default, biz_travel 等) */
+    private String strategyCode;
 
     /** 用户本次输入的提示词、自然语言指令或核心任务目标 */
     private String message;
@@ -35,7 +35,7 @@ public class AgentInvokeRequestDTO implements Serializable {
     /** 链路追踪标识 (TraceId)，用于分布式全链路排查 */
     private String traceId;
 
-    /** 流程唯一标识 (FlowId)，指定时支持幂等查询或恢复 */
+    /** 流程唯一标识 (FlowId)，支持指定流程唯一标识或断点恢复 */
     private String flowId;
 
     /** 扩展运行属性字典，支持业务方定制化参数透传 */

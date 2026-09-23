@@ -45,21 +45,18 @@ public class ToolAgent extends BaseAgent<AgentContext> {
     }
 
     public ToolAgent(ToolConfigDO toolConfig, HttpClient httpClient) {
-        super(Objects.requireNonNull(toolConfig, "toolConfig 不能为空").getName(),
+        super(Objects.requireNonNull(toolConfig, "toolConfig 不能为空").getCode(),
                 toolConfig.getDescription(),
                 AgentTypeEnum.TOOL);
-        if (StringUtils.isBlank(toolConfig.getName())) {
-            throw new IllegalArgumentException("toolConfig.name 不能为空");
+        if (StringUtils.isBlank(toolConfig.getCode())) {
+            throw new IllegalArgumentException("toolConfig.code 不能为空");
         }
         this.toolConfig = toolConfig;
         this.httpClient = Objects.requireNonNull(httpClient, "httpClient 不能为空");
     }
 
     @Override
-    public AgentResult execute(AgentContext context) throws BizException {
-        if (isStopped()) {
-            return null;
-        }
+    protected AgentResult doExecute(AgentContext context) throws BizException {
 
         Object request = context.getAgentRequest();
         if (request == null && context instanceof StrategyContext strategyContext) {

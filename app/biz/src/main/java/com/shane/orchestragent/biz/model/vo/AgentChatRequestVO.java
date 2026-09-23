@@ -19,8 +19,8 @@ import java.util.Map;
 @AllArgsConstructor
 public class AgentChatRequestVO implements Serializable {
 
-    /** 目标策略唯一编码标识 */
-    private String strategyId;
+    /** 目标策略业务编码 */
+    private String strategyCode;
 
     /** 用户本次发送的自然语言对话消息 */
     private String message;

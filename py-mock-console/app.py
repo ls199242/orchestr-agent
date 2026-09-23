@@ -302,12 +302,13 @@ async def proxy_get_flow(flow_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/proxy/testInvoke")
-async def proxy_test_invoke(payload: Dict[str, Any]):
-    url = f"{JAVA_BACKEND_URL}/api/agent/testInvoke"
+@app.post("/proxy/stop/{flow_id}")
+@app.post("/proxy/cancel/{flow_id}")
+async def proxy_stop_flow(flow_id: str):
+    url = f"{JAVA_BACKEND_URL}/api/agent/stop/{flow_id}"
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(url, json=payload)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url)
             return resp.json()
     except httpx.ConnectError:
         raise HTTPException(status_code=502, detail=f"无法连接到 Java 服务 ({JAVA_BACKEND_URL})，请确认 Java 应用已启动在 8080 端口")

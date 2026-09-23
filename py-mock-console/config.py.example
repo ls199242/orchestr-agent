@@ -80,7 +80,7 @@ DEFAULT_CONFIGS = {
     "agents": [
         {
             "name": "ROUTER",
-            "code": "router_agent",
+            "code": "ROUTER",
             "description": "意图识别与前置路由决策智能体",
             "agentType": "SYSTEM",
             "model": "Deepseek",
@@ -93,7 +93,7 @@ DEFAULT_CONFIGS = {
         },
         {
             "name": "PLANNER",
-            "code": "planner_agent",
+            "code": "PLANNER",
             "description": "任务分解与执行路径全局规划智能体",
             "agentType": "SYSTEM",
             "model": "Deepseek",
@@ -106,7 +106,7 @@ DEFAULT_CONFIGS = {
         },
         {
             "name": "CONDUCTOR",
-            "code": "conductor_agent",
+            "code": "CONDUCTOR",
             "description": "执行流水线调度中枢与自愈驱动智能体",
             "agentType": "SYSTEM",
             "model": "Deepseek",
@@ -119,7 +119,7 @@ DEFAULT_CONFIGS = {
         },
         {
             "name": "EVALUATOR",
-            "code": "evaluator_agent",
+            "code": "EVALUATOR",
             "description": "多维度质量评估与自愈缺陷诊断智能体",
             "agentType": "SYSTEM",
             "model": "Deepseek",
@@ -132,7 +132,7 @@ DEFAULT_CONFIGS = {
         },
         {
             "name": "REPORTER",
-            "code": "reporter_agent",
+            "code": "REPORTER",
             "description": "执行产出聚合与终版汇报渲染智能体",
             "agentType": "SYSTEM",
             "model": "Deepseek",

@@ -20,8 +20,8 @@ import java.util.Map;
 @AllArgsConstructor
 public class AgentChatRequestDTO implements Serializable {
 
-    /** 目标策略编码标识 (如: default, biz_travel 等) */
-    private String strategyId;
+    /** 目标策略业务编码 (如: default, biz_travel 等) */
+    private String strategyCode;
 
     /** 用户发送的会话消息或对话提问 */
     private String message;

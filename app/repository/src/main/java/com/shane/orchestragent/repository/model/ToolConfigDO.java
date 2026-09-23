@@ -45,4 +45,5 @@ public class ToolConfigDO implements Serializable {
 
     /** 附加静态参数表 */
     private Map<String, Object> parameters;
+
 }

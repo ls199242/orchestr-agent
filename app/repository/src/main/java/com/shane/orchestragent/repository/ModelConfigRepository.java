@@ -24,6 +24,17 @@ public interface ModelConfigRepository extends Repository<ModelConfigDO> {
     ModelConfigDO findByCode(String code);
 
     /**
+     * 根据模型唯一编码查询模型接入配置（通用契约规范）
+     *
+     * @param code 模型代码
+     * @return 模型配置实体
+     */
+    @Override
+    default ModelConfigDO getByCode(String code) {
+        return findByCode(code);
+    }
+
+    /**
      * 根据模型配置名称查询模型接入配置（大小写不敏感）
      *
      * @param name 模型配置展示名称（如 "Deepseek"）

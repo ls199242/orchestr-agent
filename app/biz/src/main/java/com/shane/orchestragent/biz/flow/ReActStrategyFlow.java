@@ -57,8 +57,11 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
 
     @Override
     protected String doExecute() throws BizException {
-        // 1. 战略规划阶段: 拆解全局目标为有序步骤
-        plan();
+        // 1. 战略规划阶段: 拆解全局目标为有序步骤 (执行前由 checkStep 统一把关停止状态与步数)
+        if (!checkStep()) {
+            throw BizErrorFactory.getInstance().handleMaxStepLimitExceeded();
+        }
+        PlanResult planResult = plan();
 
         int evalRetry = 0;
 
@@ -186,6 +189,9 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
 
     private EvaluatorResult evaluate() throws BizException {
         EvaluatorResult evalResult = evaluatorAgent.evaluate(getContext());
+        if (evalResult == null) {
+            throw new BizException("EVALUATOR_PARSE_ERROR", "战略目标审查智能体返回内容为空");
+        }
         log.info("[Flow: {}][FLOW_EVALUATE] Evaluator 验收审计: score={}, pass={}, critique='{}', remedy='{}'",
                 getFlowId(), evalResult.getScore(), evalResult.isPass(), evalResult.getCritique(), evalResult.getSuggestedRemedy());
         return evalResult;

@@ -69,4 +69,11 @@ public class AgentConfigDO implements Serializable {
     public String getEffectiveUserPrompt() {
         return userPrompt;
     }
+
+    public String getCode() {
+        if (code != null && !code.isBlank()) {
+            return code;
+        }
+        return name;
+    }
 }

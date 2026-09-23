@@ -47,16 +47,12 @@ public class AgentConfigRepositoryImpl extends AbstractConfigRepository<AgentCon
         if (StringUtils.isBlank(code)) {
             return null;
         }
-        AgentConfigDO found = dataMapByCode.get(code);
-        if (found != null) {
-            return found;
-        }
-        return dataMapByName.get(code);
+        return dataMapByCode.get(code);
     }
 
     @Override
     public Map<String, AgentConfigDO> getMap() {
-        return this.dataMapByName;
+        return this.dataMapByCode;
     }
 
     @Override
@@ -80,11 +76,15 @@ public class AgentConfigRepositoryImpl extends AbstractConfigRepository<AgentCon
         Map<String, AgentConfigDO> mapByCode = new HashMap<>();
         for (AgentConfigDO agent : remoteList) {
             if (agent != null) {
+                String code = StringUtils.isNotBlank(agent.getCode()) ? agent.getCode() : agent.getName();
+                if (StringUtils.isNotBlank(code)) {
+                    if (StringUtils.isBlank(agent.getCode())) {
+                        agent.setCode(code);
+                    }
+                    mapByCode.put(code, agent);
+                }
                 if (StringUtils.isNotBlank(agent.getName())) {
                     mapByName.put(agent.getName(), agent);
-                }
-                if (StringUtils.isNotBlank(agent.getCode())) {
-                    mapByCode.put(agent.getCode(), agent);
                 }
             }
         }

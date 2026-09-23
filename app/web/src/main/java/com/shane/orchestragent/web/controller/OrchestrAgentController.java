@@ -86,29 +86,7 @@ public class OrchestrAgentController {
     }
 
     /**
-     * 3. 同步测试调用入口 (testInvoke)
-     * 同步触发 invoke 对应的 ReAct 协同执行流水线，阻塞等待全流程执行完毕
-     * 主要用于研发自测、单元测试与控制台即时联调
-     *
-     * @param request 测试调用请求数据传输对象 (DTO)
-     * @return 包含最终生成结果、流程状态、Evaluator质检报告以及总耗时的完整响应
-     * @throws BizException 业务异常
-     */
-    @PostMapping("/testInvoke")
-    @Api(logModule = LogModuleEnum.API_TEST_INVOKE, desc = "同步测试调用")
-    public BaseResult<AgentInvokeResponseDTO> testInvoke(@RequestBody AgentInvokeRequestDTO request) throws BizException {
-        // 1. 将测试传输 DTO 转换为业务内部请求 VO
-        AgentInvokeRequestVO requestVO = apiMapping.dto2v(request);
-
-        // 2. 调用业务中枢同步阻塞执行完整流程
-        AgentInvokeResponseVO responseVO = agentManager.testInvoke(requestVO);
-
-        // 3. 将结果 VO 转换为传输 DTO 并返回
-        return BaseResult.ok(apiMapping.v2dto(responseVO));
-    }
-
-    /**
-     * 4. 异步流程状态与结果查询入口 (getFlowStatus)
+     * 3. 异步流程状态与结果查询入口 (getFlowStatus)
      * 根据 flowId 实时查询异步工作流的运行状态、节点步骤明细、Evaluator质检结果及最终交付产物
      *
      * @param flowId 流程唯一标识
@@ -120,5 +98,20 @@ public class OrchestrAgentController {
     public BaseResult<AgentInvokeResponseDTO> getFlowStatus(@PathVariable("flowId") String flowId) throws BizException {
         AgentInvokeResponseVO responseVO = agentManager.getFlow(flowId);
         return BaseResult.ok(apiMapping.v2dto(responseVO));
+    }
+
+    /**
+     * 4. 主动终止/取消流程入口 (stopFlow)
+     * 根据 flowId 中断正在运行的工作流实例，级联终止所有挂载智能体并置终态为 STOPPED
+     *
+     * @param flowId 流程唯一标识
+     * @return 终止触发结果 (BaseResult<Boolean>)
+     * @throws BizException 业务异常
+     */
+    @PostMapping("/stop/{flowId}")
+    @Api(logModule = LogModuleEnum.API_INVOKE, desc = "主动终止流程")
+    public BaseResult<Boolean> stopFlow(@PathVariable("flowId") String flowId) throws BizException {
+        boolean success = agentManager.stopFlow(flowId);
+        return BaseResult.ok(success);
     }
 }
