@@ -58,10 +58,10 @@ public class OrchestrAgentFlowTest {
     private PromptService promptService;
     private LlmConfig defaultConfig;
     private LlmConfig plannerConfig;
-    private LlmConfig conductorConfig;
+    private LlmConfig supervisorConfig;
     private LlmConfig evaluatorConfig;
     private LlmConfig reporterConfig;
-    private LlmConfig routerConfig;
+    private LlmConfig coordinatorConfig;
     private AgentConfigRepositoryImpl agentRepo;
 
     @BeforeEach
@@ -77,10 +77,10 @@ public class OrchestrAgentFlowTest {
                 .userPrompt("目标: ${strategy_target}")
                 .build();
 
-        this.conductorConfig = LlmConfig.builder()
+        this.supervisorConfig = LlmConfig.builder()
                 .model("gpt-4o")
                 .nodeWaitTime(5000L)
-                .systemPrompt("# ConductorAgent\n调度下一步。输出: {\"next\": \"FINISH\", \"request\": {}}")
+                .systemPrompt("# SupervisorAgent\n调度下一步。输出: {\"next\": \"FINISH\", \"request\": {}}")
                 .userPrompt("默认调度指令")
                 .build();
 
@@ -98,10 +98,10 @@ public class OrchestrAgentFlowTest {
                 .userPrompt("请根据执行总结输出最终回复:\n${flowExecutionSummary}")
                 .build();
 
-        this.routerConfig = LlmConfig.builder()
+        this.coordinatorConfig = LlmConfig.builder()
                 .model("gpt-4o")
                 .nodeWaitTime(5000L)
-                .systemPrompt("# RouterAgent\n分析意图: {\"handoffToPlanner\": true, \"reply\": \"\"}")
+                .systemPrompt("# CoordinatorAgent\n分析意图: {\"handoffToPlanner\": true, \"reply\": \"\"}")
                 .userPrompt("用户诉求: ${strategy_target}")
                 .build();
 
@@ -115,40 +115,40 @@ public class OrchestrAgentFlowTest {
         this.agentRepo = new AgentConfigRepositoryImpl();
         List<AgentConfigDO> systemAgents = List.of(
                 AgentConfigDO.builder().name("PLANNER").code("PLANNER").model("gpt-4o").systemPrompt(plannerConfig.getSystemPrompt()).userPrompt(plannerConfig.getUserPrompt()).build(),
-                AgentConfigDO.builder().name("CONDUCTOR").code("CONDUCTOR").model("gpt-4o").systemPrompt(conductorConfig.getSystemPrompt()).userPrompt(conductorConfig.getUserPrompt()).build(),
+                AgentConfigDO.builder().name("SUPERVISOR").code("SUPERVISOR").model("gpt-4o").systemPrompt(supervisorConfig.getSystemPrompt()).userPrompt(supervisorConfig.getUserPrompt()).build(),
                 AgentConfigDO.builder().name("EVALUATOR").code("EVALUATOR").model("gpt-4o").systemPrompt(evaluatorConfig.getSystemPrompt()).userPrompt(evaluatorConfig.getUserPrompt()).build(),
                 AgentConfigDO.builder().name("REPORTER").code("REPORTER").model("gpt-4o").systemPrompt(reporterConfig.getSystemPrompt()).userPrompt(reporterConfig.getUserPrompt()).build(),
-                AgentConfigDO.builder().name("ROUTER").code("ROUTER").model("gpt-4o").systemPrompt(routerConfig.getSystemPrompt()).userPrompt(routerConfig.getUserPrompt()).build(),
+                AgentConfigDO.builder().name("COORDINATOR").code("COORDINATOR").model("gpt-4o").systemPrompt(coordinatorConfig.getSystemPrompt()).userPrompt(coordinatorConfig.getUserPrompt()).build(),
                 AgentConfigDO.builder().name("CHAT_SUMMARY").code("CHAT_SUMMARY").model("gpt-4o").systemPrompt("# ChatSummaryAgent\n摘要压缩").build(),
-                AgentConfigDO.builder().name("search_worker").code("search_worker").agentType("WORKER").model("gpt-4o").systemPrompt("检索航班信息").build(),
-                AgentConfigDO.builder().name("expert_ticket").code("expert_ticket").agentType("WORKER").model("gpt-4o").systemPrompt("负责客规审查").datasets(List.of("kb_flight_rules")).build()
+                AgentConfigDO.builder().name("search_worker").code("search_worker").agentType("EXPERT").model("gpt-4o").systemPrompt("检索航班信息").build(),
+                AgentConfigDO.builder().name("expert_ticket").code("expert_ticket").agentType("EXPERT").model("gpt-4o").systemPrompt("负责客规审查").datasets(List.of("kb_flight_rules")).build()
         );
         org.springframework.test.util.ReflectionTestUtils.setField(agentRepo, "agentConfigApiClient", (AgentConfigApiClient) () -> systemAgents);
         agentRepo.afterPropertiesSet();
     }
 
     @Test
-    @DisplayName("测试正常全流程: Planner -> Conductor -> Worker -> Evaluator(通过) -> Reporter")
+    @DisplayName("测试正常全流程: Planner -> Supervisor -> Expert -> Evaluator(通过) -> Reporter")
     public void testFullFlowSuccess() throws BizException {
         StrategyContext context = new DefaultStrategyContext();
         context.setProperties(PropertyKeys.KEY_STRATEGY_TARGET, "查询北京到上海的最优航班并给出建议");
 
         Map<AgentTypeEnum, Agent> systemAgents = new HashMap<>();
         systemAgents.put(AgentTypeEnum.PLANNER, new PlannerAgent(plannerConfig, llmService, promptService));
-        systemAgents.put(AgentTypeEnum.CONDUCTOR, new ConductorAgent(conductorConfig, llmService, promptService));
+        systemAgents.put(AgentTypeEnum.SUPERVISOR, new SupervisorAgent(supervisorConfig, llmService, promptService));
         systemAgents.put(AgentTypeEnum.EVALUATOR, new EvaluatorAgent(evaluatorConfig, llmService, promptService));
         systemAgents.put(AgentTypeEnum.REPORTER, new ReporterAgent(reporterConfig, llmService, promptService));
 
         ReActStrategyFlow flow = new ReActStrategyFlow(context, systemAgents, 10);
 
-        AgentConfigDO workerDO = AgentConfigDO.builder()
+        AgentConfigDO expertDO = AgentConfigDO.builder()
                 .name("search_worker")
                 .description("航班检索专精工作节点")
                 .systemPrompt("负责根据出发地与目的地检索航班实时信息")
                 .model("gpt-4o")
                 .build();
-        WorkerAgent worker = new WorkerAgent(workerDO, defaultConfig, llmService, promptService);
-        flow.addAgent(worker);
+        ExpertAgent expert = new ExpertAgent(expertDO, defaultConfig, llmService, promptService);
+        flow.addAgent(expert);
 
         flow.execute();
         String result = context.getRecommendResult();
@@ -179,19 +179,19 @@ public class OrchestrAgentFlowTest {
 
         Map<AgentTypeEnum, Agent> systemAgents = new HashMap<>();
         systemAgents.put(AgentTypeEnum.PLANNER, new PlannerAgent(plannerConfig, llmService, promptService));
-        systemAgents.put(AgentTypeEnum.CONDUCTOR, new ConductorAgent(conductorConfig, llmService, promptService));
+        systemAgents.put(AgentTypeEnum.SUPERVISOR, new SupervisorAgent(supervisorConfig, llmService, promptService));
         systemAgents.put(AgentTypeEnum.EVALUATOR, strictEvaluator);
         systemAgents.put(AgentTypeEnum.REPORTER, new ReporterAgent(reporterConfig, llmService, promptService));
 
         ReActStrategyFlow flow = new ReActStrategyFlow(context, systemAgents, 10);
 
-        AgentConfigDO workerDO = AgentConfigDO.builder()
+        AgentConfigDO expertDO = AgentConfigDO.builder()
                 .name("search_worker")
                 .description("航班检索")
                 .systemPrompt("检索航班")
                 .model("gpt-4o")
                 .build();
-        flow.addAgent(new WorkerAgent(workerDO, defaultConfig, llmService, promptService));
+        flow.addAgent(new ExpertAgent(expertDO, defaultConfig, llmService, promptService));
 
         flow.execute();
         String result = context.getRecommendResult();
@@ -204,12 +204,12 @@ public class OrchestrAgentFlowTest {
     }
 
     @Test
-    @DisplayName("测试 RouterAgent 意图识别与直接回复 (不触发后续流程)")
-    public void testRouterDirectReply() throws BizException {
+    @DisplayName("测试 CoordinatorAgent 意图识别与直接回复 (不触发后续流程)")
+    public void testCoordinatorDirectReply() throws BizException {
         StrategyContext context = new DefaultStrategyContext();
         context.setProperties(PropertyKeys.KEY_STRATEGY_TARGET, "你好呀");
 
-        RouterAgent directRouter = new RouterAgent(routerConfig, llmService, promptService) {
+        CoordinatorAgent directCoordinator = new CoordinatorAgent(coordinatorConfig, llmService, promptService) {
             @Override
             public com.shane.orchestragent.biz.model.agent.AgentResult execute(StrategyContext ctx) {
                 return new com.shane.orchestragent.biz.model.agent.LlmAgentResult(
@@ -220,9 +220,9 @@ public class OrchestrAgentFlowTest {
         };
 
         Map<AgentTypeEnum, Agent> systemAgents = new HashMap<>();
-        systemAgents.put(AgentTypeEnum.ROUTER, directRouter);
+        systemAgents.put(AgentTypeEnum.COORDINATOR, directCoordinator);
         systemAgents.put(AgentTypeEnum.PLANNER, new PlannerAgent(plannerConfig, llmService, promptService));
-        systemAgents.put(AgentTypeEnum.CONDUCTOR, new ConductorAgent(conductorConfig, llmService, promptService));
+        systemAgents.put(AgentTypeEnum.SUPERVISOR, new SupervisorAgent(supervisorConfig, llmService, promptService));
         systemAgents.put(AgentTypeEnum.EVALUATOR, new EvaluatorAgent(evaluatorConfig, llmService, promptService));
         systemAgents.put(AgentTypeEnum.REPORTER, new ReporterAgent(reporterConfig, llmService, promptService));
 
@@ -235,8 +235,8 @@ public class OrchestrAgentFlowTest {
     }
 
     @Test
-    @DisplayName("测试 MultipleChatStrategyFlow: RouterAgent 返回直接答复但内容为空时 Fail-Fast 阻断")
-    public void testMultipleChatRouterEmptyReplyFailFast() {
+    @DisplayName("测试 MultipleChatStrategyFlow: CoordinatorAgent 返回直接答复但内容为空时 Fail-Fast 阻断")
+    public void testMultipleChatCoordinatorEmptyReplyFailFast() {
         StrategyConfigDO config = StrategyConfigDO.builder()
                 .strategyId("chat_strategy")
                 .code("chat_strategy")
@@ -244,9 +244,9 @@ public class OrchestrAgentFlowTest {
                 .maxStep(10)
                 .flowTopologyType("MULTIPLE_CHAT")
                 .build();
-        StrategyContext context = new DefaultStrategyContext(config, "test_flow_router_empty", "test_session", null);
+        StrategyContext context = new DefaultStrategyContext(config, "test_flow_coordinator_empty", "test_session", null);
 
-        RouterAgent blankReplyRouter = new RouterAgent(routerConfig, llmService, promptService) {
+        CoordinatorAgent blankReplyCoordinator = new CoordinatorAgent(coordinatorConfig, llmService, promptService) {
             @Override
             public AgentResult execute(StrategyContext ctx) {
                 return new AgentResult("{\"handoffToPlanner\": false, \"reply\": \"\"}", null);
@@ -254,9 +254,9 @@ public class OrchestrAgentFlowTest {
         };
 
         Map<AgentTypeEnum, Agent> systemAgents = new HashMap<>();
-        systemAgents.put(AgentTypeEnum.ROUTER, blankReplyRouter);
+        systemAgents.put(AgentTypeEnum.COORDINATOR, blankReplyCoordinator);
         systemAgents.put(AgentTypeEnum.PLANNER, new PlannerAgent(plannerConfig, llmService, promptService));
-        systemAgents.put(AgentTypeEnum.CONDUCTOR, new ConductorAgent(conductorConfig, llmService, promptService));
+        systemAgents.put(AgentTypeEnum.SUPERVISOR, new SupervisorAgent(supervisorConfig, llmService, promptService));
         systemAgents.put(AgentTypeEnum.EVALUATOR, new EvaluatorAgent(evaluatorConfig, llmService, promptService));
         systemAgents.put(AgentTypeEnum.REPORTER, new ReporterAgent(reporterConfig, llmService, promptService));
 
@@ -265,7 +265,7 @@ public class OrchestrAgentFlowTest {
         Assertions.assertEquals(FlowStateEnum.ERROR, flow.getState());
         Throwable lastError = (Throwable) context.getProperty("lastError");
         Assertions.assertTrue(lastError instanceof BizException);
-        Assertions.assertEquals("ROUTER_REPLY_EMPTY", ((BizException) lastError).getErrorCode());
+        Assertions.assertEquals("COORDINATOR_REPLY_EMPTY", ((BizException) lastError).getErrorCode());
     }
 
     @Test
@@ -285,16 +285,16 @@ public class OrchestrAgentFlowTest {
     }
 
     @Test
-    @DisplayName("测试 ConductorAgent 多轮消息组装与系统提示词动态渲染")
-    public void testConductorAgentMultiRoundMessageRendering() throws BizException {
-        ConductorAgent conductor = new ConductorAgent(conductorConfig, llmService, promptService);
+    @DisplayName("测试 SupervisorAgent 多轮消息组装与系统提示词动态渲染")
+    public void testSupervisorAgentMultiRoundMessageRendering() throws BizException {
+        SupervisorAgent supervisor = new SupervisorAgent(supervisorConfig, llmService, promptService);
         StrategyContext context = new DefaultStrategyContext();
         context.setProperties(PropertyKeys.KEY_STRATEGY_TARGET, "北京到上海机票");
 
         // 1. 系统消息渲染
-        ChatMessageDTO systemMsg = conductor.formatSystemMessage(context);
+        ChatMessageDTO systemMsg = supervisor.formatSystemMessage(context);
         Assertions.assertNotNull(systemMsg);
-        Assertions.assertTrue(systemMsg.getContent().contains("# ConductorAgent"));
+        Assertions.assertTrue(systemMsg.getContent().contains("# SupervisorAgent"));
 
         // 2. 模拟多轮中间协同产物追加到 context
         context.getChatMessages().add(FlowAgentMessage.builder()
@@ -303,7 +303,7 @@ public class OrchestrAgentFlowTest {
                 .output("{\"steps\": [{\"step\": 1, \"agent\": \"search_worker\"}]}")
                 .build());
         context.getChatMessages().add(FlowAgentMessage.builder()
-                .agentType(AgentTypeEnum.WORKER)
+                .agentType(AgentTypeEnum.EXPERT)
                 .agentName("search_worker")
                 .output("已查询到3个推荐航班")
                 .build());
@@ -319,10 +319,10 @@ public class OrchestrAgentFlowTest {
                 .build());
 
         // 3. 完整多轮消息格式化
-        List<ChatMessageDTO> formatted = conductor.formatMessages(context);
-        Assertions.assertTrue(formatted.size() >= 5); // 1 system + 4 round messages (+ 1 conductor instruction prompt)
+        List<ChatMessageDTO> formatted = supervisor.formatMessages(context);
+        Assertions.assertTrue(formatted.size() >= 5); // 1 system + 4 round messages (+ 1 supervisor instruction prompt)
         Assertions.assertTrue(formatted.get(1).getContent().contains("【任务规划步骤】"));
-        Assertions.assertTrue(formatted.get(2).getContent().contains("【工作节点 search_worker 执行结果】"));
+        Assertions.assertTrue(formatted.get(2).getContent().contains("【专精节点 search_worker 执行结果】"));
         Assertions.assertTrue(formatted.get(3).getContent().contains("【工具 weather_tool 真实调用返回结果】"));
         Assertions.assertTrue(formatted.get(4).getContent().contains("【整改要求】: 缺少行李额说明"));
     }
@@ -430,11 +430,11 @@ public class OrchestrAgentFlowTest {
         Assertions.assertEquals("AGENT_CONFIG_ERROR", ex2.getErrorCode());
         Assertions.assertTrue(ex2.getMessage().contains("PLANNER") && ex2.getMessage().contains("userPrompt"));
 
-        // 3. WorkerAgent 缺少有效 prompt / systemPrompt 抛出 AGENT_CONFIG_ERROR
-        AgentConfigDO emptyPromptWorkerDO = AgentConfigDO.builder().name("empty_worker").build();
+        // 3. ExpertAgent 缺少有效 prompt / systemPrompt 抛出 AGENT_CONFIG_ERROR
+        AgentConfigDO emptyPromptExpertDO = AgentConfigDO.builder().name("empty_worker").build();
         LlmConfig emptyLlmConfig = LlmConfig.builder().model("gpt-4o").build();
-        WorkerAgent workerNoPrompt = new WorkerAgent(emptyPromptWorkerDO, emptyLlmConfig, llmService, promptService);
-        BizException ex3 = Assertions.assertThrows(BizException.class, () -> workerNoPrompt.execute(context));
+        ExpertAgent expertNoPrompt = new ExpertAgent(emptyPromptExpertDO, emptyLlmConfig, llmService, promptService);
+        BizException ex3 = Assertions.assertThrows(BizException.class, () -> expertNoPrompt.execute(context));
         Assertions.assertEquals("AGENT_CONFIG_ERROR", ex3.getErrorCode());
         Assertions.assertTrue(ex3.getMessage().contains("empty_worker") && ex3.getMessage().contains("systemPrompt"));
     }
@@ -462,7 +462,7 @@ public class OrchestrAgentFlowTest {
                 .flowTopologyType("REACT")
                 .maxStep(10)
                 .toolCodes(List.of("weather_tool"))
-                .workerCodes(List.of("expert_ticket"))
+                .expertCodes(List.of("expert_ticket"))
                 .build();
 
         DefaultStrategyContext context = new DefaultStrategyContext(config, "test-flow-001", "session-001", null);
@@ -475,8 +475,8 @@ public class OrchestrAgentFlowTest {
     }
 
     @Test
-    @DisplayName("测试纯 workerCodes 引用挂载 Worker 与伴生 RAG")
-    public void testPureWorkerCodesAndCompanionRag() throws Exception {
+    @DisplayName("测试纯 expertCodes 引用挂载 Expert 与伴生 RAG")
+    public void testPureExpertCodesAndCompanionRag() throws Exception {
         ToolConfigRepositoryImpl toolRepo = new ToolConfigRepositoryImpl();
         List<ToolConfigDO> tools = List.of(
                 ToolConfigDO.builder()
@@ -493,18 +493,18 @@ public class OrchestrAgentFlowTest {
         factory.setAgentConfigRepository(agentRepo);
 
         StrategyConfigDO config = StrategyConfigDO.builder()
-                .strategyId("pure_worker_codes_strat")
-                .code("pure_worker_codes_strat")
+                .strategyId("pure_expert_codes_strat")
+                .code("pure_expert_codes_strat")
                 .flowTopologyType("REACT")
                 .maxStep(10)
                 .toolCodes(List.of("weather_tool"))
-                .workerCodes(List.of("expert_ticket"))
+                .expertCodes(List.of("expert_ticket"))
                 .build();
 
         DefaultStrategyContext context = new DefaultStrategyContext(config, "test-flow-pure-001", "session-pure-001", null);
         ReActStrategyFlow flow = (ReActStrategyFlow) factory.create(context);
 
-        // 验证纯 workerCodes 模式下成功通过 AgentConfigRepository 解析并注册 WorkerAgent 与伴生 RAG
+        // 验证纯 expertCodes 模式下成功通过 AgentConfigRepository 解析并注册 ExpertAgent 与伴生 RAG
         Assertions.assertTrue(flow.getAgents().containsKey("weather_tool"));
         Assertions.assertTrue(flow.getAgents().containsKey("expert_ticket"));
         Assertions.assertTrue(flow.getAgents().containsKey("expert_ticket#RAG"));

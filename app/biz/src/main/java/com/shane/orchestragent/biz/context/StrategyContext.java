@@ -1,7 +1,7 @@
 package com.shane.orchestragent.biz.context;
 
 import com.shane.orchestragent.biz.agent.Agent;
-import com.shane.orchestragent.biz.model.flow.ConductorResult;
+import com.shane.orchestragent.biz.model.flow.SupervisorResult;
 import com.shane.orchestragent.biz.model.flow.EvaluatorResult;
 import com.shane.orchestragent.biz.model.flow.FlowAgentMessage;
 import com.shane.orchestragent.biz.model.flow.PlanResult;
@@ -83,12 +83,12 @@ public interface StrategyContext extends AgentContext {
     /**
      * 获取最近一次协调指挥结果
      */
-    ConductorResult getLastConductorResult();
+    SupervisorResult getLastSupervisorResult();
 
     /**
      * 设置最近一次协调指挥结果
      */
-    void setLastConductorResult(ConductorResult result);
+    void setLastSupervisorResult(SupervisorResult result);
 
     /**
      * 获取最近一次质检评估结果

@@ -1,15 +1,15 @@
 package com.shane.orchestragent.biz.flow;
 
 import com.shane.orchestragent.biz.agent.Agent;
-import com.shane.orchestragent.biz.agent.flow.ConductorAgent;
 import com.shane.orchestragent.biz.agent.flow.EvaluatorAgent;
 import com.shane.orchestragent.biz.agent.flow.PlannerAgent;
 import com.shane.orchestragent.biz.agent.flow.RagAgent;
 import com.shane.orchestragent.biz.agent.flow.ReporterAgent;
+import com.shane.orchestragent.biz.agent.flow.SupervisorAgent;
 import com.shane.orchestragent.biz.context.StrategyContext;
-import com.shane.orchestragent.biz.model.agent.WorkerErrorAgentResult;
+import com.shane.orchestragent.biz.model.agent.ExpertErrorAgentResult;
 import com.shane.orchestragent.common.enums.AgentTypeEnum;
-import com.shane.orchestragent.biz.model.flow.ConductorResult;
+import com.shane.orchestragent.biz.model.flow.SupervisorResult;
 import com.shane.orchestragent.biz.model.flow.EvaluatorResult;
 import com.shane.orchestragent.biz.model.flow.FlowStep;
 import com.shane.orchestragent.biz.model.flow.PlanResult;
@@ -22,7 +22,7 @@ import org.apache.commons.lang3.StringUtils;
 import java.util.Map;
 
 /**
- * ReAct 策略流引擎 (核心创新: 深度整合 Conductor 步进调度与 Evaluator 战略目标核验自愈闭环)
+ * ReAct 策略流引擎 (核心创新: 深度整合 Supervisor 步进调度与 Evaluator 战略目标核验自愈闭环)
  *
  * @author Shane
  */
@@ -32,7 +32,7 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
     private final int maxEvalRetry;
 
     private final PlannerAgent plannerAgent;
-    private final ConductorAgent conductorAgent;
+    private final SupervisorAgent supervisorAgent;
     private final EvaluatorAgent evaluatorAgent;
     private final ReporterAgent reporterAgent;
 
@@ -45,12 +45,12 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
         this.maxEvalRetry = maxEvalRetry > 0 ? maxEvalRetry : 2;
 
         this.plannerAgent = (PlannerAgent) systemAgents.get(AgentTypeEnum.PLANNER);
-        this.conductorAgent = (ConductorAgent) systemAgents.get(AgentTypeEnum.CONDUCTOR);
+        this.supervisorAgent = (SupervisorAgent) systemAgents.get(AgentTypeEnum.SUPERVISOR);
         this.evaluatorAgent = (EvaluatorAgent) systemAgents.get(AgentTypeEnum.EVALUATOR);
         this.reporterAgent = (ReporterAgent) systemAgents.get(AgentTypeEnum.REPORTER);
 
         addAgent(this.plannerAgent);
-        addAgent(this.conductorAgent);
+        addAgent(this.supervisorAgent);
         addAgent(this.evaluatorAgent);
         addAgent(this.reporterAgent);
     }
@@ -68,18 +68,18 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
         // 2. 步进协同与自愈循环
         while (checkStep()) {
             // 指挥调度: 单步审视进度与反馈，判定下一步
-            ConductorResult conductorResult = conduct();
+            SupervisorResult supervisorResult = conduct();
 
-            if (conductorResult.isError()) {
-                String errorReason = conductorResult.getRequest() != null && conductorResult.getRequest().get("reason") != null
-                        ? String.valueOf(conductorResult.getRequest().get("reason"))
+            if (supervisorResult.isError()) {
+                String errorReason = supervisorResult.getRequest() != null && supervisorResult.getRequest().get("reason") != null
+                        ? String.valueOf(supervisorResult.getRequest().get("reason"))
                         : "调度器检测到前序步骤或系统异常中断流程";
-                log.error("[Flow: {}] Conductor 调度器检测到异常中断流程: {}", getFlowId(), errorReason);
-                throw new BizException("CONDUCTOR_RETURN_ERROR", "指挥调度器检测到异常中断流程: " + errorReason);
+                log.error("[Flow: {}] Supervisor 调度器检测到异常中断流程: {}", getFlowId(), errorReason);
+                throw new BizException("SUPERVISOR_RETURN_ERROR", "指挥调度器检测到异常中断流程: " + errorReason);
             }
 
             // 当指挥官判定流程可结束时，由 Evaluator 进行终局战略目标审计
-            if (conductorResult.isFinish()) {
+            if (supervisorResult.isFinish()) {
                 EvaluatorResult evalResult = evaluate();
 
                 // 2.1 验收通过: 达标放行进入 Reporter 汇总交付
@@ -94,7 +94,7 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
                     log.warn("[Flow: {}] Evaluator 验收未通过 (第 {} 次自愈重试), 诊断意见: {}",
                             getFlowId(), evalRetry, evalResult.getCritique());
 
-                    // 将批评与整改意见注入上下文，供 Conductor 下一轮调度 Worker 进行针对性数据修补
+                    // 将批评与整改意见注入上下文，供 Supervisor 下一轮调度 Expert 进行针对性数据修补
                     String feedback = evalResult.getCritique() +
                             (StringUtils.isNotEmpty(evalResult.getSuggestedRemedy()) ? " 建议动作: " + evalResult.getSuggestedRemedy() : "");
                     getContext().setEvaluationFeedback(feedback);
@@ -107,8 +107,8 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
                 return finish();
             }
 
-            // 调度 Worker 执行特定工单子任务
-            executeWorker(conductorResult);
+            // 调度 Expert 执行特定工单子任务
+            executeExpert(supervisorResult);
         }
 
         throw BizErrorFactory.getInstance().handleMaxStepLimitExceeded();
@@ -130,27 +130,27 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
         }
         for (FlowStep step : planResult.getSteps()) {
             if (!getAgents().containsKey(step.getAgent())) {
-                log.warn("[Plan Validation] 提示: 规划步骤包含外部或动态 Worker: {}", step.getAgent());
+                log.warn("[Plan Validation] 提示: 规划步骤包含外部或动态 Expert: {}", step.getAgent());
             }
         }
     }
 
-    private ConductorResult conduct() throws BizException {
-        ConductorResult conductorResult = (ConductorResult) executeStep(conductorAgent, ConductorResult.class);
-        if (conductorResult == null || StringUtils.isBlank(conductorResult.getNext())) {
-            throw BizErrorFactory.getInstance().conductorDecisionEmpty();
+    private SupervisorResult conduct() throws BizException {
+        SupervisorResult supervisorResult = (SupervisorResult) executeStep(supervisorAgent, SupervisorResult.class);
+        if (supervisorResult == null || StringUtils.isBlank(supervisorResult.getNext())) {
+            throw BizErrorFactory.getInstance().supervisorDecisionEmpty();
         }
-        getContext().setLastConductorResult(conductorResult);
-        getContext().setNextAgentRequest(conductorResult.getRequest());
-        log.info("[Flow: {}][FLOW_CONDUCT] Conductor 调度决策: next={}, targetAgentRequest='{}'",
-                getFlowId(), conductorResult.getNext(), conductorResult.getRequest());
-        return conductorResult;
+        getContext().setLastSupervisorResult(supervisorResult);
+        getContext().setNextAgentRequest(supervisorResult.getRequest());
+        log.info("[Flow: {}][FLOW_SUPERVISE] Supervisor 调度决策: next={}, targetAgentRequest='{}'",
+                getFlowId(), supervisorResult.getNext(), supervisorResult.getRequest());
+        return supervisorResult;
     }
 
-    private void executeWorker(ConductorResult conductorResult) throws BizException {
-        String nextAgentName = conductorResult != null ? conductorResult.getNext() : null;
+    private void executeExpert(SupervisorResult supervisorResult) throws BizException {
+        String nextAgentName = supervisorResult != null ? supervisorResult.getNext() : null;
         if (StringUtils.isBlank(nextAgentName)) {
-            log.warn("[Flow: {}] Conductor 未指定下一个执行节点，跳过", getFlowId());
+            log.warn("[Flow: {}] Supervisor 未指定下一个执行节点，跳过", getFlowId());
             return;
         }
         Agent targetAgent = getAgents().get(nextAgentName);
@@ -158,8 +158,8 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
             throw BizErrorFactory.getInstance().agentNotFound(nextAgentName);
         }
 
-        // 1. 伴生 RAG 隐式前置调度：若目标为 Worker 且存在对应伴生 RAG 节点，先触发知识检索并压入上下文
-        if (targetAgent.getType() == AgentTypeEnum.WORKER) {
+        // 1. 伴生 RAG 隐式前置调度：若目标为 Expert 且存在对应伴生 RAG 节点，先触发知识检索并压入上下文
+        if (targetAgent.getType() == AgentTypeEnum.EXPERT) {
             String companionRagName = RagAgent.buildRagName(nextAgentName);
             Agent companionRag = getAgents().get(companionRagName);
             if (companionRag != null) {
@@ -168,7 +168,7 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
             }
         }
 
-        // 2. 调度执行目标节点 (WorkerAgent 或 ToolAgent)
+        // 2. 调度执行目标节点 (ExpertAgent 或 ToolAgent)
         log.info("[Flow: {}][FLOW_AGENT_EXEC] 调度节点 [{}] (类型: {}) 执行工单...", getFlowId(), nextAgentName, targetAgent.getType());
         String output = (String) executeStep(targetAgent, String.class);
         validStepResult(targetAgent, output);
@@ -179,10 +179,10 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
         if (StringUtils.isBlank(output)) {
             throw BizErrorFactory.getInstance().toolExecutionError(agent.getName(), "节点产出结果为空");
         }
-        if (agent.getType() == AgentTypeEnum.WORKER) {
-            WorkerErrorAgentResult errorResult = WorkerErrorAgentResult.format(output);
+        if (agent.getType() == AgentTypeEnum.EXPERT) {
+            ExpertErrorAgentResult errorResult = ExpertErrorAgentResult.format(output);
             if (errorResult != null) {
-                throw BizErrorFactory.getInstance().workerReturnException(errorResult.getErrorCode(), errorResult.getErrorMessage());
+                throw BizErrorFactory.getInstance().expertReturnException(errorResult.getErrorCode(), errorResult.getErrorMessage());
             }
         }
     }

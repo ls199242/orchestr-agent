@@ -12,7 +12,7 @@ import com.shane.orchestragent.common.utils.JsonUtils;
 import com.shane.orchestragent.integration.llm.model.ChatMessageDTO;
 import com.shane.orchestragent.integration.llm.model.SystemChatMessageDTO;
 import com.shane.orchestragent.integration.llm.model.UserChatMessageDTO;
-import com.shane.orchestragent.prompt.model.WorkerPO;
+import com.shane.orchestragent.prompt.model.ExpertPO;
 import com.shane.orchestragent.prompt.service.PromptService;
 import com.shane.orchestragent.repository.model.AgentConfigDO;
 import org.apache.commons.lang3.StringUtils;
@@ -23,16 +23,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 专精工作智能体 (基于业务规范 Spec 与伴生 RAG 检索知识驱动)
+ * 专精任务执行智能体 (基于业务规范 Spec 与伴生 RAG 检索知识驱动)
  *
  * @author Shane
  */
-public class WorkerAgent extends BaseLlmAgent<StrategyContext> {
+public class ExpertAgent extends BaseLlmAgent<StrategyContext> {
 
     protected final AgentConfigDO agentConfig;
 
-    public WorkerAgent(AgentConfigDO agentConfig, LlmConfig llmConfig, LlmService llmService, PromptService promptService) {
-        super(agentConfig.getName(), agentConfig.getDescription(), AgentTypeEnum.WORKER, llmConfig, llmService, promptService);
+    public ExpertAgent(AgentConfigDO agentConfig, LlmConfig llmConfig, LlmService llmService, PromptService promptService) {
+        super(agentConfig.getName(), agentConfig.getDescription(), AgentTypeEnum.EXPERT, llmConfig, llmService, promptService);
         this.agentConfig = agentConfig;
     }
 
@@ -47,8 +47,8 @@ public class WorkerAgent extends BaseLlmAgent<StrategyContext> {
         }
 
         Map<String, Object> model = new HashMap<>(context.getProperties());
-        model.put("worker_name", getName());
-        model.put("worker_description", getDescription());
+        model.put("expert_name", getName());
+        model.put("expert_description", getDescription());
         model.put("spec", StringUtils.defaultString(template));
 
         Object ragResult = context.getProperty(PropertyKeys.KEY_RAG_RESULT);
@@ -82,8 +82,8 @@ public class WorkerAgent extends BaseLlmAgent<StrategyContext> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public WorkerPO getPO() {
-        WorkerPO po = new WorkerPO();
+    public ExpertPO getPO() {
+        ExpertPO po = new ExpertPO();
         po.setName(getName());
         po.setDescription(getDescription());
         po.setAgentType(getType().getCode());

@@ -48,9 +48,9 @@ public class ReporterAgent extends BaseLlmAgent<StrategyContext> {
 
     @Override
     protected List<ChatMessageDTO> buildMessages(StrategyContext context) throws BizException {
-        // 安全过滤 Worker 与 Tool 产出，杜绝老代码 NPE
+        // 安全过滤 Expert 与 Tool 产出，杜绝老代码 NPE
         List<FlowAgentMessage> messages = context.getChatMessages().stream()
-                .filter(m -> m != null && (m.getAgentType() == AgentTypeEnum.WORKER || m.getAgentType() == AgentTypeEnum.TOOL))
+                .filter(m -> m != null && (m.getAgentType() == AgentTypeEnum.EXPERT || m.getAgentType() == AgentTypeEnum.TOOL))
                 .collect(Collectors.toList());
 
         StringBuilder sb = new StringBuilder();

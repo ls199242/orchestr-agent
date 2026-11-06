@@ -32,9 +32,9 @@ public class PlannerAgent extends BaseLlmAgent<StrategyContext> {
     protected SystemChatMessageDTO buildSystemPrompt(StrategyContext context) throws BizException {
         Map<String, Object> properties = new HashMap<>(context.getProperties());
 
-        // 注入可用的业务专精 Worker 与外部 Tool 列表描述 (伴生 RAG 由底层自愈调度，不向规划器暴露)
+        // 注入可用的业务专精 Expert 与外部 Tool 列表描述 (伴生 RAG 由底层自愈调度，不向规划器暴露)
         List<Map<String, String>> agentDescriptions = context.getAgents().values().stream()
-                .filter(a -> a.getType() == AgentTypeEnum.WORKER || a.getType() == AgentTypeEnum.TOOL)
+                .filter(a -> a.getType() == AgentTypeEnum.EXPERT || a.getType() == AgentTypeEnum.TOOL)
                 .map(a -> {
                     Map<String, String> map = new HashMap<>();
                     map.put("name", a.getName());

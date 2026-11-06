@@ -86,8 +86,8 @@ public class FlowStopTest {
                 AgentConfigDO.builder().name("PLANNER").code("PLANNER").model("gpt-4o")
                         .systemPrompt("# Planner\n{\"steps\": [{\"step\": 1, \"agent\": \"search_worker\", \"description\": \"查询\"}]}")
                         .userPrompt("目标: ${strategy_target}").build(),
-                AgentConfigDO.builder().name("CONDUCTOR").code("CONDUCTOR").model("gpt-4o")
-                        .systemPrompt("# Conductor\n{\"next\": \"FINISH\", \"request\": {}}")
+                AgentConfigDO.builder().name("SUPERVISOR").code("SUPERVISOR").model("gpt-4o")
+                        .systemPrompt("# Supervisor\n{\"next\": \"FINISH\", \"request\": {}}")
                         .userPrompt("调度").build(),
                 AgentConfigDO.builder().name("EVALUATOR").code("EVALUATOR").model("gpt-4o")
                         .systemPrompt("# Evaluator\n{\"pass\": true, \"score\": 100, \"critique\": \"\", \"suggestedRemedy\": \"\"}")
@@ -95,10 +95,10 @@ public class FlowStopTest {
                 AgentConfigDO.builder().name("REPORTER").code("REPORTER").model("gpt-4o")
                         .systemPrompt("# Reporter\n汇总输出")
                         .userPrompt("产出: ${flowExecutionSummary}").build(),
-                AgentConfigDO.builder().name("ROUTER").code("ROUTER").model("gpt-4o")
-                        .systemPrompt("# Router\n{\"handoffToPlanner\": true, \"reply\": \"\"}")
+                AgentConfigDO.builder().name("COORDINATOR").code("COORDINATOR").model("gpt-4o")
+                        .systemPrompt("# Coordinator\n{\"handoffToPlanner\": true, \"reply\": \"\"}")
                         .userPrompt("目标: ${strategy_target}").build(),
-                AgentConfigDO.builder().name("search_worker").code("search_worker").agentType("WORKER").model("gpt-4o")
+                AgentConfigDO.builder().name("search_worker").code("search_worker").agentType("EXPERT").model("gpt-4o")
                         .systemPrompt("搜索结果").build()
         );
         ReflectionTestUtils.setField(agentRepo, "agentConfigApiClient", (AgentConfigApiClient) () -> systemAgents);
@@ -112,7 +112,7 @@ public class FlowStopTest {
                 .name("测试终止策略")
                 .maxStep(10)
                 .flowTopologyType("REACT")
-                .workerCodes(List.of("search_worker"))
+                .expertCodes(List.of("search_worker"))
                 .build();
         ReflectionTestUtils.setField(strategyRepo, "strategyConfigApiClient", (StrategyConfigApiClient) () -> List.of(configDO));
         strategyRepo.afterPropertiesSet();
@@ -135,7 +135,7 @@ public class FlowStopTest {
 
         Map<AgentTypeEnum, Agent> systemAgents = new HashMap<>();
         systemAgents.put(AgentTypeEnum.PLANNER, new PlannerAgent(defaultLlmConfig, llmService, promptService));
-        systemAgents.put(AgentTypeEnum.CONDUCTOR, new ConductorAgent(defaultLlmConfig, llmService, promptService));
+        systemAgents.put(AgentTypeEnum.SUPERVISOR, new SupervisorAgent(defaultLlmConfig, llmService, promptService));
         systemAgents.put(AgentTypeEnum.EVALUATOR, new EvaluatorAgent(defaultLlmConfig, llmService, promptService));
         systemAgents.put(AgentTypeEnum.REPORTER, new ReporterAgent(defaultLlmConfig, llmService, promptService));
 
@@ -223,7 +223,7 @@ public class FlowStopTest {
                 .userPrompt("usr")
                 .build();
 
-        BaseLlmAgent<StrategyContext> testAgent = new BaseLlmAgent<>("TEST_AGENT", "测试智能体", AgentTypeEnum.WORKER, config, hangingLlmService, promptService) {
+        BaseLlmAgent<StrategyContext> testAgent = new BaseLlmAgent<>("TEST_AGENT", "测试智能体", AgentTypeEnum.EXPERT, config, hangingLlmService, promptService) {
             @Override
             protected com.shane.orchestragent.integration.llm.model.SystemChatMessageDTO buildSystemPrompt(StrategyContext context) {
                 return new com.shane.orchestragent.integration.llm.model.SystemChatMessageDTO("system");
@@ -238,7 +238,7 @@ public class FlowStopTest {
         StrategyContext context = new DefaultStrategyContext();
         AtomicReference<AgentResult> resultRef = new AtomicReference<>();
 
-        Thread workerThread = new Thread(() -> {
+        Thread agentThread = new Thread(() -> {
             try {
                 AgentResult result = testAgent.execute(context);
                 resultRef.set(result);
@@ -246,7 +246,7 @@ public class FlowStopTest {
                 // 不应抛出异常
             }
         });
-        workerThread.start();
+        agentThread.start();
 
         // 等待 LLM 请求发起
         assertTrue(callStarted.await(2, TimeUnit.SECONDS));
@@ -258,8 +258,8 @@ public class FlowStopTest {
         assertTrue(cancelLatch.await(2, TimeUnit.SECONDS));
         assertTrue(testAgent.isStopped());
 
-        workerThread.join(2000);
-        assertFalse(workerThread.isAlive());
+        agentThread.join(2000);
+        assertFalse(agentThread.isAlive());
         assertNull(resultRef.get());
     }
 
@@ -283,7 +283,7 @@ public class FlowStopTest {
                 .temperature(0.7)
                 .maxTokens(1000)
                 .nodeWaitTime(5000L)
-                .systemPrompt("调度与指挥专家 (ConductorAgent)")
+                .systemPrompt("调度与指挥专家 (SupervisorAgent)")
                 .userPrompt("目标: {{strategy_target}}")
                 .build();
 
@@ -294,8 +294,8 @@ public class FlowStopTest {
 
         AtomicReference<ReActStrategyFlow> flowRef = new AtomicReference<>();
 
-        // 自定义 Conductor: 在执行指挥调度决策时模拟外部调用 stop
-        ConductorAgent customConductor = new ConductorAgent(defaultLlmConfig, llmService, promptService) {
+        // 自定义 Supervisor: 在执行指挥调度决策时模拟外部调用 stop
+        SupervisorAgent customSupervisor = new SupervisorAgent(defaultLlmConfig, llmService, promptService) {
             @Override
             public AgentResult execute(StrategyContext ctx) throws BizException {
                 if (flowRef.get() != null) {
@@ -304,7 +304,7 @@ public class FlowStopTest {
                 return super.execute(ctx);
             }
         };
-        systemAgents.put(AgentTypeEnum.CONDUCTOR, customConductor);
+        systemAgents.put(AgentTypeEnum.SUPERVISOR, customSupervisor);
 
         ReActStrategyFlow flow = new ReActStrategyFlow(context, systemAgents, 10);
         flow.setFlowService(flowService);

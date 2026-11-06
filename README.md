@@ -28,7 +28,7 @@ orchestr-agent/
 │   ├── memory/                    # 短期执行上下文与长期记忆管理
 │   ├── repository/                # 7 大配置仓储（内存缓存 + 远程定时轮询拉取）
 │   ├── integration/               # 大模型网络客户端（OpenAI 兼容协议）
-│   ├── biz/                       # 核心业务逻辑：指挥调度 (Conductor)、质检评估 (Evaluator)、专精 Worker (Rag/Tool) 与 ReAct 工作流
+│   ├── biz/                       # 核心业务逻辑：意图协同 (Coordinator)、规划 (Planner)、调度指挥 (Supervisor)、质检评估 (Evaluator)、专精业务 (Expert/Rag/Tool) 与成果汇报 (Reporter)
 │   ├── web/                       # Spring Boot 启动入口、REST Controller、SSE 流式打字机推送
 │   └── test/                      # 单元测试与集成测试组件 (MockLlmClient 等)
 ├── py-mock-console/               # [Python] 可视化控制台与配置 Mock 服务 (FastAPI)

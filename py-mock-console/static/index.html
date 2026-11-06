@@ -1026,23 +1026,23 @@
                 </div>
               </div>
 
-              <!-- 挂载的专精业务智能体 (workerCodes) -->
+              <!-- 挂载的专精业务智能体 (expertCodes) -->
               <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-2">
                 <div class="flex items-center justify-between">
                   <label class="font-medium text-slate-300 flex items-center space-x-1.5">
                     <i class="fa-solid fa-users-gear text-indigo-400"></i>
-                    <span>策略挂载专精智能体编码 (workerCodes)</span>
+                    <span>策略挂载专精智能体编码 (expertCodes)</span>
                   </label>
-                  <span class="text-[11px] text-slate-500">输入 Worker 编码，多个用英文逗号分隔</span>
+                  <span class="text-[11px] text-slate-500">输入 Expert 编码，多个用英文逗号分隔</span>
                 </div>
-                <input type="text" x-model="formData.workerCodesInput" placeholder="例如: arrival_recommend_worker"
+                <input type="text" x-model="formData.expertCodesInput" placeholder="例如: arrival_recommend_expert"
                        class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-indigo-500">
                 <div class="flex flex-wrap gap-1.5 pt-1">
-                  <span class="text-[11px] text-slate-400">当前可选 Worker：</span>
-                  <template x-for="w in (configs.agents || []).filter(a => a.agentType === 'WORKER')" :key="w.code || w.name">
-                    <button type="button" @click="toggleWorkerCode(w.code || w.name)"
+                  <span class="text-[11px] text-slate-400">当前可选 Expert：</span>
+                  <template x-for="w in (configs.agents || []).filter(a => a.agentType === 'EXPERT')" :key="w.code || w.name">
+                    <button type="button" @click="toggleExpertCode(w.code || w.name)"
                             class="px-2 py-0.5 rounded text-[11px] border transition"
-                            :class="(formData.workerCodesInput || '').includes(w.code || w.name) ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
+                            :class="(formData.expertCodesInput || '').includes(w.code || w.name) ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
                             x-text="(w.code || w.name) + (w.description ? ' (' + w.description + ')' : '')"></button>
                   </template>
                 </div>
@@ -1068,7 +1068,7 @@
               <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label class="block font-medium text-slate-300 mb-1">智能体名称 (name) <span class="text-rose-400">*</span></label>
-                  <input type="text" x-model="formData.name" :disabled="isEditMode" placeholder="例如: PLANNER, search_worker"
+                  <input type="text" x-model="formData.name" :disabled="isEditMode" placeholder="例如: PLANNER, arrival_recommend_expert"
                          class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 disabled:opacity-60">
                 </div>
                 <div>
@@ -1080,8 +1080,8 @@
                   <label class="block font-medium text-slate-300 mb-1">智能体角色类型 (agentType) <span class="text-rose-400">*</span></label>
                   <select x-model="formData.agentType"
                           class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
-                    <option value="SYSTEM">SYSTEM (系统核心节点: PLANNER, CONDUCTOR 等)</option>
-                    <option value="WORKER">WORKER (专精业务工作节点)</option>
+                    <option value="SYSTEM">SYSTEM (系统核心节点: PLANNER, SUPERVISOR, COORDINATOR 等)</option>
+                    <option value="EXPERT">EXPERT (专精业务节点)</option>
                     <option value="COMMON">COMMON (通用辅助节点)</option>
                   </select>
                 </div>
@@ -1507,7 +1507,7 @@
           description: '',
           prompt: '',
           toolCodesInput: '',
-          workerCodesInput: '',
+          expertCodesInput: '',
           propertiesJson: '{}'
         },
 
@@ -1994,7 +1994,7 @@
             stream: true,
             prompt: '',
             toolCodesInput: '',
-            workerCodesInput: '',
+            expertCodesInput: '',
             propertiesJson: '{}',
             // Agent
             agentType: 'SYSTEM',
@@ -2024,9 +2024,11 @@
             // 针对各类型的特化字段做序列化回填
             if (this.configCategory === 'strategies') {
               this.formData.toolCodesInput = Array.isArray(item.toolCodes) ? item.toolCodes.join(', ') : '';
-              this.formData.workerCodesInput = Array.isArray(item.workerCodes)
-                ? item.workerCodes.join(', ')
-                : (Array.isArray(item.workers) ? item.workers.map(w => w.code || w.name).filter(Boolean).join(', ') : '');
+              this.formData.expertCodesInput = Array.isArray(item.expertCodes)
+                ? item.expertCodes.join(', ')
+                : (Array.isArray(item.workerCodes)
+                  ? item.workerCodes.join(', ')
+                  : (Array.isArray(item.workers) ? item.workers.map(w => w.code || w.name).filter(Boolean).join(', ') : ''));
               this.formData.propertiesJson = item.properties ? JSON.stringify(item.properties, null, 2) : '{}';
             } else if (this.configCategory === 'agents') {
               this.formData.extraPropertiesJson = item.extraProperties ? JSON.stringify(item.extraProperties, null, 2) : '{}';
@@ -2042,7 +2044,7 @@
           } else {
             // 新增时的默认填充
             if (this.configCategory === 'strategies') {
-              this.formData.workerCodesInput = 'arrival_recommend_worker';
+              this.formData.expertCodesInput = 'arrival_recommend_expert';
             } else if (this.configCategory === 'agents') {
               this.formData.model = defaultModel;
             } else if (this.configCategory === 'models') {
@@ -2072,14 +2074,14 @@
           this.formData.toolCodesInput = list.join(', ');
         },
 
-        toggleWorkerCode(workerCode) {
-          let list = (this.formData.workerCodesInput || '').split(',').map(s => s.trim()).filter(Boolean);
-          if (list.includes(workerCode)) {
-            list = list.filter(w => w !== workerCode);
+        toggleExpertCode(expertCode) {
+          let list = (this.formData.expertCodesInput || '').split(',').map(s => s.trim()).filter(Boolean);
+          if (list.includes(expertCode)) {
+            list = list.filter(w => w !== expertCode);
           } else {
-            list.push(workerCode);
+            list.push(expertCode);
           }
-          this.formData.workerCodesInput = list.join(', ');
+          this.formData.expertCodesInput = list.join(', ');
         },
 
         syncRawJsonFromForm() {
@@ -2093,7 +2095,7 @@
             let properties = {};
             try { properties = JSON.parse(f.propertiesJson || '{}'); } catch(e) {}
             const toolCodes = (f.toolCodesInput || '').split(',').map(s => s.trim()).filter(Boolean);
-            const workerCodes = (f.workerCodesInput || '').split(',').map(s => s.trim()).filter(Boolean);
+            const expertCodes = (f.expertCodesInput || '').split(',').map(s => s.trim()).filter(Boolean);
             return {
               strategyId: f.strategyId,
               code: f.code || f.strategyId,
@@ -2104,7 +2106,8 @@
               flowTopologyType: f.flowTopologyType || 'REACT',
               stream: !!f.stream,
               toolCodes: toolCodes,
-              workerCodes: workerCodes,
+              expertCodes: expertCodes,
+              workerCodes: expertCodes,
               properties: properties
             };
           } else if (this.configCategory === 'agents') {

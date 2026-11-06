@@ -64,10 +64,10 @@ public class OrchestrAgentControllerTest {
                         .userPrompt("目标: ${strategy_target}")
                         .build(),
                 AgentConfigDO.builder()
-                        .name("CONDUCTOR")
-                        .code("CONDUCTOR")
+                        .name("SUPERVISOR")
+                        .code("SUPERVISOR")
                         .model("Deepseek")
-                        .systemPrompt("# ConductorAgent\n调度下一步。输出: {\"next\": \"FINISH\", \"request\": {}}")
+                        .systemPrompt("# SupervisorAgent\n调度下一步。输出: {\"next\": \"FINISH\", \"request\": {}}")
                         .userPrompt("默认调度指令")
                         .build(),
                 AgentConfigDO.builder()
@@ -85,10 +85,10 @@ public class OrchestrAgentControllerTest {
                         .userPrompt("请根据执行总结输出最终回复:\n${flowExecutionSummary}")
                         .build(),
                 AgentConfigDO.builder()
-                        .name("ROUTER")
-                        .code("ROUTER")
+                        .name("COORDINATOR")
+                        .code("COORDINATOR")
                         .model("Deepseek")
-                        .systemPrompt("# RouterAgent\n分析意图: {\"handoffToPlanner\": true, \"reply\": \"\"}")
+                        .systemPrompt("# CoordinatorAgent\n分析意图: {\"handoffToPlanner\": true, \"reply\": \"\"}")
                         .userPrompt("用户诉求: ${strategy_target}")
                         .build(),
                 AgentConfigDO.builder()
@@ -100,7 +100,7 @@ public class OrchestrAgentControllerTest {
                 AgentConfigDO.builder()
                         .name("search_worker")
                         .code("search_worker")
-                        .agentType("WORKER")
+                        .agentType("EXPERT")
                         .model("Deepseek")
                         .systemPrompt("负责检索航班实时信息")
                         .build()
@@ -126,7 +126,7 @@ public class OrchestrAgentControllerTest {
                 .name("商务差旅推荐策略")
                 .maxStep(10)
                 .flowTopologyType("REACT")
-                .workerCodes(List.of("search_worker"))
+                .expertCodes(List.of("search_worker"))
                 .build();
         org.springframework.test.util.ReflectionTestUtils.setField(strategyRepo, "strategyConfigApiClient", (com.shane.orchestragent.repository.client.StrategyConfigApiClient) () -> List.of(configDO));
         try {
@@ -182,7 +182,7 @@ public class OrchestrAgentControllerTest {
     }
 
     @Test
-    @DisplayName("测试 chat 流式会话: 调用 Router 进行意图识别分流，并返回 SseEmitterUTF8")
+    @DisplayName("测试 chat 流式会话: 调用 Coordinator 进行意图识别分流，并返回 SseEmitterUTF8")
     public void testChatSseStreamSuccess() throws BizException {
         AgentChatRequestDTO request = AgentChatRequestDTO.builder()
                 .strategyCode("biz_travel")

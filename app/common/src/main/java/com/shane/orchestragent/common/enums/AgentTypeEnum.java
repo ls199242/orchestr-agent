@@ -10,22 +10,22 @@ import lombok.Getter;
 @Getter
 public enum AgentTypeEnum {
 
-    /** 意图路由门禁 (原 Coordinator) */
-    ROUTER("ROUTER", "意图识别与路由智能体"),
+    /** 多轮对话意图识别智能体 */
+    COORDINATOR("COORDINATOR", "多轮对话意图识别智能体"),
 
-    /** 任务规划 */
+    /** 战略任务规划智能体 */
     PLANNER("PLANNER", "战略任务规划智能体"),
 
-    /** 步进调度指挥 (原 Supervisor) */
-    CONDUCTOR("CONDUCTOR", "步进循环调度指挥智能体"),
+    /** 步进循环调度指挥智能体 */
+    SUPERVISOR("SUPERVISOR", "步进循环调度指挥智能体"),
 
-    /** 专精任务执行 (原 Expert) */
-    WORKER("WORKER", "专精任务执行工作智能体"),
+    /** 专精任务执行智能体 */
+    EXPERT("EXPERT", "专精任务执行智能体"),
 
-    /** 战略目标评估与批判 (新增) */
+    /** 战略目标审查与自愈评估智能体 */
     EVALUATOR("EVALUATOR", "战略目标审查与自愈评估智能体"),
 
-    /** 成果汇编汇报 */
+    /** 成果汇编汇报智能体 */
     REPORTER("REPORTER", "成果汇编汇报智能体"),
 
     /** 外部工具 */

@@ -46,7 +46,7 @@ public class AgentManagerImpl implements AgentManager {
     /** 策略工作流工程工厂，负责根据拓扑结构组装各智能体节点与监听器 */
     private final StrategyFlowFactory strategyFlowFactory;
 
-    /** 策略配置仓储，提供策略元数据、Worker专精节点定义与执行上限配置 */
+    /** 策略配置仓储，提供策略元数据、Expert专精节点定义与执行上限配置 */
     private final StrategyConfigRepository strategyConfigRepository;
 
     /** 流程生命周期与结果管理服务 */
@@ -125,7 +125,7 @@ public class AgentManagerImpl implements AgentManager {
 
     /**
      * SSE 流式会话方法实现
-     * 组装带 Router 智能体的多轮会话流，首轮进行意图识别与分流，通过 SseService#attachFlow 统一纳管流式推送与生命周期监听
+     * 组装带 Coordinator 智能体的多轮会话流，首轮进行意图识别与分流，通过 SseService#attachFlow 统一纳管流式推送与生命周期监听
      */
     @Override
     public SseEmitterUTF8 chat(AgentChatRequestVO request) throws BizException {
@@ -147,7 +147,7 @@ public class AgentManagerImpl implements AgentManager {
         log.info("[FLOW: {}][INPUT] 流式会话上下文初始化完成: sessionId={}, userId={}, target='{}'",
                 flowId, sessionId, request.getUserId(), context.getStrategyTarget());
 
-        // 4. 构建包含 Router 意图分流的多轮会话策略流程
+        // 4. 构建包含 Coordinator 意图识别的多轮会话策略流程
         StrategyFlow strategyFlow = strategyFlowFactory.createMultipleChatFlow(strategyConfig, context);
 
         // 5. 绑定 SSE 流式事件推送与生命周期监听
@@ -253,9 +253,9 @@ public class AgentManagerImpl implements AgentManager {
         if (config == null) {
             throw BizErrorFactory.getInstance().strategyNotFound(strategyCode);
         }
-        log.info("[CONFIG][GET] 成功获取策略配置: code={}, name={}, topology={}, workersCount={}",
+        log.info("[CONFIG][GET] 成功获取策略配置: code={}, name={}, topology={}, expertsCount={}",
                 config.getCode(), config.getName(), config.getFlowTopologyType(),
-                config.getWorkerCodes() != null ? config.getWorkerCodes().size() : 0);
+                config.getExpertCodes() != null ? config.getExpertCodes().size() : 0);
         return config;
     }
 

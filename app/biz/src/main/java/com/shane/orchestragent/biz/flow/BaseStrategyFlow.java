@@ -431,7 +431,7 @@ public abstract class BaseStrategyFlow implements StrategyFlow {
     /**
      * 执行具体策略编排逻辑的抽象方法
      * <p>
-     * 由具体的策略工作流实现类（如 ConductorEvaluatorFlow 等）提供多智能体协同流转的具体编排实现。
+     * 由具体的策略工作流实现类（如 ReActStrategyFlow 等）提供多智能体协同流转的具体编排实现。
      *
      * @return 流程最终产出的字符串结果
      * @throws BizException 若流程执行失败

@@ -26,8 +26,8 @@ public interface AgentManager {
 
     /**
      * SSE 流式多轮会话交互入口
-     * 调用 Router 智能体进行前置意图识别和分流决策:
-     * - 轻量会话意图: 由 Router 智能体直接给出解答并通过 SSE 流式推送完毕
+     * 调用 Coordinator 智能体进行前置意图识别和分流决策:
+     * - 轻量会话意图: 由 Coordinator 智能体直接给出解答并通过 SSE 流式推送完毕
      * - 复杂任务意图: 移交由 Plan 规划器与 ReAct 自愈循环执行，并全程流式推送各智能体步骤思考与最终交付结果
      *
      * @param request 流式会话请求业务对象

@@ -23,7 +23,7 @@ public class AgentConfigDO implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    /** 智能体名称唯一标识（如 PLANNER, CONDUCTOR, ROUTER） */
+    /** 智能体名称唯一标识（如 PLANNER, SUPERVISOR, COORDINATOR） */
     private String name;
 
     /** 智能体业务代码 */
@@ -32,7 +32,7 @@ public class AgentConfigDO implements Serializable {
     /** 智能体角色功能描述 */
     private String description;
 
-    /** 智能体分类类型（如 SYSTEM, WORKER） */
+    /** 智能体分类类型（如 SYSTEM, EXPERT） */
     private String agentType;
 
     /** 绑定的模型名称（如 gpt-4o, deepseek-chat） */
@@ -53,7 +53,7 @@ public class AgentConfigDO implements Serializable {
     /** 智能体用户提示词模板（包含占位符，动态插值渲染） */
     private String userPrompt;
 
-    /** 关联知识库/数据集 ID 列表 (专精 Worker 配置时触发伴生 RAG 智能体) */
+    /** 关联知识库/数据集 ID 列表 (专精 Expert 配置时触发伴生 RAG 智能体) */
     private List<String> datasets;
 
     /** 适用的特定工具列表 */

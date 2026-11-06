@@ -22,8 +22,8 @@
    - 当前系统处于建设初期阶段，不存在既有线上系统的兼容负担与历史版本包袱。
    - **全面禁止使用 `@Deprecated` 废弃注解**。如果代码或配置已不合时宜，必须立即彻底删除，严禁以“向下兼容”为借口保留冗余分支。
 2. **单一事实来源（Single Source of Truth）**：
-   - 智能体（包括系统智能体和业务专精 Worker）的元数据、模型超参及提示词模板统一归口到 `AgentConfigRepository`（对应实体为 `AgentConfigDO`）。
-   - 策略配置 `StrategyConfigDO` 中仅维护绑定的专精 Worker 编码列表（`workerCodes: List<String>`），严禁维护内嵌式实体或双轨配置。
+   - 智能体（包括系统智能体和业务专精 Expert）的元数据、模型超参及提示词模板统一归口到 `AgentConfigRepository`（对应实体为 `AgentConfigDO`）。
+   - 策略配置 `StrategyConfigDO` 中仅维护绑定的专精 Expert 编码列表（`expertCodes: List<String>`），严禁维护内嵌式实体或双轨配置。
 
 ---
 
@@ -34,8 +34,8 @@
    - 生产 HTTP 客户端必须保持纯粹性，只负责实际的网络请求与协议解析。
    - 单元测试与集成测试所需的模拟行为必须严格存放在 `app/test/src/test/java` 目录下（如使用 `MockLlmClient` 或 Mockito），不得污染生产代码。
 2. **严禁伪造桩对象掩盖缺失**：
-   - 当策略声明依赖某个 Worker（`workerCodes`）或工具（`toolCodes`）时，若对应仓储未检索到配置，必须严格 **Fail-Fast** 抛出 `BizException` 中断流程，严禁动态伪造“默认 Worker 桩”或“默认 Tool 桩”。
+   - 当策略声明依赖某个 Expert（`expertCodes`）或工具（`toolCodes`）时，若对应仓储未检索到配置，必须严格 **Fail-Fast** 抛出 `BizException` 中断流程，严禁动态伪造“默认 Expert 桩”或“默认 Tool 桩”。
    - 当大模型未配置且字典无全局默认模型时，必须直接抛出异常，严禁隐式硬编码模型名称。
 3. **严禁假通过（False Positive）**：
    - 评估智能体（`EvaluatorAgent`）在返回空内容或返回内容无法解析为有效 JSON 时，必须直接抛出异常中断或判定为质检不合格，严禁隐式兜底为 100 分满分通过（`defaultPass`）。
-   - 指挥智能体（`ConductorAgent`）在返回无法识别的指令或返回空动作时，必须抛出指挥调度异常，严禁静默伪造 `FINISH` 结束标记。
+   - 指挥调度智能体（`SupervisorAgent`）在返回无法识别的指令或返回空动作时，必须抛出指挥调度异常，严禁静默伪造 `FINISH` 结束标记。

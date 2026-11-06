@@ -5,14 +5,14 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 /**
- * 工作智能体元数据 PO (原 ExpertPO)
+ * 专精智能体元数据 PO
  *
  * @author Shane
  */
 @Data
 @NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-public class WorkerPO extends AgentPO {
+public class ExpertPO extends AgentPO {
 
     private String spec;
     private String skills;

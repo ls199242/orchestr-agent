@@ -33,7 +33,7 @@ import java.util.Map;
  * 1. 构造期从 AgentConfigRepository 动态解析系统 Agent 模型与提示词超参（Fail-Fast 校验）；
  * 2. 从 AgentConfigRepository 动态解析系统 Agent 模型超参与提示词；
  * 3. 动态加载并装配 ToolAgent 工具节点；
- * 4. 动态装配专精 WorkerAgent 及其伴生 RagAgent (WorkerName#RAG)。
+ * 4. 动态装配专精 ExpertAgent 及其伴生 RagAgent (ExpertName#RAG)。
  *
  * @author Shane
  */
@@ -137,9 +137,9 @@ public class StrategyFlowFactory {
     public StrategyFlow createReActFlow(StrategyConfigDO strategyConfig, StrategyContext context) throws BizException {
         int maxStep = resolveMaxStep(strategyConfig);
         int maxEvalRetry = resolveMaxEvalRetry();
-        log.info("[FLOW_FACTORY][BUILD] 创建纯 ReAct 策略流程: flowId={}, maxStep={}, maxEvalRetry={}, workersCount={}, toolsCount={}",
+        log.info("[FLOW_FACTORY][BUILD] 创建纯 ReAct 策略流程: flowId={}, maxStep={}, maxEvalRetry={}, expertsCount={}, toolsCount={}",
                 context.getFlowId(), maxStep, maxEvalRetry,
-                getWorkerCount(strategyConfig), getToolCount(strategyConfig));
+                getExpertCount(strategyConfig), getToolCount(strategyConfig));
 
         ReActStrategyFlow flow = new ReActStrategyFlow(context, buildSystemAgents(), maxStep, maxEvalRetry);
         assembleFlow(flow, strategyConfig);
@@ -147,7 +147,7 @@ public class StrategyFlowFactory {
     }
 
     /**
-     * 创建多轮会话策略流程 (包含 Router 智能体，首轮进行意图识别与分流决策)
+     * 创建多轮会话策略流程 (包含 Coordinator 智能体，首轮进行意图识别与分流决策)
      *
      * @param strategyConfig 策略配置实体
      * @param context 策略运行上下文
@@ -155,9 +155,9 @@ public class StrategyFlowFactory {
      */
     public StrategyFlow createMultipleChatFlow(StrategyConfigDO strategyConfig, StrategyContext context) throws BizException {
         int maxStep = resolveMaxStep(strategyConfig);
-        log.info("[FLOW_FACTORY][BUILD] 创建 MultipleChat 策略流程: flowId={}, maxStep={}, workersCount={}, toolsCount={}",
+        log.info("[FLOW_FACTORY][BUILD] 创建 MultipleChat 策略流程: flowId={}, maxStep={}, expertsCount={}, toolsCount={}",
                 context.getFlowId(), maxStep,
-                getWorkerCount(strategyConfig), getToolCount(strategyConfig));
+                getExpertCount(strategyConfig), getToolCount(strategyConfig));
 
         MultipleChatStrategyFlow flow = new MultipleChatStrategyFlow(context, buildSystemAgents(), maxStep);
         assembleFlow(flow, strategyConfig);
@@ -165,11 +165,11 @@ public class StrategyFlowFactory {
     }
 
     /**
-     * 统一流程拓扑装配：挂载工具、注册业务 Worker 及伴生 RAG、挂载执行监听器与记录器
+     * 统一流程拓扑装配：挂载工具、注册业务 Expert 及伴生 RAG、挂载执行监听器与记录器
      */
     private void assembleFlow(BaseStrategyFlow flow, StrategyConfigDO strategyConfig) throws BizException {
         registerTools(flow, strategyConfig);
-        registerWorkers(flow, strategyConfig);
+        registerExperts(flow, strategyConfig);
         decorateFlow(flow);
     }
 
@@ -213,9 +213,9 @@ public class StrategyFlowFactory {
 
     private Map<AgentTypeEnum, Agent> buildSystemAgents() throws BizException {
         Map<AgentTypeEnum, Agent> map = new HashMap<>();
-        map.put(AgentTypeEnum.ROUTER, new RouterAgent(resolveSystemAgentLlmConfig(AgentTypeEnum.ROUTER, 0.1), llmService, promptService));
+        map.put(AgentTypeEnum.COORDINATOR, new CoordinatorAgent(resolveSystemAgentLlmConfig(AgentTypeEnum.COORDINATOR, 0.1), llmService, promptService));
         map.put(AgentTypeEnum.PLANNER, new PlannerAgent(resolveSystemAgentLlmConfig(AgentTypeEnum.PLANNER, 0.2), llmService, promptService));
-        map.put(AgentTypeEnum.CONDUCTOR, new ConductorAgent(resolveSystemAgentLlmConfig(AgentTypeEnum.CONDUCTOR, 0.2), llmService, promptService));
+        map.put(AgentTypeEnum.SUPERVISOR, new SupervisorAgent(resolveSystemAgentLlmConfig(AgentTypeEnum.SUPERVISOR, 0.2), llmService, promptService));
         map.put(AgentTypeEnum.EVALUATOR, new EvaluatorAgent(resolveSystemAgentLlmConfig(AgentTypeEnum.EVALUATOR, 0.1), llmService, promptService));
         map.put(AgentTypeEnum.REPORTER, new ReporterAgent(resolveSystemAgentLlmConfig(AgentTypeEnum.REPORTER, 0.3), llmService, promptService));
         return map;
@@ -282,46 +282,46 @@ public class StrategyFlowFactory {
         }
     }
 
-    private int getWorkerCount(StrategyConfigDO strategyConfig) {
-        return (strategyConfig != null && strategyConfig.getWorkerCodes() != null) ? strategyConfig.getWorkerCodes().size() : 0;
+    private int getExpertCount(StrategyConfigDO strategyConfig) {
+        return (strategyConfig != null && strategyConfig.getExpertCodes() != null) ? strategyConfig.getExpertCodes().size() : 0;
     }
 
     private int getToolCount(StrategyConfigDO strategyConfig) {
         return (strategyConfig != null && strategyConfig.getToolCodes() != null) ? strategyConfig.getToolCodes().size() : 0;
     }
 
-    private void registerWorkers(BaseStrategyFlow flow, StrategyConfigDO strategyConfig) throws BizException {
-        if (strategyConfig == null || CollectionUtils.isEmpty(strategyConfig.getWorkerCodes())) {
+    private void registerExperts(BaseStrategyFlow flow, StrategyConfigDO strategyConfig) throws BizException {
+        if (strategyConfig == null || CollectionUtils.isEmpty(strategyConfig.getExpertCodes())) {
             return;
         }
 
-        for (String workerCode : strategyConfig.getWorkerCodes()) {
+        for (String expertCode : strategyConfig.getExpertCodes()) {
             AgentConfigDO agentConfig = null;
             if (agentConfigRepository != null) {
-                agentConfig = agentConfigRepository.getByCode(workerCode);
+                agentConfig = agentConfigRepository.getByCode(expertCode);
             }
             if (agentConfig == null) {
-                throw BizErrorFactory.getInstance().agentNotFound(workerCode);
+                throw BizErrorFactory.getInstance().agentNotFound(expertCode);
             }
 
-            LlmConfig workerLlmConfig = resolveWorkerLlmConfig(agentConfig);
-            WorkerAgent worker = new WorkerAgent(agentConfig, workerLlmConfig, llmService, promptService);
-            flow.addAgent(worker);
-            log.info("[FLOW_FACTORY] 成功根据 workerCode [{}] 注册专精 Worker 节点: [{}] (模型: {})",
-                    workerCode, worker.getName(), workerLlmConfig.getModel());
+            LlmConfig expertLlmConfig = resolveExpertLlmConfig(agentConfig);
+            ExpertAgent expert = new ExpertAgent(agentConfig, expertLlmConfig, llmService, promptService);
+            flow.addAgent(expert);
+            log.info("[FLOW_FACTORY] 成功根据 expertCode [{}] 注册专精 Expert 节点: [{}] (模型: {})",
+                    expertCode, expert.getName(), expertLlmConfig.getModel());
 
-            // 伴生 RAG 机制：若 Worker 关联了知识库，自动生成对应的伴生 RAG 节点
+            // 伴生 RAG 机制：若 Expert 关联了知识库，自动生成对应的伴生 RAG 节点
             if (CollectionUtils.isNotEmpty(agentConfig.getDatasets())) {
                 String ragName = RagAgent.buildRagName(agentConfig.getName());
                 RagAgent companionRag = new RagAgent(ragName, agentConfig.getDatasets());
                 flow.addAgent(companionRag);
-                log.info("[FLOW_FACTORY] 为专精 Worker [{}] 注册伴生 RAG 节点 [{}] (关联知识库: {})",
+                log.info("[FLOW_FACTORY] 为专精 Expert [{}] 注册伴生 RAG 节点 [{}] (关联知识库: {})",
                         agentConfig.getName(), ragName, agentConfig.getDatasets());
             }
         }
     }
 
-    private LlmConfig resolveWorkerLlmConfig(AgentConfigDO agentDO) throws BizException {
+    private LlmConfig resolveExpertLlmConfig(AgentConfigDO agentDO) throws BizException {
         String model = agentDO != null && StringUtils.isNotBlank(agentDO.getModel()) ? agentDO.getModel() : null;
         Double temp = agentDO != null ? agentDO.getTemperature() : null;
         Integer maxTokens = agentDO != null ? agentDO.getMaxTokens() : null;
@@ -337,8 +337,8 @@ public class StrategyFlowFactory {
         }
         if (temp == null) {
             temp = dictRepository != null
-                    ? dictRepository.getValue(DictRepository.Keys.KEY_DEFAULT_WORKER_AGENT_TEMP, DictRepository.Defaults.DEFAULT_WORKER_AGENT_TEMP)
-                    : DictRepository.Defaults.DEFAULT_WORKER_AGENT_TEMP;
+                    ? dictRepository.getValue(DictRepository.Keys.KEY_DEFAULT_EXPERT_AGENT_TEMP, DictRepository.Defaults.DEFAULT_EXPERT_AGENT_TEMP)
+                    : DictRepository.Defaults.DEFAULT_EXPERT_AGENT_TEMP;
         }
 
         return LlmConfig.builder()

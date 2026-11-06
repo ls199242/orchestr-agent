@@ -19,12 +19,12 @@ public enum FlowTopologyTypeEnum {
     /**
      * ReAct 协同调度流 (自愈闭环，支持结果缓存)
      */
-    REACT(List.of(AgentTypeEnum.PLANNER, AgentTypeEnum.CONDUCTOR, AgentTypeEnum.EVALUATOR, AgentTypeEnum.REPORTER), true),
+    REACT(List.of(AgentTypeEnum.PLANNER, AgentTypeEnum.SUPERVISOR, AgentTypeEnum.EVALUATOR, AgentTypeEnum.REPORTER), true),
 
     /**
      * 多轮对话意图分流 (实时交互，不使用结果缓存)
      */
-    MULTIPLE_CHAT(List.of(AgentTypeEnum.ROUTER, AgentTypeEnum.PLANNER, AgentTypeEnum.CONDUCTOR, AgentTypeEnum.EVALUATOR, AgentTypeEnum.REPORTER), false);
+    MULTIPLE_CHAT(List.of(AgentTypeEnum.COORDINATOR, AgentTypeEnum.PLANNER, AgentTypeEnum.SUPERVISOR, AgentTypeEnum.EVALUATOR, AgentTypeEnum.REPORTER), false);
 
     private final List<AgentTypeEnum> systemAgents;
     private final boolean useResultCache;

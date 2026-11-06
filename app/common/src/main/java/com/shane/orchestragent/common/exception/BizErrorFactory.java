@@ -30,12 +30,12 @@ public class BizErrorFactory {
         return new BizException("PLANNER_TARGET_NOT_FOUND", "缺少战略目标输入参数");
     }
 
-    public BizException conductorReturnError() {
-        return new BizException("CONDUCTOR_RETURN_ERROR", "指挥调度器状态异常或返回ERROR");
+    public BizException supervisorReturnError() {
+        return new BizException("SUPERVISOR_RETURN_ERROR", "指挥调度器状态异常或返回ERROR");
     }
 
-    public BizException workerReturnException(String code, String msg) {
-        return new BizException("WORKER_EXECUTION_ERROR", "工作智能体执行异常: [" + code + "] " + msg);
+    public BizException expertReturnException(String code, String msg) {
+        return new BizException("EXPERT_EXECUTION_ERROR", "专精智能体执行异常: [" + code + "] " + msg);
     }
 
     public BizException evaluatorReturnError(String msg) {
@@ -74,16 +74,16 @@ public class BizErrorFactory {
         return new BizException("TOOL_EXECUTION_ERROR", "工具 [" + toolName + "] 执行异常: " + detail);
     }
 
-    public BizException conductorDecisionEmpty() {
-        return new BizException("CONDUCTOR_DECISION_EMPTY", "指挥调度器决策异常: 未能指定下一步执行动作或节点");
+    public BizException supervisorDecisionEmpty() {
+        return new BizException("SUPERVISOR_DECISION_EMPTY", "指挥调度器决策异常: 未能指定下一步执行动作或节点");
     }
 
-    public BizException routerDecisionEmpty() {
-        return new BizException("ROUTER_DECISION_EMPTY", "路由门禁决策异常: 未能获取有效决策结果");
+    public BizException coordinatorDecisionEmpty() {
+        return new BizException("COORDINATOR_DECISION_EMPTY", "多轮意图识别决策异常: 未能获取有效决策结果");
     }
 
-    public BizException routerReplyEmpty() {
-        return new BizException("ROUTER_REPLY_EMPTY", "路由门禁决策为直接答复，但答复内容为空");
+    public BizException coordinatorReplyEmpty() {
+        return new BizException("COORDINATOR_REPLY_EMPTY", "多轮意图识别决策为直接答复，但答复内容为空");
     }
 
     public BizException strategyNotFound(String strategyId) {

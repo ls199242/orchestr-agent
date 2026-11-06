@@ -42,8 +42,8 @@ public interface DictRepository extends Repository<DictDO> {
         String KEY_DEFAULT_LLM_MODEL = "default_llm_model";
         /** 系统智能体默认采样温度 */
         String KEY_DEFAULT_SYSTEM_AGENT_TEMP = "default_system_agent_temp";
-        /** 业务 Worker 智能体默认采样温度 */
-        String KEY_DEFAULT_WORKER_AGENT_TEMP = "default_worker_agent_temp";
+        /** 业务 Expert 专精智能体默认采样温度 */
+        String KEY_DEFAULT_EXPERT_AGENT_TEMP = "default_expert_agent_temp";
     }
 
     /**
@@ -76,8 +76,8 @@ public interface DictRepository extends Repository<DictDO> {
         String DEFAULT_LLM_MODEL = "Deepseek";
         /** 默认系统智能体温度：0.7 */
         double DEFAULT_SYSTEM_AGENT_TEMP = 0.7;
-        /** 默认业务 Worker 智能体温度：0.3 */
-        double DEFAULT_WORKER_AGENT_TEMP = 0.3;
+        /** 默认业务 Expert 专精智能体温度：0.3 */
+        double DEFAULT_EXPERT_AGENT_TEMP = 0.3;
     }
 
     @Override

@@ -46,7 +46,7 @@ DEFAULT_CONFIGS = {
 2. 【检索落地供给服务】：
    - 调用 `query_arrival_services_tool` 查询当前落地机场周边的可售服务（接送机专车、周边优质酒店、热门景点门票）。
 3. 【专精业务决策与排序推荐】：
-   - 调度 `arrival_recommend_worker`（落地服务推荐专家），综合上述客观环境、用户偏好与候选服务，执行推荐矩阵决策与文案生成。
+   - 调度 `arrival_recommend_expert`（落地服务推荐专家），综合上述客观环境、用户偏好与候选服务，执行推荐矩阵决策与文案生成。
 4. 【生成交付报文】：
    - 由 Reporter 严格按照 Output Schema 生成结构化推荐卡片。""",
             "maxStep": 12,
@@ -57,8 +57,8 @@ DEFAULT_CONFIGS = {
                 "query_user_profile_tool",
                 "query_arrival_services_tool",
             ],
-            "workerCodes": [
-                "arrival_recommend_worker",
+            "expertCodes": [
+                "arrival_recommend_expert",
             ],
             "properties": {},
         },
@@ -66,12 +66,12 @@ DEFAULT_CONFIGS = {
             "strategyId": "multi_chat_strategy",
             "code": "multi_chat_strategy",
             "name": "多轮会话服务咨询策略",
-            "description": "支持 RouterAgent 意图识别，轻量问答直接回复，复杂任务流转 ReAct",
+            "description": "支持 CoordinatorAgent 意图识别，轻量问答直接回复，复杂任务流转 ReAct",
             "prompt": "航班落地后的多轮智能管家服务与咨询路由",
             "maxStep": 8,
             "flowTopologyType": "MULTIPLE_CHAT",
             "stream": True,
-            "workerCodes": [],
+            "expertCodes": [],
             "properties": {},
         },
     ],
@@ -79,15 +79,15 @@ DEFAULT_CONFIGS = {
     # 2.2 智能体基础配置 (AgentConfigDO)
     "agents": [
         {
-            "name": "ROUTER",
-            "code": "ROUTER",
-            "description": "意图识别与前置路由决策智能体",
+            "name": "COORDINATOR",
+            "code": "COORDINATOR",
+            "description": "多轮对话意图识别智能体",
             "agentType": "SYSTEM",
             "model": "Deepseek",
             "temperature": 0.1,
             "maxTokens": 1024,
             "nodeWaitTime": 10000,
-            "systemPrompt": "# 角色定义\n你是智能问答与意图路由专家 RouterAgent。\n请分析用户的问题：\n- 若属于日常问答、咨询闲聊或单轮知识查询，请在 reply 字段直接回答，并将 handoffToPlanner 置为 false。\n- 若属于复杂业务任务（如差旅预订、多工具协同、数据核验等），请将 handoffToPlanner 置为 true，由后续 Planner 与协同流处理。\n\n【输出格式要求】：严格输出 JSON：\n{\n  \"handoffToPlanner\": false,\n  \"reply\": \"直接答复内容\"\n}",
+            "systemPrompt": "# 角色定义\n你是智能问答与多轮意图识别专家 CoordinatorAgent。\n请分析用户的问题：\n- 若属于日常问答、咨询闲聊或单轮知识查询，请在 reply 字段直接回答，并将 handoffToPlanner 置为 false。\n- 若属于复杂业务任务（如差旅预订、多工具协同、数据核验等），请将 handoffToPlanner 置为 true，由后续 Planner 与协同流处理。\n\n【输出格式要求】：严格输出 JSON：\n{\n  \"handoffToPlanner\": false,\n  \"reply\": \"直接答复内容\"\n}",
             "userPrompt": "用户诉求: ${strategy_target}",
             "extraProperties": {},
         },
@@ -105,15 +105,15 @@ DEFAULT_CONFIGS = {
             "extraProperties": {},
         },
         {
-            "name": "CONDUCTOR",
-            "code": "CONDUCTOR",
+            "name": "SUPERVISOR",
+            "code": "SUPERVISOR",
             "description": "执行流水线调度中枢与自愈驱动智能体",
             "agentType": "SYSTEM",
             "model": "Deepseek",
             "temperature": 0.2,
             "maxTokens": 2048,
             "nodeWaitTime": 20000,
-            "systemPrompt": "# 角色定义\n你是协同执行中枢 ConductorAgent。请根据全局战略目标、规划分解步骤（plan_steps）、当前策略挂载的可用工具定义（tool_list）以及流水线执行历史反馈（history_messages），精准做出下一步调度决策。\n战略目标：${strategy_target}\n\n<#if tool_list??>\n【可用外部工具列表与调用入参 Schema 定义】：\n${tool_list}\n</#if>\n\n【核心调度规则与前置核验铁律】：\n1. 【先行核验上一步执行结果（可用性把关）】：\n   - 在做出下一步调度决策前，必须首先仔细审视历史反馈（history_messages）中【最新一步】的执行产出结果（工具真实调用返回或 Worker 执行产出）。\n   - 检查该结果是否有效可用：是否包含业务数据？是否为空、异常、网络超时或明确报错？\n   - 若上一步执行失败、结果无效或报错：\n     - 若属于可修正自愈情况（例如入参缺失或传参错误），请重新调度该节点，并提供修正后的精准入参进行重试；\n     - 若属于不可逆错误或连续重试失败，严禁假装成功继续规划下一步，必须果断中断流程，输出：\n       {\"next\": \"ERROR\", \"request\": {\"reason\": \"上一步执行结果无效或调用失败: 具体原因说明\"}}\n2. 【工具调用精准入参规范（Schema-First）】：\n   - 当调度目标为工具（Tool）时，`request` 必须严格为该工具所需的 JSON 参数对象（依据上述工具 Schema 填写具体键值对，例如 {\"city\": \"上海\", \"airportCode\": \"SHA\"} 或 {\"userId\": \"U8801\"}）。\n   - 【严禁违规】：绝对严禁在 request 中只写自然语言描述（如严禁输出 {\"query\": \"查询天气\"}）！必须给出具体工具的调用入参。\n3. 【业务专精节点调度】：\n   - 当调度目标为 Worker 时，`request` 为针对该 Worker 的具体业务工单上下文与决策指令。\n4. 【任务完结判定】：\n   - 当所有规划步骤均已保质保量执行完毕且成果完备时，输出 \"FINISH\"，`request` 可为空对象 {}。\n\n【输出格式要求】：严格输出符合以下结构的纯 JSON，严禁输出任何 markdown 代码块标记或多余解释文字：\n{\n  \"next\": \"目标节点名称（工具名/Worker名） 或 FINISH 或 ERROR\",\n  \"request\": {\n    \"具体参数名\": \"参数值\"\n  }\n}",
+            "systemPrompt": "# 角色定义\n你是协同执行中枢 SupervisorAgent。请根据全局战略目标、规划分解步骤（plan_steps）、当前策略挂载的可用工具定义（tool_list）以及流水线执行历史反馈（history_messages），精准做出下一步调度决策。\n战略目标：${strategy_target}\n\n<#if tool_list??>\n【可用外部工具列表与调用入参 Schema 定义】：\n${tool_list}\n</#if>\n\n【核心调度规则与前置核验铁律】：\n1. 【先行核验上一步执行结果（可用性把关）】：\n   - 在做出下一步调度决策前，必须首先仔细审视历史反馈（history_messages）中【最新一步】的执行产出结果（工具真实调用返回或 Expert 执行产出）。\n   - 检查该结果是否有效可用：是否包含业务数据？是否为空、异常、网络超时或明确报错？\n   - 若上一步执行失败、结果无效或报错：\n     - 若属于可修正自愈情况（例如入参缺失或传参错误），请重新调度该节点，并提供修正后的精准入参进行重试；\n     - 若属于不可逆错误或连续重试失败，严禁假装成功继续规划下一步，必须果断中断流程，输出：\n       {\"next\": \"ERROR\", \"request\": {\"reason\": \"上一步执行结果无效或调用失败: 具体原因说明\"}}\n2. 【工具调用精准入参规范（Schema-First）】：\n   - 当调度目标为工具（Tool）时，`request` 必须严格为该工具所需的 JSON 参数对象（依据上述工具 Schema 填写具体键值对，例如 {\"city\": \"上海\", \"airportCode\": \"SHA\"} 或 {\"userId\": \"U8801\"}）。\n   - 【严禁违规】：绝对严禁在 request 中只写自然语言描述（如严禁输出 {\"query\": \"查询天气\"}）！必须给出具体工具的调用入参。\n3. 【业务专精节点调度】：\n   - 当调度目标为 Expert 时，`request` 为针对该 Expert 的具体业务工单上下文与决策指令。\n4. 【任务完结判定】：\n   - 当所有规划步骤均已保质保量执行完毕且成果完备时，输出 \"FINISH\"，`request` 可为空对象 {}。\n\n【输出格式要求】：严格输出符合以下结构的纯 JSON，严禁输出任何 markdown 代码块标记或多余解释文字：\n{\n  \"next\": \"目标节点名称（工具名/Expert名） 或 FINISH 或 ERROR\",\n  \"request\": {\n    \"具体参数名\": \"参数值\"\n  }\n}",
             "userPrompt": "请依据历史执行结果先核验上一步是否有效可用，再调度下一步。若全部步骤已完成请输出 FINISH，若异常不可恢复请输出 ERROR。",
             "extraProperties": {},
         },
@@ -144,15 +144,15 @@ DEFAULT_CONFIGS = {
             "extraProperties": {},
         },
         {
-            "name": "arrival_recommend_worker",
-            "code": "arrival_recommend_worker",
+            "name": "arrival_recommend_expert",
+            "code": "arrival_recommend_expert",
             "description": "落地场景化交叉营销决策专家，负责结合天气、画像与服务列表，执行推荐矩阵裁决并生成个性化推荐文案",
-            "agentType": "WORKER",
+            "agentType": "EXPERT",
             "model": "Deepseek",
             "temperature": 0.2,
             "maxTokens": 2048,
             "nodeWaitTime": 20000,
-            "systemPrompt": "# 专精业务智能体: ${worker_name}\n【岗位职责与执行规范】：\n负责结合天气、画像与服务列表，执行推荐矩阵裁决并生成个性化推荐文案。\n<#if rag_result?? && rag_result?length gt 0>\n【伴生知识库检索参考结果】：\n${rag_result}\n</#if>\n请严格基于上述职责与参考信息，保质保量完成当前工单任务。",
+            "systemPrompt": "# 专精业务智能体: ${expert_name}\n【岗位职责与执行规范】：\n负责结合天气、画像与服务列表，执行推荐矩阵裁决并生成个性化推荐文案。\n<#if rag_result?? && rag_result?length gt 0>\n【伴生知识库检索参考结果】：\n${rag_result}\n</#if>\n请严格基于上述职责与参考信息，保质保量完成当前工单任务。",
             "userPrompt": "【总体战略目标】：${strategy_target}\n【当前调度工单入参】：${agent_request}",
             "datasets": [],
             "tools": [],
@@ -371,9 +371,9 @@ DEFAULT_CONFIGS = {
             "description": "系统智能体默认采样温度（未在 AgentConfig 配置时的保底值）",
         },
         {
-            "key": "default_worker_agent_temp",
+            "key": "default_expert_agent_temp",
             "value": "0.3",
-            "description": "业务 Worker 智能体默认采样温度（未在策略或配置中指定时的保底值）",
+            "description": "业务 Expert 智能体默认采样温度（未在策略或配置中指定时的保底值）",
         },
     ],
 }

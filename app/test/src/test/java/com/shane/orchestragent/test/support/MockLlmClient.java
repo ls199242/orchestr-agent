@@ -75,8 +75,8 @@ public class MockLlmClient implements LlmClient {
         }
         String text = allText.toString();
 
-        if (text.contains("ConductorAgent") || text.contains("调度指挥") || text.contains("调度与指挥专家")) {
-            if (text.contains("WorkerAgent") || text.contains("已成功检索") || text.contains("产出")
+        if (text.contains("SupervisorAgent") || text.contains("调度指挥") || text.contains("调度与指挥专家")) {
+            if (text.contains("ExpertAgent") || text.contains("已成功检索") || text.contains("产出")
                     || text.contains("当前已执行步数: 1") || text.contains("当前已执行步数: 2")) {
                 return ChatResponseVO.ofSingle("{\"next\": \"FINISH\", \"request\": {}}", null);
             } else {
@@ -86,12 +86,12 @@ public class MockLlmClient implements LlmClient {
             return ChatResponseVO.ofSingle("{\"steps\": [{\"step\": 1, \"agent\": \"search_worker\", \"description\": \"查询目标信息\"}]}", null);
         } else if (text.contains("EvaluatorAgent") || text.contains("战略目标审查") || text.contains("战略核验") || text.contains("\"pass\":")) {
             return ChatResponseVO.ofSingle("{\"pass\": true, \"score\": 100, \"critique\": \"目标完全达成\", \"suggestedRemedy\": \"\"}", null);
-        } else if (text.contains("RouterAgent") || text.contains("handoffToPlanner")) {
+        } else if (text.contains("CoordinatorAgent") || text.contains("handoffToPlanner")) {
             return ChatResponseVO.ofSingle("{\"handoffToPlanner\": true, \"reply\": \"正在为您规划任务...\"}", null);
         } else if (text.contains("ReporterAgent") || text.contains("成果汇报") || text.contains("交付成果报告")) {
             return ChatResponseVO.ofSingle("【OrchestrAgent 任务完成】已成功处理您的需求，各智能体协同顺畅完成规划与交付。", null);
         } else {
-            return ChatResponseVO.ofSingle("【WorkerAgent search_worker 产出】已成功检索并处理完成相关航班与业务信息。", null);
+            return ChatResponseVO.ofSingle("【ExpertAgent search_worker 产出】已成功检索并处理完成相关航班与业务信息。", null);
         }
     }
 }

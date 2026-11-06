@@ -84,7 +84,7 @@ public class RepositoryIntegrationTest {
                 .name("自定义测试策略")
                 .flowTopologyType("REACT")
                 .maxStep(15)
-                .workerCodes(List.of("search_worker"))
+                .expertCodes(List.of("search_worker"))
                 .build();
 
         StrategyConfigDO chatStrategy = StrategyConfigDO.builder()
@@ -100,7 +100,7 @@ public class RepositoryIntegrationTest {
         strategyRepo.reload();
 
         assertEquals(custom, strategyRepo.getByCode("custom_code_01"));
-        assertEquals(List.of("search_worker"), strategyRepo.getByCode("custom_code_01").getWorkerCodes());
+        assertEquals(List.of("search_worker"), strategyRepo.getByCode("custom_code_01").getExpertCodes());
         assertEquals("MULTIPLE_CHAT", strategyRepo.getByCode("multi_chat_strategy").getFlowTopologyType());
         assertTrue(strategyRepo.getByCode("multi_chat_strategy").getStream());
         assertEquals(2, strategyRepo.getAll().size());
@@ -113,27 +113,27 @@ public class RepositoryIntegrationTest {
         assertEquals("agentConfigRepository", agentRepo.name());
 
         // 验证初始状态下无兜底数据
-        assertNull(agentRepo.getByCode("ROUTER"), "无外部配置时严禁自动填充默认智能体");
+        assertNull(agentRepo.getByCode("COORDINATOR"), "无外部配置时严禁自动填充默认智能体");
         assertNull(agentRepo.getByCode("PLANNER"));
         assertTrue(agentRepo.getAll().isEmpty());
 
         // 模拟远程下发标准智能体
-        AgentConfigDO router = AgentConfigDO.builder().name("ROUTER").code("router_code").model("gpt-4o").build();
+        AgentConfigDO coordinator = AgentConfigDO.builder().name("COORDINATOR").code("coordinator_code").model("gpt-4o").build();
         AgentConfigDO planner = AgentConfigDO.builder().name("PLANNER").code("planner_code").model("gpt-4o").build();
-        AgentConfigDO conductor = AgentConfigDO.builder().name("CONDUCTOR").code("conductor_code").model("gpt-4o").build();
-        AgentConfigDO worker = AgentConfigDO.builder().name("search_worker").code("search_worker_code").model("gpt-4o").build();
+        AgentConfigDO supervisor = AgentConfigDO.builder().name("SUPERVISOR").code("supervisor_code").model("gpt-4o").build();
+        AgentConfigDO expert = AgentConfigDO.builder().name("search_expert").code("search_expert_code").model("gpt-4o").build();
 
-        AgentConfigApiClient mockAgentClient = () -> List.of(router, planner, conductor, worker);
+        AgentConfigApiClient mockAgentClient = () -> List.of(coordinator, planner, supervisor, expert);
         ReflectionTestUtils.setField(agentRepo, "agentConfigApiClient", mockAgentClient);
         agentRepo.reload();
 
         // 验证检索（按 code）
-        assertEquals(router, agentRepo.getByCode("router_code"));
+        assertEquals(coordinator, agentRepo.getByCode("coordinator_code"));
         assertEquals(planner, agentRepo.getByCode("planner_code"));
-        assertEquals(conductor, agentRepo.getByCode("conductor_code"));
-        assertEquals(worker, agentRepo.getByCode("search_worker_code"));
+        assertEquals(supervisor, agentRepo.getByCode("supervisor_code"));
+        assertEquals(expert, agentRepo.getByCode("search_expert_code"));
         assertEquals(4, agentRepo.getAll().size());
-        assertTrue(agentRepo.getMap().containsKey("router_code"));
+        assertTrue(agentRepo.getMap().containsKey("coordinator_code"));
 
         // 验证未注册的智能体返回 null
         assertNull(agentRepo.getByCode("NON_EXISTENT_CODE"));
@@ -226,8 +226,8 @@ public class RepositoryIntegrationTest {
                         .userPrompt("请针对以下目标进行拆解: ${strategy_target}")
                         .build(),
                 AgentConfigDO.builder()
-                        .name("WORKER_PROMPT_TEST")
-                        .code("WORKER_PROMPT_TEST")
+                        .name("EXPERT_PROMPT_TEST")
+                        .code("EXPERT_PROMPT_TEST")
                         .model("gpt-4o")
                         .systemPrompt("你是专业的工作执行节点")
                         .build()
@@ -240,10 +240,10 @@ public class RepositoryIntegrationTest {
         assertEquals("你是专业的任务规划专家", planner.getSystemPrompt());
         assertEquals("请针对以下目标进行拆解: ${strategy_target}", planner.getUserPrompt());
 
-        AgentConfigDO worker = agentRepo.getByCode("WORKER_PROMPT_TEST");
-        assertNotNull(worker);
-        assertEquals("你是专业的工作执行节点", worker.getSystemPrompt());
-        assertNull(worker.getUserPrompt());
+        AgentConfigDO expert = agentRepo.getByCode("EXPERT_PROMPT_TEST");
+        assertNotNull(expert);
+        assertEquals("你是专业的工作执行节点", expert.getSystemPrompt());
+        assertNull(expert.getUserPrompt());
     }
 
     @Test

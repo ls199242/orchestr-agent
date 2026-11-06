@@ -12,25 +12,25 @@ public interface PromptPropertyConstant {
     String KEY_REQUEST_PARAMETER_PREFIX = "request_";
 
     String KEY_TOOL_MESSAGES = "tool_messages";
-    String KEY_WORKER_MESSAGES = "worker_messages";
+    String KEY_EXPERT_MESSAGES = "expert_messages";
 
     interface PLANNER {
         String KEY_PLAN_RESULT = "planResult";
     }
 
-    interface CONDUCTOR {
+    interface SUPERVISOR {
         String KEY_REQUEST_PARAMETER_JSON = "requestParameter";
         String KEY_PLAN_STEPS = "plan_steps";
         String KEY_HISTORY_MESSAGES = "history_messages";
         String KEY_EVALUATOR_FEEDBACK = "evaluator_feedback";
     }
 
-    interface WORKER {
-        String KEY_SPEC = "workerSpec";
-        String KEY_WORKER_TARGET = "workerTarget";
-        String KEY_NAME = "workerName";
-        String KEY_RESPONSE = "workerResponse";
-        String KEY_PROMPT = "workerPrompt";
+    interface EXPERT {
+        String KEY_SPEC = "expertSpec";
+        String KEY_EXPERT_TARGET = "expertTarget";
+        String KEY_NAME = "expertName";
+        String KEY_RESPONSE = "expertResponse";
+        String KEY_PROMPT = "expertPrompt";
         String KEY_RAG_CONTENT = "ragContents";
     }
 

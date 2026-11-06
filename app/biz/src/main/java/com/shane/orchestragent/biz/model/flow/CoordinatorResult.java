@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.io.Serializable;
 
 /**
- * 路由分流产出结果 (原 CoordinatorResult)
+ * 多轮对话意图识别协同产出结果
  *
  * @author Shane
  */
@@ -16,7 +16,7 @@ import java.io.Serializable;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class RouterResult implements Serializable {
+public class CoordinatorResult implements Serializable {
 
     /** 是否移交给规划器处理复杂任务 */
     private boolean handoffToPlanner;

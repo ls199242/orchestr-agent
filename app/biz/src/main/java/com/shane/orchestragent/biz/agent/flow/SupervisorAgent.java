@@ -26,10 +26,10 @@ import java.util.Map;
  *
  * @author Shane
  */
-public class ConductorAgent extends BaseLlmAgent<StrategyContext> {
+public class SupervisorAgent extends BaseLlmAgent<StrategyContext> {
 
-    public ConductorAgent(LlmConfig llmConfig, LlmService llmService, PromptService promptService) {
-        super(AgentTypeEnum.CONDUCTOR, llmConfig, llmService, promptService);
+    public SupervisorAgent(LlmConfig llmConfig, LlmService llmService, PromptService promptService) {
+        super(AgentTypeEnum.SUPERVISOR, llmConfig, llmService, promptService);
     }
 
     @Override
@@ -69,7 +69,7 @@ public class ConductorAgent extends BaseLlmAgent<StrategyContext> {
 
         String template = llmConfig != null ? llmConfig.getSystemPrompt() : null;
         if (StringUtils.isBlank(template)) {
-            throw BizErrorFactory.getInstance().agentSystemPromptMissing("CONDUCTOR");
+            throw BizErrorFactory.getInstance().agentSystemPromptMissing("SUPERVISOR");
         }
         String prompt = promptService.renderPrompt(template, properties);
         return new SystemChatMessageDTO(prompt);
@@ -90,11 +90,11 @@ public class ConductorAgent extends BaseLlmAgent<StrategyContext> {
                 case TOOL -> {
                     chatMessages.add(new UserChatMessageDTO("【工具 " + chatMessage.getAgentName() + " 真实调用返回结果】: " + chatMessage.getOutput()));
                 }
-                case CONDUCTOR -> {
+                case SUPERVISOR -> {
                     chatMessages.add(new AssistantChatMessageDTO(chatMessage.getOutput()));
                 }
-                case WORKER -> {
-                    chatMessages.add(new UserChatMessageDTO("【工作节点 " + chatMessage.getAgentName() + " 执行结果】: " + chatMessage.getOutput()));
+                case EXPERT -> {
+                    chatMessages.add(new UserChatMessageDTO("【专精节点 " + chatMessage.getAgentName() + " 执行结果】: " + chatMessage.getOutput()));
                 }
                 case EVALUATOR -> {
                     chatMessages.add(new UserChatMessageDTO("【整改要求】: " + chatMessage.getOutput()));
@@ -112,15 +112,15 @@ public class ConductorAgent extends BaseLlmAgent<StrategyContext> {
             boolean hasEvaluatorMsg = context.getChatMessages().stream()
                     .anyMatch(m -> m.getAgentType() == AgentTypeEnum.EVALUATOR);
             if (!hasEvaluatorMsg) {
-                chatMessages.add(new UserChatMessageDTO("【特别注意】战略评估器提出整改要求: " + context.getEvaluationFeedback() + "\n请优先指派对应 Worker 执行修补！"));
+                chatMessages.add(new UserChatMessageDTO("【特别注意】战略评估器提出整改要求: " + context.getEvaluationFeedback() + "\n请优先指派对应 Expert 执行修补！"));
             }
         }
 
-        String conductorPrompt = llmConfig != null ? llmConfig.getUserPrompt() : null;
-        if (StringUtils.isNotBlank(conductorPrompt)) {
-            chatMessages.add(new UserChatMessageDTO("【调度指令与核验提醒】: " + conductorPrompt));
+        String supervisorPrompt = llmConfig != null ? llmConfig.getUserPrompt() : null;
+        if (StringUtils.isNotBlank(supervisorPrompt)) {
+            chatMessages.add(new UserChatMessageDTO("【调度指令与核验提醒】: " + supervisorPrompt));
         } else if (chatMessages.isEmpty()) {
-            throw BizErrorFactory.getInstance().agentUserPromptMissing("CONDUCTOR");
+            throw BizErrorFactory.getInstance().agentUserPromptMissing("SUPERVISOR");
         }
 
         return chatMessages;

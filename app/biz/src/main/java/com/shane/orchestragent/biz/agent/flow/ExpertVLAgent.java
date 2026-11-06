@@ -14,13 +14,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 视觉多模态工作智能体 (支持图片、文档多模态交互)
+ * 视觉多模态专精智能体 (支持图片、文档多模态交互)
  *
  * @author Shane
  */
-public class WorkerVLAgent extends WorkerAgent {
+public class ExpertVLAgent extends ExpertAgent {
 
-    public WorkerVLAgent(AgentConfigDO agentConfig, LlmConfig llmConfig, LlmService llmService, PromptService promptService) {
+    public ExpertVLAgent(AgentConfigDO agentConfig, LlmConfig llmConfig, LlmService llmService, PromptService promptService) {
         super(agentConfig, llmConfig, llmService, promptService);
     }
 

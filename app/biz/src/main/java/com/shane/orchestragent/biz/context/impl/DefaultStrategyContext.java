@@ -2,7 +2,7 @@ package com.shane.orchestragent.biz.context.impl;
 
 import com.shane.orchestragent.biz.agent.Agent;
 import com.shane.orchestragent.biz.context.StrategyContext;
-import com.shane.orchestragent.biz.model.flow.ConductorResult;
+import com.shane.orchestragent.biz.model.flow.SupervisorResult;
 import com.shane.orchestragent.biz.model.flow.EvaluatorResult;
 import com.shane.orchestragent.biz.model.flow.FlowAgentMessage;
 import com.shane.orchestragent.biz.model.flow.PlanResult;
@@ -39,7 +39,7 @@ public class DefaultStrategyContext implements StrategyContext {
     private final List<FlowAgentMessage> chatMessages = new CopyOnWriteArrayList<>();
 
     private PlanResult planResult;
-    private ConductorResult lastConductorResult;
+    private SupervisorResult lastSupervisorResult;
     private EvaluatorResult lastEvaluatorResult;
     private String evaluationFeedback;
     private int evaluationRetryCount = 0;

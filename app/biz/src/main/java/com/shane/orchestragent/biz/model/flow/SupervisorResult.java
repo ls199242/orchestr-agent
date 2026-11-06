@@ -9,7 +9,7 @@ import java.io.Serializable;
 import java.util.Map;
 
 /**
- * 指挥调度产出结果 (原 SupervisorResult)
+ * 步进调度指挥产出结果
  *
  * @author Shane
  */
@@ -17,7 +17,7 @@ import java.util.Map;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ConductorResult implements Serializable {
+public class SupervisorResult implements Serializable {
 
     private static final String FINISH_FLAG = "FINISH";
     private static final String ERROR_FLAG = "ERROR";

@@ -67,7 +67,7 @@ public class OrchestrAgentController {
 
     /**
      * 2. SSE 流式会话交互入口 (chat)
-     * SSE 流式调用 Router 智能体，进行意图识别与分流决策:
+     * SSE 流式调用 Coordinator 智能体，进行意图识别与分流决策:
      * - 简单对话意图直接流式输出解答
      * - 复杂任务意图触发 Plan + ReAct 策略流程并全程流式推送思考片段与交付物
      *

@@ -17,21 +17,21 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 路由门禁智能体 (严格基于配置中心渲染，聚焦意图识别与复杂任务分流)
+ * 多轮对话意图识别智能体 (严格基于配置中心渲染，聚焦意图识别与复杂任务分流)
  *
  * @author Shane
  */
-public class RouterAgent extends BaseLlmAgent<StrategyContext> {
+public class CoordinatorAgent extends BaseLlmAgent<StrategyContext> {
 
-    public RouterAgent(LlmConfig llmConfig, LlmService llmService, PromptService promptService) {
-        super(AgentTypeEnum.ROUTER, llmConfig, llmService, promptService);
+    public CoordinatorAgent(LlmConfig llmConfig, LlmService llmService, PromptService promptService) {
+        super(AgentTypeEnum.COORDINATOR, llmConfig, llmService, promptService);
     }
 
     @Override
     protected SystemChatMessageDTO buildSystemPrompt(StrategyContext context) throws BizException {
         String template = llmConfig != null ? llmConfig.getSystemPrompt() : null;
         if (StringUtils.isBlank(template)) {
-            throw BizErrorFactory.getInstance().agentSystemPromptMissing("ROUTER");
+            throw BizErrorFactory.getInstance().agentSystemPromptMissing("COORDINATOR");
         }
         String prompt = promptService.renderPrompt(template, context.getProperties());
         return new SystemChatMessageDTO(prompt);
@@ -41,7 +41,7 @@ public class RouterAgent extends BaseLlmAgent<StrategyContext> {
     protected List<ChatMessageDTO> buildMessages(StrategyContext context) throws BizException {
         String template = llmConfig != null ? llmConfig.getUserPrompt() : null;
         if (StringUtils.isBlank(template)) {
-            throw BizErrorFactory.getInstance().agentUserPromptMissing("ROUTER");
+            throw BizErrorFactory.getInstance().agentUserPromptMissing("COORDINATOR");
         }
         String prompt = promptService.renderPrompt(template, context.getProperties());
         return Collections.singletonList(new UserChatMessageDTO(prompt));

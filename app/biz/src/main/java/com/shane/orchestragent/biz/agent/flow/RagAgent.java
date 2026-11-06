@@ -15,7 +15,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 知识库检索增强智能体 (作为专精 Worker 的伴生节点，隐式伴随触发并注入知识)
+ * 知识库检索增强智能体 (作为专精 Expert 的伴生节点，隐式伴随触发并注入知识)
  *
  * @author Shane
  */
@@ -35,11 +35,11 @@ public class RagAgent extends BaseAgent<StrategyContext> {
     /**
      * 生成伴生 RAG 节点名称
      *
-     * @param workerName 绑定的 Worker 名称
-     * @return 伴生名称，如 "TicketWorker#RAG"
+     * @param expertName 绑定的 Expert 名称
+     * @return 伴生名称，如 "TicketExpert#RAG"
      */
-    public static String buildRagName(String workerName) {
-        return workerName + "#RAG";
+    public static String buildRagName(String expertName) {
+        return expertName + "#RAG";
     }
 
     @Override

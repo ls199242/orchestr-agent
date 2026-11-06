@@ -28,7 +28,7 @@ public class EvaluatorResult implements Serializable {
     /** 批评诊断意见 (指出遗漏信息、未满足约束或逻辑漏洞) */
     private String critique;
 
-    /** 调度修正建议 (供 Conductor 派发补救任务) */
+    /** 调度修正建议 (供 Supervisor 派发补救任务) */
     private String suggestedRemedy;
 
     /** 细项检查列表 */

@@ -1,5 +1,7 @@
 package com.shane.orchestragent.repository.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -41,8 +43,10 @@ public class StrategyConfigDO implements Serializable {
     /** 流程最大步数限制（防止死循环） */
     private Integer maxStep;
 
-    /** 适用的业务 Worker 编码列表 (从 AgentConfigRepository 加载挂载) */
-    private List<String> workerCodes;
+    /** 适用的专精 Expert 编码列表 (从 AgentConfigRepository 加载挂载) */
+    @JsonProperty("expertCodes")
+    @JsonAlias({"workerCodes"})
+    private List<String> expertCodes;
 
     /** 适用的工具代码列表 (从 ToolConfigRepository 加载挂载) */
     private List<String> toolCodes;
