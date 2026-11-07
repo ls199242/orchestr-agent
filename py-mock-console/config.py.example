@@ -296,7 +296,7 @@ DEFAULT_CONFIGS = {
             "modelName": "deepseek-flash",
             "contextMaxTokens": 64000,
             "endpoint": "https://api.deepseek.com",
-            "apiKey": "sk-a4077ed8bd294ebf86bb8e6a75658f81",
+            "apiKey": "sk-********************************",  # 替换为你的真实 API Key（从环境变量 DEEPSEEK_API_KEY 读取或手动填入）
             "temperature": 0.7,
             "supportImage": False,
             "tags": ["chat", "reasoning"],

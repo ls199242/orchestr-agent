@@ -320,7 +320,7 @@ public class RepositoryIntegrationTest {
     }
 
     @Test
-    @DisplayName("8. 验证核心业务中断: 策略未获取到时严格抛出 BizException 中断流程")
+    @DisplayName("8. 验证核心业务中断: invoke 策略未获取到时严格抛出 BizException 中断流程 (chat 入口不携带策略，其策略 Fail-Fast 已前置至意图识别 COORDINATOR_STRATEGY_UNKNOWN)")
     public void testStrategyNotFoundThrowsBizException() {
         // 构建核心执行链路
         OpenAiCompatibleLlmClient llmClient = new OpenAiCompatibleLlmClient();
@@ -346,15 +346,8 @@ public class RepositoryIntegrationTest {
         assertEquals(BizErrorFactory.STRATEGY_NOT_FOUND, invokeEx.getErrorCode());
         assertTrue(invokeEx.getMessage().contains("non_existent_strategy_id"));
 
-        // 2. 验证 chat (流式调用) 在策略不存在时直接抛出异常中断
-        AgentChatRequestVO chatReq = AgentChatRequestVO.builder()
-                .strategyCode("non_existent_chat_strategy")
-                .message("你好")
-                .sessionId("session-test-02")
-                .build();
-        BizException chatEx = assertThrows(BizException.class, () -> agentManager.chat(chatReq));
-        assertEquals(BizErrorFactory.STRATEGY_NOT_FOUND, chatEx.getErrorCode());
-        assertTrue(chatEx.getMessage().contains("non_existent_chat_strategy"));
+        // 说明: 多轮 chat 入参已不携带策略，入口不存在"策略未找到"中断语义；
+        // 意图识别选定目录外策略时的 Fail-Fast (COORDINATOR_STRATEGY_UNKNOWN) 由 OrchestrAgentFlowTest 覆盖
     }
 
     @Test
@@ -366,7 +359,7 @@ public class RepositoryIntegrationTest {
                         .name("Deepseek")
                         .modelName("deepseek-flash")
                         .endpoint("https://api.deepseek.com")
-                        .apiKey("sk-a4077ed8bd294ebf86bb8e6a75658f81")
+                        .apiKey("sk-********************************")
                         .build()
         );
         ReflectionTestUtils.setField(modelRepo, "modelConfigApiClient", mockClient);
