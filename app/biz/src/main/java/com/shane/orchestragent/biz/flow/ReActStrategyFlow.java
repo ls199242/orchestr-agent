@@ -22,7 +22,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * ReAct 策略流引擎 (核心升级: 纯代码 DAG 并发调度中枢与 Evaluator 战略目标核验自愈闭环)
+ * ReAct 策略流引擎 (纯代码 DAG 并发调度与 Evaluator 自愈闭环)
  *
  * @author Shane
  */
@@ -57,17 +57,52 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
 
     @Override
     protected String doExecute() throws BizException {
-        // 1. 战略规划阶段: 拆解全局目标为有向无环依赖图 (执行前由 checkStep 统一把关停止状态与步数)
+        // 1. 战略规划阶段: 拆解全局目标为有向无环依赖图 (DAG)
+        PlanResult planResult = plan();
+
+        // 2. 调度执行阶段: 纯代码并发调度驱动 DAG
+        DagExecutionState dagState = executeDag(planResult);
+
+        // 3. 验收自愈阶段: 战略目标核验与局部重跑闭环
+        evaluateAndSelfCorrect(planResult, dagState);
+
+        // 4. 汇总交付阶段: 汇编最终业务交付物
+        return finish();
+    }
+
+    /**
+     * 战略规划: 拆解目标为 DAG 步骤图
+     */
+    private PlanResult plan() throws BizException {
         if (!checkStep()) {
             throw BizErrorFactory.getInstance().handleMaxStepLimitExceeded();
         }
-        PlanResult planResult = plan();
+        PlanResult planResult = (PlanResult) executeStep(plannerAgent, PlanResult.class);
+        validPlanResult(planResult);
+        getContext().setPlanResult(planResult);
+        return planResult;
+    }
 
-        int evalRetry = 0;
+    private void validPlanResult(PlanResult planResult) throws BizException {
+        if (planResult == null || CollectionUtils.isEmpty(planResult.getSteps())) {
+            throw BizErrorFactory.getInstance().plannerReturnEmpty();
+        }
+    }
 
-        // 2. 纯代码 DAG 并发调度引擎首次全量驱动
-        log.info("[Flow: {}][FLOW_DAG_EXEC] 启动纯代码 DAG 并发调度中枢...", getFlowId());
+    /**
+     * 调度执行: 驱动 DAG 并发调度
+     */
+    private DagExecutionState executeDag(PlanResult planResult) throws BizException {
+        notifyPlanTopology(planResult);
+        return supervisorAgent.run(planResult, getContext(), (agent, result) ->
+                agentEventListeners.forEach(l -> l.onAfter(this, agent, result))
+        );
+    }
 
+    /**
+     * 发送调度拓扑通知事件给监听器
+     */
+    private void notifyPlanTopology(PlanResult planResult) {
         StringBuilder planSummary = new StringBuilder();
         planSummary.append("【Supervisor 纯代码并发调度拓扑】\n共包含 ").append(planResult.getSteps().size()).append(" 个 DAG 步骤:\n");
         for (FlowDagStep s : planResult.getSteps()) {
@@ -76,99 +111,91 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
                     .append(", 目标: ").append(s.getGoal())
                     .append("\n");
         }
-        agentEventListeners.forEach(l -> l.onAfter(this, supervisorAgent, new AgentResult(planSummary.toString().trim(), null)));
+        AgentResult topologyResult = new AgentResult(planSummary.toString().trim(), null);
+        agentEventListeners.forEach(l -> l.onAfter(this, supervisorAgent, topologyResult));
+    }
 
-        DagExecutionState dagState = supervisorAgent.run(planResult, getContext(), (agent, result) -> {
-            agentEventListeners.forEach(l -> l.onAfter(this, agent, result));
-        });
-
-        // 3. 终局战略验收与自愈打回循环
+    /**
+     * 验收自愈循环: 核验是否达成目标，未达成且在预算内则局部重跑闭环
+     */
+    private void evaluateAndSelfCorrect(PlanResult planResult, DagExecutionState dagState) throws BizException {
+        int evalRetry = 0;
         while (checkStep()) {
             EvaluatorResult evalResult = evaluate();
 
-            // 3.1 验收通过: 达标放行进入 Reporter 汇总交付
+            // 验收通过
             if (evalResult.isPass()) {
-                log.info("[Flow: {}] Evaluator 验收通过 (得分: {}), 进入最终成果汇编", getFlowId(), evalResult.getScore());
-                return finish();
+                log.info("[Flow: {}] 目标验收通过 (得分: {})", getFlowId(), evalResult.getScore());
+                return;
             }
 
-            // 3.2 验收未通过且处于重试预算内: 触发基于闭包的局部自愈打回 (Self-Correction Loop)
+            // 验收未通过且处于重试预算内: 触发局部自愈重跑
             if (evalRetry < maxEvalRetry) {
                 evalRetry++;
-                log.warn("[Flow: {}] Evaluator 验收未通过 (第 {} 次自愈重试), 诊断意见: {}, 点名步骤: {}",
-                        getFlowId(), evalRetry, evalResult.getCritique(), evalResult.getBlamedStepIds());
-
-                // 将批评与整改意见注入上下文，供重跑节点读取
-                String feedback = evalResult.getCritique() +
-                        (StringUtils.isNotEmpty(evalResult.getSuggestedRemedy()) ? " 建议动作: " + evalResult.getSuggestedRemedy() : "");
-                getContext().setEvaluationFeedback(feedback);
-                getContext().setEvaluationRetryCount(evalRetry);
-
-                // 构造针对被点名步骤的反馈映射
-                Map<String, String> feedbackMap = new HashMap<>();
-                if (CollectionUtils.isNotEmpty(evalResult.getBlamedStepIds())) {
-                    for (String blamedId : evalResult.getBlamedStepIds()) {
-                        feedbackMap.put(blamedId, feedback);
-                    }
-                } else {
-                    // 若 Evaluator 未明确指出具体节点，默认反馈给全部节点
-                    planResult.getSteps().forEach(s -> feedbackMap.put(s.getId(), feedback));
-                }
-
-                // 触发 DAG 传递下游闭包局部重跑 (仅重跑失效范围，未受影响的上游节点直接复用)
-                dagState = supervisorAgent.rerun(planResult, dagState, feedbackMap, getContext(), (agent, result) -> {
-                    agentEventListeners.forEach(l -> l.onAfter(this, agent, result));
-                });
+                log.warn("[Flow: {}] 目标验收未通过 (第 {}/{} 次重试): {}, 点名步骤: {}",
+                        getFlowId(), evalRetry, maxEvalRetry, evalResult.getCritique(), evalResult.getBlamedStepIds());
+                dagState = selfCorrect(planResult, dagState, evalResult, evalRetry);
                 continue;
             }
 
-            // 3.3 达到重试上限: 触发优雅降级交付 (携带未达成风险透明告知用户)
-            log.error("[Flow: {}] Evaluator 自愈重试达到上限，启动优雅降级交付", getFlowId());
-            return finish();
+            // 达到重试上限: 优雅降级交付
+            log.warn("[Flow: {}] 自愈重试达到上限 ({})，降级交付", getFlowId(), maxEvalRetry);
+            return;
         }
 
         throw BizErrorFactory.getInstance().handleMaxStepLimitExceeded();
     }
 
-    private PlanResult plan() throws BizException {
-        PlanResult planResult = (PlanResult) executeStep(plannerAgent, PlanResult.class);
-        validPlanResult(planResult);
-        getContext().setPlanResult(planResult);
-        log.info("[Flow: {}][FLOW_PLAN] Planner 规划拆解完成: 共 {} 个 DAG 步骤: {}",
-                getFlowId(), planResult.getSteps().size(),
-                planResult.getSteps().stream().map(s -> s.getId() + "." + s.getGoal() + "(" + s.getAgent() + ")").toList());
-        return planResult;
-    }
-
-    private void validPlanResult(PlanResult planResult) throws BizException {
-        if (planResult == null || CollectionUtils.isEmpty(planResult.getSteps())) {
-            throw BizErrorFactory.getInstance().plannerReturnEmpty();
-        }
-        for (FlowDagStep step : planResult.getSteps()) {
-            if (!getAgents().containsKey(step.getAgent())) {
-                log.warn("[Plan Validation] 提示: 规划步骤包含外部或动态 Expert: {}", step.getAgent());
-            }
-        }
-    }
-
+    /**
+     * 执行战略验收
+     */
     private EvaluatorResult evaluate() throws BizException {
         EvaluatorResult evalResult = (EvaluatorResult) executeStep(evaluatorAgent, EvaluatorResult.class);
         if (evalResult == null) {
             throw new BizException("EVALUATOR_PARSE_ERROR", "战略目标审查智能体返回内容为空");
         }
         getContext().setLastEvaluatorResult(evalResult);
-        log.info("[Flow: {}][FLOW_EVALUATE] Evaluator 验收审计: score={}, pass={}, critique='{}', remedy='{}', blamedSteps={}",
-                getFlowId(), evalResult.getScore(), evalResult.isPass(), evalResult.getCritique(),
-                evalResult.getSuggestedRemedy(), evalResult.getBlamedStepIds());
         return evalResult;
     }
 
+    /**
+     * 触发 DAG 局部重跑
+     */
+    private DagExecutionState selfCorrect(PlanResult planResult, DagExecutionState dagState,
+                                          EvaluatorResult evalResult, int evalRetry) throws BizException {
+        String feedback = evalResult.getCritique() +
+                (StringUtils.isNotEmpty(evalResult.getSuggestedRemedy()) ? " 建议动作: " + evalResult.getSuggestedRemedy() : "");
+        getContext().setEvaluationFeedback(feedback);
+        getContext().setEvaluationRetryCount(evalRetry);
+
+        Map<String, String> feedbackMap = buildFeedbackMap(planResult, evalResult, feedback);
+        return supervisorAgent.rerun(planResult, dagState, feedbackMap, getContext(), (agent, result) ->
+                agentEventListeners.forEach(l -> l.onAfter(this, agent, result))
+        );
+    }
+
+    /**
+     * 构造被点名重跑步骤的反馈字典
+     */
+    private Map<String, String> buildFeedbackMap(PlanResult planResult, EvaluatorResult evalResult, String feedback) {
+        Map<String, String> feedbackMap = new HashMap<>();
+        if (CollectionUtils.isNotEmpty(evalResult.getBlamedStepIds())) {
+            for (String blamedId : evalResult.getBlamedStepIds()) {
+                feedbackMap.put(blamedId, feedback);
+            }
+        } else {
+            planResult.getSteps().forEach(s -> feedbackMap.put(s.getId(), feedback));
+        }
+        return feedbackMap;
+    }
+
+    /**
+     * 最终成果汇编交付
+     */
     private String finish() throws BizException {
-        log.info("[Flow: {}][FLOW_FINISH] Reporter 正在汇总最终交付物...", getFlowId());
         String output = (String) executeStep(reporterAgent, String.class);
         getContext().setRecommendResult(output);
         getContext().setProperties(PropertyKeys.KEY_RECOMMEND_RESULT, output);
-        log.info("[Flow: {}][FLOW_FINISH] 最终交付物汇编完毕，字数: {}", getFlowId(), output != null ? output.length() : 0);
         return output;
     }
 }

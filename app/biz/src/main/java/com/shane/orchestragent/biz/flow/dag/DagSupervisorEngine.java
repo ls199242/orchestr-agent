@@ -2,17 +2,14 @@ package com.shane.orchestragent.biz.flow.dag;
 
 import com.shane.orchestragent.biz.agent.Agent;
 import com.shane.orchestragent.biz.agent.flow.RagAgent;
-import com.shane.orchestragent.biz.agent.flow.ToolAgent;
 import com.shane.orchestragent.biz.context.StrategyContext;
 import com.shane.orchestragent.biz.context.impl.StepStrategyContext;
 import com.shane.orchestragent.biz.model.agent.AgentResult;
 import com.shane.orchestragent.biz.model.agent.ExpertErrorAgentResult;
 import com.shane.orchestragent.biz.model.flow.*;
-import com.shane.orchestragent.common.constant.PropertyKeys;
 import com.shane.orchestragent.common.enums.AgentTypeEnum;
 import com.shane.orchestragent.common.exception.BizErrorFactory;
 import com.shane.orchestragent.common.exception.BizException;
-import com.shane.orchestragent.common.exception.FlowStoppedException;
 import com.shane.orchestragent.common.utils.JsonUtils;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -21,6 +18,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -30,10 +28,10 @@ import java.util.stream.Collectors;
  * 职责：
  * <ul>
  *   <li>静态 DAG 拓扑校验与 Kahn 算法环检测 (Fail-Fast 铁律)</li>
- *   <li>基于数据依赖与显式依赖的动态并行任务提交</li>
- *   <li>基于表达式 ($global.x / $s1.output.y) 的纯机械参数搬运 (零模型幻觉)</li>
- *   <li>单步超时控制、失败重试与契约校验 (outputKeys)</li>
- *   <li>基于传递闭包 (Closure) 的精准局部重跑与结果复用自愈闭环</li>
+ *   <li>基于依赖就绪度的动态分轮并发调度 (单层线程池驱动，杜绝嵌套死锁)</li>
+ *   <li>机械化参数求值装配 ($global.x / $s1.output.y)</li>
+ *   <li>超时中断守护、失败重试与输出契约校验 (outputKeys)</li>
+ *   <li>基于传递闭包 (Closure) 的局部精准重跑与结果复用自愈闭环</li>
  * </ul>
  *
  * @author Shane
@@ -41,6 +39,19 @@ import java.util.stream.Collectors;
 public class DagSupervisorEngine {
 
     private static final Logger log = LoggerFactory.getLogger(DagSupervisorEngine.class);
+
+    /** 默认工作线程池核心参数 */
+    private static final int DEFAULT_CORE_POOL_SIZE = Math.max(4, Runtime.getRuntime().availableProcessors());
+    private static final int DEFAULT_MAX_POOL_SIZE = Math.max(8, Runtime.getRuntime().availableProcessors() * 2);
+    private static final long KEEP_ALIVE_SECONDS = 60L;
+    private static final int QUEUE_CAPACITY = 256;
+
+    /** 单步超时看门狗定时调度器 (单守护线程轻量中断，不占用任务线程池资源) */
+    private static final ScheduledExecutorService TIMEOUT_SCHEDULER = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "dag-step-timeout-watchdog");
+        t.setDaemon(true);
+        return t;
+    });
 
     private final ExecutorService executorService;
     private final boolean internalPool;
@@ -54,11 +65,20 @@ public class DagSupervisorEngine {
             this.executorService = executorService;
             this.internalPool = false;
         } else {
-            this.executorService = Executors.newCachedThreadPool(r -> {
-                Thread t = new Thread(r, "dag-supervisor-worker-" + UUID.randomUUID().toString().substring(0, 6));
-                t.setDaemon(true);
-                return t;
-            });
+            AtomicInteger threadIndex = new AtomicInteger(1);
+            this.executorService = new ThreadPoolExecutor(
+                    DEFAULT_CORE_POOL_SIZE,
+                    DEFAULT_MAX_POOL_SIZE,
+                    KEEP_ALIVE_SECONDS,
+                    TimeUnit.SECONDS,
+                    new LinkedBlockingQueue<>(QUEUE_CAPACITY),
+                    r -> {
+                        Thread t = new Thread(r, "dag-supervisor-worker-" + threadIndex.getAndIncrement());
+                        t.setDaemon(true);
+                        return t;
+                    },
+                    new ThreadPoolExecutor.CallerRunsPolicy()
+            );
             this.internalPool = true;
         }
     }
@@ -147,8 +167,12 @@ public class DagSupervisorEngine {
         return state;
     }
 
+    // ==========================================
+    // 调度核心主循环
+    // ==========================================
+
     /**
-     * 核心调度主循环
+     * 核心调度主循环：分轮识别就绪步骤，单层线程池并发驱动，收集结果并推进 DAG 状态
      */
     private void drive(PlanResult plan, DagExecutionState state,
                        StrategyContext context, Map<String, String> feedback,
@@ -170,7 +194,7 @@ public class DagSupervisorEngine {
                 throw BizErrorFactory.getInstance().strategyFlowStopped();
             }
 
-            // 1. 扫描所有依赖已满足的 PENDING 步骤，全部并发提交
+            // 1. 扫描所有依赖已满足的 PENDING 步骤，并发提交
             if (!aborted) {
                 List<FlowDagStep> readySteps = new ArrayList<>();
                 for (FlowDagStep s : plan.getSteps()) {
@@ -277,8 +301,12 @@ public class DagSupervisorEngine {
         return true;
     }
 
+    // ==========================================
+    // 单步执行管线
+    // ==========================================
+
     /**
-     * 单个步骤的执行管线：参数绑定 -> 伴生 RAG 前置 -> 超时与重试控制 -> 契约校验
+     * 单个步骤的执行管线：参数装配 -> 伴生 RAG -> 超时与重试控制 -> 契约校验
      */
     private DagOutcome runStep(FlowDagStep step, DagExecutionState st, StrategyContext context,
                                String stepFeedback, BiConsumer<Agent, AgentResult> stepCallback) {
@@ -288,6 +316,195 @@ public class DagSupervisorEngine {
         }
 
         // 1. 机械化参数求值装配
+        Map<String, Object> resolvedInputs = assembleInputs(step, st, context);
+
+        // 2. 线程隔离的局部上下文
+        StepStrategyContext stepContext = new StepStrategyContext(context, resolvedInputs, stepFeedback);
+
+        // 3. 伴生 RAG 前置加载
+        preloadCompanionRag(agent, stepContext, context);
+
+        // 4. 单线程重试与超时控制循环 (当前线程同步执行，杜绝嵌套提交)
+        return executeWithRetryAndTimeout(agent, step, stepContext, resolvedInputs, stepCallback);
+    }
+
+    /**
+     * 步骤执行与重试主流程（同步调用 Agent，采用全局调度器超时中断守护）
+     */
+    private DagOutcome executeWithRetryAndTimeout(Agent agent, FlowDagStep step,
+                                                  StepStrategyContext stepContext,
+                                                  Map<String, Object> resolvedInputs,
+                                                  BiConsumer<Agent, AgentResult> stepCallback) {
+        int maxRetries = Math.max(0, step.getMaxRetries());
+        long timeoutMs = step.getTimeoutMs() > 0 ? step.getTimeoutMs() : 30000L;
+        String lastError = null;
+        int attempt = 0;
+
+        while (attempt <= maxRetries) {
+            attempt++;
+            final int curAttempt = attempt;
+            if (lastError != null) {
+                stepContext.setProperties("lastError", lastError);
+            }
+
+            log.info("[Flow: {}][SUPERVISOR][STEP {}] 启动步骤 ({}) 第 {}/{} 次调用，入参装配: {}",
+                    stepContext.getFlowId(), step.getId(), step.getAgent(), curAttempt, maxRetries + 1,
+                    JsonUtils.toJsonString(resolvedInputs));
+
+            Thread currentThread = Thread.currentThread();
+            ScheduledFuture<?> timeoutWatchdog = null;
+            if (timeoutMs > 0) {
+                timeoutWatchdog = TIMEOUT_SCHEDULER.schedule(currentThread::interrupt, timeoutMs, TimeUnit.MILLISECONDS);
+            }
+
+            AgentResult result = null;
+            boolean timedOut = false;
+            try {
+                // 直接在当前工作线程同步执行，杜绝二次提交与同线程池饥饿死锁
+                result = agent.execute(stepContext);
+            } catch (Exception e) {
+                if (Thread.interrupted() || isTimeoutException(e)) {
+                    timedOut = true;
+                    lastError = "执行超时 (" + timeoutMs + "ms)";
+                } else {
+                    lastError = "执行异常: " + (e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
+                }
+            } finally {
+                if (timeoutWatchdog != null) {
+                    timeoutWatchdog.cancel(false);
+                }
+                if (Thread.interrupted()) {
+                    timedOut = true;
+                    if (lastError == null) {
+                        lastError = "执行超时 (" + timeoutMs + "ms)";
+                    }
+                }
+            }
+
+            if (timedOut) {
+                continue;
+            }
+
+            if (result == null || StringUtils.isBlank(result.getOutput())) {
+                lastError = "节点产出为空";
+                continue;
+            }
+
+            String rawOutput = result.getOutput().trim();
+
+            // Expert 业务错误拦截
+            if (agent.getType() == AgentTypeEnum.EXPERT) {
+                ExpertErrorAgentResult errorResult = ExpertErrorAgentResult.format(rawOutput);
+                if (errorResult != null) {
+                    lastError = "Expert 抛出业务异常: " + errorResult.getErrorMessage();
+                    continue;
+                }
+            }
+
+            // 结构化解析
+            Object structuredOutput = tryParseJson(rawOutput);
+
+            // 契约校验
+            String contractError = validateOutputContract(step, agent, structuredOutput);
+            if (contractError != null) {
+                lastError = contractError;
+                continue;
+            }
+
+            // 执行成功回调
+            notifyStepCallback(stepCallback, agent, resolvedInputs, rawOutput);
+
+            log.info("[Flow: {}][SUPERVISOR][STEP {}] 节点 [{}] 执行完成，产出摘要: {}",
+                    stepContext.getFlowId(), step.getId(), step.getAgent(), StringUtils.abbreviate(rawOutput, 200));
+
+            return new DagOutcome(step.getId(), structuredOutput, rawOutput, null, curAttempt);
+        }
+
+        return new DagOutcome(step.getId(), null, null, lastError, attempt);
+    }
+
+    /**
+     * 判断异常是否由超时或打断引起
+     */
+    private boolean isTimeoutException(Exception e) {
+        if (e instanceof TimeoutException || e instanceof InterruptedException) {
+            return true;
+        }
+        if (e.getCause() instanceof TimeoutException || e.getCause() instanceof InterruptedException) {
+            return true;
+        }
+        String msg = e.getMessage();
+        return msg != null && (msg.contains("timed out") || msg.contains("Timeout") || msg.contains("interrupt"));
+    }
+
+    /**
+     * 契约字段校验
+     */
+    private String validateOutputContract(FlowDagStep step, Agent agent, Object structuredOutput) {
+        if (CollectionUtils.isEmpty(step.getOutputKeys())) {
+            return null;
+        }
+        if (agent.getType() == AgentTypeEnum.EXPERT) {
+            // Expert 专精节点产出为自然语言/Markdown 推荐内容，放行强校验
+            return null;
+        }
+        if (!(structuredOutput instanceof Map<?, ?> outMap)) {
+            return "产出并非 JSON 对象，无法满足契约校验: " + step.getOutputKeys();
+        }
+        List<String> missingKeys = step.getOutputKeys().stream()
+                .filter(k -> !containsKeyIgnoreCase(outMap, k))
+                .toList();
+        if (!missingKeys.isEmpty()) {
+            return "产出缺少必要契约字段: " + missingKeys;
+        }
+        return null;
+    }
+
+    /**
+     * 步骤完成回调通知
+     */
+    private void notifyStepCallback(BiConsumer<Agent, AgentResult> stepCallback,
+                                    Agent agent,
+                                    Map<String, Object> resolvedInputs,
+                                    String rawOutput) {
+        if (stepCallback == null) {
+            return;
+        }
+        try {
+            String detail;
+            if (agent.getType() == AgentTypeEnum.TOOL) {
+                detail = "【入参 requestBody】:\n" + JsonUtils.toJsonString(resolvedInputs) + "\n\n【响应 responseBody】:\n" + rawOutput;
+            } else {
+                detail = rawOutput;
+            }
+            stepCallback.accept(agent, new AgentResult(detail, null));
+        } catch (Exception e) {
+            log.warn("[DAG_ENGINE] 步骤完成回调执行异常: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 专精 Expert 伴生 RAG 隐式前置加载
+     */
+    private void preloadCompanionRag(Agent agent, StepStrategyContext stepContext, StrategyContext context) {
+        if (agent.getType() != AgentTypeEnum.EXPERT) {
+            return;
+        }
+        String companionRagName = RagAgent.buildRagName(agent.getName());
+        Agent companionRag = context.getAgents().get(companionRagName);
+        if (companionRag != null) {
+            try {
+                companionRag.execute(stepContext);
+            } catch (Exception e) {
+                log.warn("[Flow: {}][DAG_ENGINE][RAG] 伴生 RAG 检索异常 (非致命): {}", context.getFlowId(), e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 机械化参数求值装配
+     */
+    private Map<String, Object> assembleInputs(FlowDagStep step, DagExecutionState st, StrategyContext context) {
         Map<String, Object> resolvedInputs = new LinkedHashMap<>();
         if (step.getInputs() != null) {
             step.getInputs().forEach((k, expr) -> {
@@ -297,115 +514,12 @@ public class DagSupervisorEngine {
                 }
             });
         }
-
-        // 2. 线程隔离的局部上下文
-        StepStrategyContext stepContext = new StepStrategyContext(context, resolvedInputs, stepFeedback);
-
-        // 3. 专精 Expert 伴生 RAG 隐式前置加载
-        if (agent.getType() == AgentTypeEnum.EXPERT) {
-            String companionRagName = RagAgent.buildRagName(step.getAgent());
-            Agent companionRag = context.getAgents().get(companionRagName);
-            if (companionRag != null) {
-                try {
-                    log.info("[Flow: {}][DAG_ENGINE][RAG] 正在前置检索 Expert [{}] 的伴生知识库 [{}]...", context.getFlowId(), step.getAgent(), companionRagName);
-                    companionRag.execute(stepContext);
-                } catch (Exception e) {
-                    log.warn("[Flow: {}][DAG_ENGINE][RAG] 伴生 RAG 检索异常 (非致命): {}", context.getFlowId(), e.getMessage());
-                }
-            }
-        }
-
-        int maxRetries = Math.max(0, step.getMaxRetries());
-        long timeoutMs = step.getTimeoutMs() > 0 ? step.getTimeoutMs() : 30000L;
-        String lastError = null;
-        int attempt = 0;
-
-        while (attempt <= maxRetries) {
-            attempt++;
-            final int curAttempt = attempt;
-            final String currentError = lastError;
-            if (currentError != null) {
-                stepContext.setProperties("lastError", currentError);
-            }
-
-            log.info("[Flow: {}][SUPERVISOR][STEP {}] 启动步骤 ({}) 第 {}/{} 次调用，入参装配: {}",
-                    context.getFlowId(), step.getId(), step.getAgent(), curAttempt, maxRetries + 1,
-                    JsonUtils.toJsonString(resolvedInputs));
-
-            Future<AgentResult> future = executorService.submit(() -> agent.execute(stepContext));
-            try {
-                AgentResult result = future.get(timeoutMs, TimeUnit.MILLISECONDS);
-                if (result == null || StringUtils.isBlank(result.getOutput())) {
-                    lastError = "节点产出为空";
-                    continue;
-                }
-
-                String rawOutput = result.getOutput().trim();
-
-                // Expert 业务错误拦截
-                if (agent.getType() == AgentTypeEnum.EXPERT) {
-                    ExpertErrorAgentResult errorResult = ExpertErrorAgentResult.format(rawOutput);
-                    if (errorResult != null) {
-                        lastError = "Expert 抛出业务异常: " + errorResult.getErrorMessage();
-                        continue;
-                    }
-                }
-
-                // 结构化解析
-                Object structuredOutput = tryParseJson(rawOutput);
-
-                // 输出契约校验
-                if (CollectionUtils.isNotEmpty(step.getOutputKeys())) {
-                    if (agent.getType() == AgentTypeEnum.EXPERT) {
-                        // Expert 专精节点产出为自然语言/Markdown 推荐内容，放行强校验
-                        log.info("[Flow: {}][DAG_ENGINE] 专精 Expert [{}] 产出为自然语言文本，放行结构化契约校验", context.getFlowId(), step.getAgent());
-                    } else {
-                        if (!(structuredOutput instanceof Map<?, ?> outMap)) {
-                            lastError = "产出并非 JSON 对象，无法满足契约校验: " + step.getOutputKeys();
-                            continue;
-                        }
-                        List<String> missingKeys = step.getOutputKeys().stream()
-                                .filter(k -> !containsKeyIgnoreCase(outMap, k)).toList();
-                        if (!missingKeys.isEmpty()) {
-                            lastError = "产出缺少必要契约字段: " + missingKeys;
-                            continue;
-                        }
-                    }
-                }
-
-                if (stepCallback != null) {
-                    try {
-                        String detail;
-                        if (agent.getType() == AgentTypeEnum.TOOL) {
-                            detail = "【入参 requestBody】:\n" + JsonUtils.toJsonString(resolvedInputs) + "\n\n【响应 responseBody】:\n" + rawOutput;
-                        } else {
-                            detail = rawOutput;
-                        }
-                        stepCallback.accept(agent, new AgentResult(detail, null));
-                    } catch (Exception e) {
-                        log.warn("[Flow: {}][DAG_ENGINE] 步骤完成回调执行异常: {}", context.getFlowId(), e.getMessage());
-                    }
-                }
-
-                log.info("[Flow: {}][SUPERVISOR][STEP {}] 节点 [{}] 执行完成，产出摘要: {}",
-                        context.getFlowId(), step.getId(), step.getAgent(), StringUtils.abbreviate(rawOutput, 200));
-
-                return new DagOutcome(step.getId(), structuredOutput, rawOutput, null, curAttempt);
-            } catch (TimeoutException e) {
-                future.cancel(true);
-                lastError = "执行超时 (" + timeoutMs + "ms)";
-            } catch (ExecutionException e) {
-                lastError = "执行异常: " + (e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                future.cancel(true);
-                lastError = "被中断";
-                break;
-            }
-        }
-
-        return new DagOutcome(step.getId(), null, null, lastError, attempt);
+        return resolvedInputs;
     }
+
+    // ==========================================
+    // 拓扑分析与 Kahn 算法静态校验
+    // ==========================================
 
     /**
      * 静态 DAG 规则校验 (Fail-Fast 铁律)
@@ -497,6 +611,10 @@ public class DagSupervisorEngine {
         return seen;
     }
 
+    // ==========================================
+    // 表达式机械解析与辅助工具
+    // ==========================================
+
     /**
      * 引用表达式机械解析 ($global.x / $s1.output / $s1.output.y)
      */
@@ -517,37 +635,7 @@ public class DagSupervisorEngine {
                 return context.getProperties();
             }
             String key = parts[1];
-            cur = context.getProperty(key);
-            if (cur == null && context.getRequest() != null && context.getRequest().getBizData() != null) {
-                cur = context.getRequest().getBizData().get(key);
-            }
-            if (cur == null && ("userId".equalsIgnoreCase(key) || "user_id".equalsIgnoreCase(key))) {
-                cur = context.getUserId();
-            }
-            // 常用全局参数智能别名与业务目标提取降级
-            if (cur == null) {
-                if ("city".equalsIgnoreCase(key) || "arrivalCity".equalsIgnoreCase(key) || "arrival_city".equalsIgnoreCase(key)) {
-                    cur = context.getProperty("arrivalCity");
-                    if (cur == null) cur = context.getProperty("city");
-                    if (cur == null) cur = "上海";
-                } else if ("airportCode".equalsIgnoreCase(key) || "arrivalAirport".equalsIgnoreCase(key) || "arrival_airport".equalsIgnoreCase(key)) {
-                    cur = context.getProperty("arrivalAirport");
-                    if (cur == null) cur = context.getProperty("airportCode");
-                    if (cur == null) cur = "SHA";
-                } else if ("flightNo".equalsIgnoreCase(key) || "flight_no".equalsIgnoreCase(key)) {
-                    cur = context.getProperty("flightNo");
-                    if (cur == null) {
-                        String target = context.getStrategyTarget();
-                        if (target != null) {
-                            java.util.regex.Matcher m = java.util.regex.Pattern.compile("([A-Za-z]{2}\\d{3,4})").matcher(target);
-                            if (m.find()) {
-                                cur = m.group(1);
-                            }
-                        }
-                    }
-                    if (cur == null) cur = "MU5101";
-                }
-            }
+            cur = resolveGlobalProperty(key, context);
             idx = 2;
         } else {
             String stepId = parts[0];
@@ -572,6 +660,45 @@ public class DagSupervisorEngine {
             }
         }
         return cur;
+    }
+
+    private static Object resolveGlobalProperty(String key, StrategyContext context) {
+        Object val = context.getProperty(key);
+        if (val != null) {
+            return val;
+        }
+        if (context.getRequest() != null && context.getRequest().getBizData() != null) {
+            val = context.getRequest().getBizData().get(key);
+            if (val != null) {
+                return val;
+            }
+        }
+        if ("userId".equalsIgnoreCase(key) || "user_id".equalsIgnoreCase(key)) {
+            return context.getUserId();
+        }
+        // 兼容同义别名读取 (遵循真实数据，严禁隐式伪造假数据)
+        if ("city".equalsIgnoreCase(key) || "arrivalCity".equalsIgnoreCase(key) || "arrival_city".equalsIgnoreCase(key)) {
+            val = context.getProperty("arrivalCity");
+            return val != null ? val : context.getProperty("city");
+        }
+        if ("airportCode".equalsIgnoreCase(key) || "arrivalAirport".equalsIgnoreCase(key) || "arrival_airport".equalsIgnoreCase(key)) {
+            val = context.getProperty("arrivalAirport");
+            return val != null ? val : context.getProperty("airportCode");
+        }
+        if ("flightNo".equalsIgnoreCase(key) || "flight_no".equalsIgnoreCase(key)) {
+            val = context.getProperty("flightNo");
+            if (val != null) {
+                return val;
+            }
+            String target = context.getStrategyTarget();
+            if (target != null) {
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("([A-Za-z]{2}\\d{3,4})").matcher(target);
+                if (m.find()) {
+                    return m.group(1);
+                }
+            }
+        }
+        return null;
     }
 
     private static boolean containsKeyIgnoreCase(Map<?, ?> map, String expectedKey) {
@@ -640,7 +767,7 @@ public class DagSupervisorEngine {
     }
 
     public void shutdown() {
-        if (internalPool) {
+        if (internalPool && !executorService.isShutdown()) {
             executorService.shutdownNow();
         }
     }
