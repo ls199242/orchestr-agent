@@ -55,6 +55,17 @@ public class LogStreamController {
     }
 
     /**
+     * 2.1 根据 flowId 获取该流程全量历史运行日志行列表
+     *
+     * @param flowId 流程唯一标识
+     * @return 该 flowId 关联的所有历史日志
+     */
+    @GetMapping("/flow/{flowId}")
+    public BaseResult<List<String>> getFlowLogs(@PathVariable("flowId") String flowId) {
+        return BaseResult.ok(logStreamService.getLogsByFlowId(flowId));
+    }
+
+    /**
      * 3. 获取日志文件基本元信息
      */
     @GetMapping("/info")

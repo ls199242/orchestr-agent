@@ -12,6 +12,7 @@ import com.shane.orchestragent.integration.llm.model.ChatMessageDTO;
 import com.shane.orchestragent.integration.llm.model.SystemChatMessageDTO;
 import com.shane.orchestragent.integration.llm.model.UserChatMessageDTO;
 import com.shane.orchestragent.prompt.service.PromptService;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.*;
@@ -32,18 +33,26 @@ public class PlannerAgent extends BaseLlmAgent<StrategyContext> {
     protected SystemChatMessageDTO buildSystemPrompt(StrategyContext context) throws BizException {
         Map<String, Object> properties = new HashMap<>(context.getProperties());
 
-        // 注入可用的业务专精 Expert 与外部 Tool 列表描述 (伴生 RAG 由底层自愈调度，不向规划器暴露)
-        List<Map<String, String>> agentDescriptions = context.getAgents().values().stream()
+        // 注入可用的业务专精 Expert 与外部 Tool 列表描述 (包含 Tool 的 Schema，供 DAG 规划精准入参绑定)
+        List<Map<String, Object>> agentDescriptions = context.getAgents().values().stream()
                 .filter(a -> a.getType() == AgentTypeEnum.EXPERT || a.getType() == AgentTypeEnum.TOOL)
                 .map(a -> {
-                    Map<String, String> map = new HashMap<>();
+                    Map<String, Object> map = new HashMap<>();
                     map.put("name", a.getName());
                     map.put("description", a.getDescription());
+                    map.put("type", a.getType().name());
+                    if (a instanceof ToolAgent toolAgent && toolAgent.getToolConfig() != null) {
+                        map.put("requestSchema", toolAgent.getToolConfig().getRequestJsonSchema());
+                        map.put("responseSchema", toolAgent.getToolConfig().getResponseJsonSchema());
+                    }
                     return map;
                 })
                 .collect(Collectors.toList());
         properties.put("agent_list", JsonUtils.toJsonString(agentDescriptions));
         properties.put("strategy_target", context.getStrategyTarget());
+        if (context.getConfig() != null && CollectionUtils.isNotEmpty(context.getConfig().getParams())) {
+            properties.put("available_global_params", JsonUtils.toJsonString(context.getConfig().getParams()));
+        }
 
         String template = llmConfig != null ? llmConfig.getSystemPrompt() : null;
         if (StringUtils.isBlank(template)) {

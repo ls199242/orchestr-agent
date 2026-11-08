@@ -307,6 +307,297 @@ DEFAULT_MOCK_RULES = [
             ],
             "attractions": []
         }
+    },
+
+    # ==================== query_user_info_tool ====================
+    {
+        "id": "rule_user_info_u1001",
+        "toolCode": "query_user_info_tool",
+        "description": "旅客 U1001 - 金卡商旅画像 (偏好早出港宽体机与首都机场PEK，价格敏感度低)",
+        "enabled": True,
+        "priority": 10,
+        "matchParams": {
+            "userId": "U1001"
+        },
+        "responseStatus": 200,
+        "responseData": {
+            "userId": "U1001",
+            "userName": "张先生",
+            "memberTier": "GOLD",
+            "homeCity": "北京",
+            "preferredAirlines": ["国航", "东航"],
+            "preferredCabin": "PREMIUM_ECONOMY",
+            "priceSensitivity": "LOW",
+            "tags": ["商务差旅", "金卡会员", "偏好早班机", "偏好宽体客机"]
+        }
+    },
+    {
+        "id": "rule_user_info_u1002",
+        "toolCode": "query_user_info_tool",
+        "description": "旅客 U1002 - 价格敏感休闲游画像 (偏好特惠经济舱，可接受临近日期与大兴/浦东机场)",
+        "enabled": True,
+        "priority": 10,
+        "matchParams": {
+            "userId": "U1002"
+        },
+        "responseStatus": 200,
+        "responseData": {
+            "userId": "U1002",
+            "userName": "李女士",
+            "memberTier": "REGULAR",
+            "homeCity": "北京",
+            "preferredAirlines": ["南航", "海航", "中联航"],
+            "preferredCabin": "ECONOMY",
+            "priceSensitivity": "HIGH",
+            "tags": ["休闲旅游", "价格敏感", "接受灵活调期", "可接受大兴机场"]
+        }
+    },
+    {
+        "id": "rule_user_info_default",
+        "toolCode": "query_user_info_tool",
+        "description": "旅客信息查询通用兜底规则",
+        "enabled": True,
+        "priority": 1,
+        "matchParams": {},
+        "responseStatus": 200,
+        "responseData": {
+            "userId": "DEFAULT_USER",
+            "userName": "旅客",
+            "memberTier": "REGULAR",
+            "homeCity": "北京",
+            "preferredAirlines": ["国航", "东航", "南航"],
+            "preferredCabin": "ECONOMY",
+            "priceSensitivity": "MEDIUM",
+            "tags": ["标准商旅"]
+        }
+    },
+
+    # ==================== query_user_orders_tool ====================
+    {
+        "id": "rule_user_orders_u1001",
+        "toolCode": "query_user_orders_tool",
+        "description": "旅客 U1001 历史订单 - 京沪线高频早间商务飞行",
+        "enabled": True,
+        "priority": 10,
+        "matchParams": {
+            "userId": "U1001"
+        },
+        "responseStatus": 200,
+        "responseData": {
+            "userId": "U1001",
+            "totalOrders": 12,
+            "frequentDepTimeSlot": "早间 (07:30-09:30)",
+            "frequentAirlines": ["国航", "东航"],
+            "frequentAirports": ["PEK", "SHA"],
+            "orders": [
+                {
+                    "orderId": "ORD2026101501",
+                    "flightNo": "CA1501",
+                    "airline": "国航",
+                    "depAirport": "PEK",
+                    "arrAirport": "SHA",
+                    "depDate": "2026-10-15",
+                    "depTime": "08:00",
+                    "cabinClass": "超经舱",
+                    "ticketPrice": 1250.0
+                },
+                {
+                    "orderId": "ORD2026092002",
+                    "flightNo": "MU5108",
+                    "airline": "东航",
+                    "depAirport": "PEK",
+                    "arrAirport": "SHA",
+                    "depDate": "2026-09-20",
+                    "depTime": "08:30",
+                    "cabinClass": "超经舱",
+                    "ticketPrice": 1180.0
+                }
+            ]
+        }
+    },
+    {
+        "id": "rule_user_orders_u1002",
+        "toolCode": "query_user_orders_tool",
+        "description": "旅客 U1002 历史订单 - 低票价非高峰及周末订单为主",
+        "enabled": True,
+        "priority": 10,
+        "matchParams": {
+            "userId": "U1002"
+        },
+        "responseStatus": 200,
+        "responseData": {
+            "userId": "U1002",
+            "totalOrders": 6,
+            "frequentDepTimeSlot": "午间/晚间 (12:00-18:00)",
+            "frequentAirlines": ["南航", "中联航"],
+            "frequentAirports": ["PKX", "PVG"],
+            "orders": [
+                {
+                    "orderId": "ORD2026081001",
+                    "flightNo": "KN5988",
+                    "airline": "中联航",
+                    "depAirport": "PKX",
+                    "arrAirport": "PVG",
+                    "depDate": "2026-08-10",
+                    "depTime": "14:20",
+                    "cabinClass": "经济舱",
+                    "ticketPrice": 480.0
+                }
+            ]
+        }
+    },
+    {
+        "id": "rule_user_orders_default",
+        "toolCode": "query_user_orders_tool",
+        "description": "历史订单通用兜底规则",
+        "enabled": True,
+        "priority": 1,
+        "matchParams": {},
+        "responseStatus": 200,
+        "responseData": {
+            "userId": "DEFAULT_USER",
+            "totalOrders": 3,
+            "frequentDepTimeSlot": "全时段",
+            "frequentAirlines": ["各大航司"],
+            "orders": []
+        }
+    },
+
+    # ==================== query_flight_schedule_tool ====================
+    {
+        "id": "rule_flight_schedule_bj_sh",
+        "toolCode": "query_flight_schedule_tool",
+        "description": "京沪线航班搜索 (包含基准日黄金班次、临近+1天特惠与大兴周边机场优质班次)",
+        "enabled": True,
+        "priority": 10,
+        "matchParams": {
+            "departureCity": "北京",
+            "arrivalCity": "上海"
+        },
+        "responseStatus": 200,
+        "responseData": {
+            "searchCondition": {
+                "departureCity": "北京",
+                "arrivalCity": "上海",
+                "departureDate": "2026-11-10"
+            },
+            "flights": [
+                {
+                    "flightNo": "CA1501",
+                    "airline": "国航",
+                    "depAirport": "PEK",
+                    "arrAirport": "SHA",
+                    "depDate": "2026-11-10",
+                    "depTime": "08:00",
+                    "arrTime": "10:15",
+                    "price": 1080.0,
+                    "seatClass": "超经舱",
+                    "punctualityRate": "93%",
+                    "isNearbyDate": False,
+                    "isNearbyAirport": False,
+                    "aircraftType": "宽体机 B777",
+                    "features": "京沪空中快线、首都机场直飞虹桥、国航金卡专属安检与贵宾休息室"
+                },
+                {
+                    "flightNo": "MU5108",
+                    "airline": "东航",
+                    "depAirport": "PEK",
+                    "arrAirport": "PVG",
+                    "depDate": "2026-11-10",
+                    "depTime": "13:00",
+                    "arrTime": "15:20",
+                    "price": 820.0,
+                    "seatClass": "经济舱",
+                    "punctualityRate": "88%",
+                    "isNearbyDate": False,
+                    "isNearbyAirport": False,
+                    "aircraftType": "窄体机 A320",
+                    "features": "午间直飞、价格适中"
+                },
+                {
+                    "flightNo": "CZ3101",
+                    "airline": "南航",
+                    "depAirport": "PKX",
+                    "arrAirport": "SHA",
+                    "depDate": "2026-11-10",
+                    "depTime": "08:30",
+                    "arrTime": "10:45",
+                    "price": 750.0,
+                    "seatClass": "经济舱",
+                    "punctualityRate": "96%",
+                    "isNearbyDate": False,
+                    "isNearbyAirport": True,
+                    "aircraftType": "宽体机 A350",
+                    "features": "【周边机场优选】大兴直飞虹桥，空轨联运草桥站19分钟直达，机型新噪音小，较首都机场省330元"
+                },
+                {
+                    "flightNo": "HU7605",
+                    "airline": "海航",
+                    "depAirport": "PEK",
+                    "arrAirport": "SHA",
+                    "depDate": "2026-11-11",
+                    "depTime": "09:00",
+                    "arrTime": "11:15",
+                    "price": 560.0,
+                    "seatClass": "经济舱",
+                    "punctualityRate": "91%",
+                    "isNearbyDate": True,
+                    "isNearbyAirport": False,
+                    "aircraftType": "窄体机 B737",
+                    "features": "【临近日期特惠】次日出发特惠票，黄金早班时段，较当日同航线立省 48%"
+                }
+            ]
+        }
+    },
+    {
+        "id": "rule_flight_schedule_default",
+        "toolCode": "query_flight_schedule_tool",
+        "description": "航班信息查询通用兜底规则",
+        "enabled": True,
+        "priority": 1,
+        "matchParams": {},
+        "responseStatus": 200,
+        "responseData": {
+            "searchCondition": {
+                "departureCity": "出发地",
+                "arrivalCity": "目的地",
+                "departureDate": "2026-11-10"
+            },
+            "flights": [
+                {
+                    "flightNo": "CA1831",
+                    "airline": "国航",
+                    "depAirport": "PEK",
+                    "arrAirport": "SHA",
+                    "depDate": "2026-11-10",
+                    "depTime": "08:30",
+                    "arrTime": "10:45",
+                    "price": 980.0,
+                    "seatClass": "经济舱",
+                    "punctualityRate": "90%",
+                    "isNearbyDate": False,
+                    "isNearbyAirport": False,
+                    "aircraftType": "窄体机 A321",
+                    "features": "含免费托运行李20KG"
+                },
+                {
+                    "flightNo": "CZ3901",
+                    "airline": "南航",
+                    "depAirport": "PKX",
+                    "arrAirport": "SHA",
+                    "depDate": "2026-11-11",
+                    "depTime": "09:00",
+                    "arrTime": "11:15",
+                    "price": 680.0,
+                    "seatClass": "经济舱",
+                    "punctualityRate": "92%",
+                    "isNearbyDate": True,
+                    "isNearbyAirport": True,
+                    "aircraftType": "宽体机 A350",
+                    "features": "临近次日与大兴机场特惠"
+                }
+            ]
+        }
     }
 ]
 

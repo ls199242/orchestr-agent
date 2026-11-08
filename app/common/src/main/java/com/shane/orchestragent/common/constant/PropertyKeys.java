@@ -52,9 +52,21 @@ public final class PropertyKeys {
     /** 规划器规划结果 */
     public static final String KEY_PLANNER_RESULT = "plannerResult";
 
+    /** 规划器规划步骤列表 */
+    public static final String KEY_PLAN_STEPS = "planSteps";
+
     /** 会话ID */
     public static final String KEY_SESSION_ID = "sessionId";
 
     /** 用户ID */
     public static final String KEY_USER_ID = "userId";
+
+    /** 意图识别候选策略目录 (code/name/description/params 裁剪视图) */
+    public static final String KEY_STRATEGY_CATALOG = "strategy_catalog";
+
+    /** 会话待定策略业务编码 (跨轮参数收集中的目标策略) */
+    public static final String KEY_PENDING_STRATEGY = "pending_strategy";
+
+    /** 会话已收集的策略入参键值对 (跨轮累积) */
+    public static final String KEY_COLLECTED_PARAMS = "collected_params";
 }

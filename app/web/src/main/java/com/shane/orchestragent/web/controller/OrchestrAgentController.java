@@ -13,6 +13,8 @@ import com.shane.orchestragent.web.converter.AgentApiMapping;
 import com.shane.orchestragent.web.dto.AgentChatRequestDTO;
 import com.shane.orchestragent.web.dto.AgentInvokeRequestDTO;
 import com.shane.orchestragent.web.dto.AgentInvokeResponseDTO;
+import com.shane.orchestragent.web.service.LogStreamService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,6 +39,10 @@ public class OrchestrAgentController {
 
     /** 智能体策略协同核心编排中枢，负责具体工作流拓扑调度与执行 */
     private final AgentManager agentManager;
+
+    /** 流程全量运行日志读取服务 */
+    @Autowired(required = false)
+    private LogStreamService logStreamService;
 
     public OrchestrAgentController(AgentApiMapping apiMapping, AgentManager agentManager) {
         this.apiMapping = apiMapping;
@@ -98,6 +104,21 @@ public class OrchestrAgentController {
     public BaseResult<AgentInvokeResponseDTO> getFlowStatus(@PathVariable("flowId") String flowId) throws BizException {
         AgentInvokeResponseVO responseVO = agentManager.getFlow(flowId);
         return BaseResult.ok(apiMapping.v2dto(responseVO));
+    }
+
+    /**
+     * 3.1 根据 flowId 检索该流程执行的完整历史日志行列表
+     *
+     * @param flowId 流程唯一标识
+     * @return 包含该 flowId 的全部按时序排序的日志行列表
+     */
+    @GetMapping("/flow/{flowId}/logs")
+    @Api(logModule = LogModuleEnum.API_INVOKE, desc = "按流程唯一标识检索全量执行日志")
+    public BaseResult<java.util.List<String>> getFlowLogs(@PathVariable("flowId") String flowId) {
+        if (logStreamService != null) {
+            return BaseResult.ok(logStreamService.getLogsByFlowId(flowId));
+        }
+        return BaseResult.ok(java.util.Collections.emptyList());
     }
 
     /**

@@ -9,7 +9,7 @@ import java.io.Serializable;
 import java.util.List;
 
 /**
- * 规划器产出结果
+ * 规划器产出结果 (包含 DAG 步骤集合)
  *
  * @author Shane
  */
@@ -19,7 +19,7 @@ import java.util.List;
 @AllArgsConstructor
 public class PlanResult implements Serializable {
 
-    private List<FlowStep> steps;
+    private List<FlowDagStep> steps;
 
     public boolean hasSteps() {
         return steps != null && !steps.isEmpty();

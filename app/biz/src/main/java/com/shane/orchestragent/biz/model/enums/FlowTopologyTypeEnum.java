@@ -22,9 +22,9 @@ public enum FlowTopologyTypeEnum {
     REACT(List.of(AgentTypeEnum.PLANNER, AgentTypeEnum.SUPERVISOR, AgentTypeEnum.EVALUATOR, AgentTypeEnum.REPORTER), true),
 
     /**
-     * 多轮对话意图分流 (实时交互，不使用结果缓存)
+     * 多轮会话目标策略拓扑 (可被会话编排层意图识别触发执行，注入会话历史后走 ReAct 循环；实时交互，不使用结果缓存)
      */
-    MULTIPLE_CHAT(List.of(AgentTypeEnum.COORDINATOR, AgentTypeEnum.PLANNER, AgentTypeEnum.SUPERVISOR, AgentTypeEnum.EVALUATOR, AgentTypeEnum.REPORTER), false);
+    MULTIPLE_CHAT(List.of(AgentTypeEnum.PLANNER, AgentTypeEnum.SUPERVISOR, AgentTypeEnum.EVALUATOR, AgentTypeEnum.REPORTER), false);
 
     private final List<AgentTypeEnum> systemAgents;
     private final boolean useResultCache;

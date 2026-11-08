@@ -86,6 +86,14 @@ public class BizErrorFactory {
         return new BizException("COORDINATOR_REPLY_EMPTY", "多轮意图识别决策为直接答复，但答复内容为空");
     }
 
+    public BizException coordinatorStrategyUnknown(String strategyCode) {
+        return new BizException("COORDINATOR_STRATEGY_UNKNOWN", "多轮意图识别选定的策略不在候选目录中: " + strategyCode);
+    }
+
+    public BizException strategyParamMissing(String detail) {
+        return new BizException("STRATEGY_PARAM_MISSING", "策略必填参数缺失且无法自动注入: " + detail);
+    }
+
     public BizException strategyNotFound(String strategyId) {
         return new BizException("STRATEGY_NOT_FOUND", "未能获取到指定策略配置: " + strategyId);
     }

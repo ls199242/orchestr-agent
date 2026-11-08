@@ -10,7 +10,7 @@ import java.util.Map;
 
 /**
  * 智能体流式多轮会话请求数据传输对象 (DTO)
- * 供 Controller 接收流式会话交互请求
+ * 供 Controller 接收流式会话交互请求 (不携带策略，由意图识别基于策略目录动态选定)
  *
  * @author Shane
  */
@@ -19,9 +19,6 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 public class AgentChatRequestDTO implements Serializable {
-
-    /** 目标策略业务编码 (如: default, biz_travel 等) */
-    private String strategyCode;
 
     /** 用户发送的会话消息或对话提问 */
     private String message;

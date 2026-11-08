@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -208,6 +209,10 @@ public abstract class BaseLlmAgent<CONTEXT extends AgentContext> extends BaseAge
             if (future.isCancelled() || (callFuture != null && callFuture.isCancelled())) {
                 log.info("[Agent: {}] LLM 执行被主动中断或取消", getName());
                 throw BizErrorFactory.getInstance().strategyFlowStopped();
+            }
+            if (e instanceof ExecutionException ee && ee.getCause() instanceof BizException be) {
+                log.error("[Agent: {}] LLM 业务异常: {}", getName(), be.getMessage());
+                throw be;
             }
             log.error("[Agent: {}] LLM 执行异常或超时", getName(), e);
             throw new BizException(BizErrorFactory.getInstance().llmAgentTimeoutOrCancel());

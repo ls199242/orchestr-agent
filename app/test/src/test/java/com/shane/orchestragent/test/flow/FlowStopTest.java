@@ -9,6 +9,7 @@ import com.shane.orchestragent.biz.flow.ReActStrategyFlow;
 import com.shane.orchestragent.biz.flow.StrategyFlow;
 import com.shane.orchestragent.biz.flow.StrategyFlowFactory;
 import com.shane.orchestragent.biz.flow.store.FlowStore;
+import com.shane.orchestragent.biz.model.flow.PlanResult;
 import com.shane.orchestragent.biz.manager.AgentManager;
 import com.shane.orchestragent.biz.manager.impl.AgentManagerImpl;
 import com.shane.orchestragent.biz.model.agent.AgentResult;
@@ -135,7 +136,7 @@ public class FlowStopTest {
 
         Map<AgentTypeEnum, Agent> systemAgents = new HashMap<>();
         systemAgents.put(AgentTypeEnum.PLANNER, new PlannerAgent(defaultLlmConfig, llmService, promptService));
-        systemAgents.put(AgentTypeEnum.SUPERVISOR, new SupervisorAgent(defaultLlmConfig, llmService, promptService));
+        systemAgents.put(AgentTypeEnum.SUPERVISOR, new SupervisorAgent());
         systemAgents.put(AgentTypeEnum.EVALUATOR, new EvaluatorAgent(defaultLlmConfig, llmService, promptService));
         systemAgents.put(AgentTypeEnum.REPORTER, new ReporterAgent(defaultLlmConfig, llmService, promptService));
 
@@ -295,13 +296,14 @@ public class FlowStopTest {
         AtomicReference<ReActStrategyFlow> flowRef = new AtomicReference<>();
 
         // 自定义 Supervisor: 在执行指挥调度决策时模拟外部调用 stop
-        SupervisorAgent customSupervisor = new SupervisorAgent(defaultLlmConfig, llmService, promptService) {
+        SupervisorAgent customSupervisor = new SupervisorAgent() {
             @Override
-            public AgentResult execute(StrategyContext ctx) throws BizException {
+            public com.shane.orchestragent.biz.flow.dag.DagExecutionState run(
+                    PlanResult plan, StrategyContext ctx) throws BizException {
                 if (flowRef.get() != null) {
                     flowRef.get().stop();
                 }
-                return super.execute(ctx);
+                return super.run(plan, ctx);
             }
         };
         systemAgents.put(AgentTypeEnum.SUPERVISOR, customSupervisor);

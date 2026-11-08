@@ -9,91 +9,427 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     [x-cloak] { display: none !important; }
-    pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0b1120; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    .pulse-dot { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .card-hover { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+    .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); }
+    .table-scroll::-webkit-scrollbar { height: 8px; width: 6px; }
+    .table-scroll::-webkit-scrollbar-track { background: #0b1120; border-radius: 4px; }
+    .table-scroll::-webkit-scrollbar-thumb { background: #3b4252; border-radius: 4px; }
+    .table-scroll::-webkit-scrollbar-thumb:hover { background: #6366f1; }
+    .sticky-action-th {
+      position: sticky;
+      right: 0;
+      background: #090d16;
+      box-shadow: -8px 0 12px -4px rgba(0, 0, 0, 0.7);
+      z-index: 20;
+    }
+    .sticky-action-td {
+      position: sticky;
+      right: 0;
+      background: #0f172a;
+      box-shadow: -8px 0 12px -4px rgba(0, 0, 0, 0.7);
+      z-index: 10;
+    }
+    tr:hover .sticky-action-td {
+      background: #1e293b;
+    }
   </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans" x-data="appData()" x-init="init()">
+<body class="bg-slate-950 text-slate-100 h-screen flex overflow-hidden font-sans" x-data="appData()" x-init="init()">
 
-  <!-- 顶部导航栏 -->
-  <header class="bg-slate-800/90 border-b border-slate-700 backdrop-blur sticky top-0 z-50">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-          <i class="fa-solid fa-diagram-project text-white text-lg"></i>
+  <!-- ============================================== -->
+  <!-- 左侧一级/二级导航菜单栏 (Left Sidebar) -->
+  <!-- ============================================== -->
+  <aside class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 select-none z-30">
+    <!-- 顶部品牌与引擎标识 -->
+    <div class="h-16 border-b border-slate-800/90 px-4 flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25 shrink-0">
+        <i class="fa-solid fa-diagram-project text-white text-base"></i>
+      </div>
+      <div class="min-w-0 flex-1">
+        <h1 class="font-bold text-sm tracking-wide text-white truncate">OrchestrAgent</h1>
+        <p class="text-[11px] text-slate-400 truncate">智能体编排控制中心</p>
+      </div>
+    </div>
+
+    <!-- 菜单导航区 (Level 1 & Level 2) -->
+    <div class="flex-1 overflow-y-auto px-3 py-4 space-y-4">
+
+      <!-- 一级菜单 1: 仪表盘 -->
+      <div>
+        <div class="px-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+          仪表盘
         </div>
-        <div>
-          <h1 class="font-bold text-lg leading-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-300 via-purple-200 to-pink-300">
-            OrchestrAgent Console
-          </h1>
-          <p class="text-xs text-slate-400">Mock Data Center & Interactive Controller</p>
+        <button @click="switchView('dashboard')"
+                :class="currentView === 'dashboard' ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40 font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border-transparent'"
+                class="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition border">
+          <i class="fa-solid fa-gauge-high text-xs w-4 text-center"></i>
+          <span>系统看板 (Overview)</span>
+        </button>
+      </div>
+
+      <!-- 一级菜单 2: 编排联调 -->
+      <div>
+        <div class="px-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+          流程编排与联调
+        </div>
+        <div class="space-y-1">
+          <button @click="switchView('ctl-chat')"
+                  :class="currentView === 'ctl-chat' ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40 font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border-transparent'"
+                  class="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition border">
+            <i class="fa-regular fa-comments text-xs w-4 text-center"></i>
+            <span>SSE 流式会话 (Chat)</span>
+          </button>
+          <button @click="switchView('ctl-invoke')"
+                  :class="currentView === 'ctl-invoke' ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40 font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border-transparent'"
+                  class="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition border">
+            <i class="fa-solid fa-rocket text-xs w-4 text-center"></i>
+            <span>异步流程 (Invoke & 跟踪)</span>
+          </button>
         </div>
       </div>
 
-      <!-- 导航标签 -->
-      <nav class="flex space-x-2 bg-slate-900/60 p-1.5 rounded-xl border border-slate-700/60">
-        <button @click="activeTab = 'controller'" :class="activeTab === 'controller' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'" class="px-4 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-2">
-          <i class="fa-solid fa-play text-xs"></i>
-          <span>联调</span>
-        </button>
-        <button @click="activeTab = 'config'" :class="activeTab === 'config' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'" class="px-4 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-2">
-          <i class="fa-solid fa-database text-xs"></i>
-          <span>配置</span>
-        </button>
-        <button @click="activeTab = 'mock'; loadMockRules();" :class="activeTab === 'mock' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'" class="px-4 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-2">
-          <i class="fa-solid fa-vial-virus text-xs"></i>
-          <span>Mock 规则</span>
-        </button>
-        <button @click="activeTab = 'java'" :class="activeTab === 'java' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'" class="px-4 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-2">
-          <i class="fa-solid fa-microchip text-xs"></i>
-          <span>内存</span>
-        </button>
-        <button @click="activeTab = 'logs'; if (!logEventSource) initLogStream();" :class="activeTab === 'logs' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'" class="px-4 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-2">
-          <i class="fa-solid fa-terminal text-xs"></i>
-          <span>日志</span>
-        </button>
-      </nav>
+      <!-- 一级菜单 3: 配置中心 -->
+      <div>
+        <div class="px-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+          配置中心 (7 大仓储)
+        </div>
+        <div class="space-y-1">
+          <button @click="switchView('config', 'strategies')"
+                  :class="currentView === 'config' && configCategory === 'strategies' ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40 font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border-transparent'"
+                  class="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition border">
+            <i class="fa-solid fa-bullseye text-xs w-4 text-center"></i>
+            <span>编排策略 (Strategies)</span>
+          </button>
+          <button @click="switchView('config', 'agents')"
+                  :class="currentView === 'config' && configCategory === 'agents' ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40 font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border-transparent'"
+                  class="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition border">
+            <i class="fa-solid fa-robot text-xs w-4 text-center"></i>
+            <span>智能体 (Agents / Experts)</span>
+          </button>
+          <button @click="switchView('config', 'tools')"
+                  :class="currentView === 'config' && configCategory === 'tools' ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40 font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border-transparent'"
+                  class="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition border">
+            <i class="fa-solid fa-screwdriver-wrench text-xs w-4 text-center"></i>
+            <span>外部工具 (Tools)</span>
+          </button>
+          <button @click="switchView('config', 'models')"
+                  :class="currentView === 'config' && configCategory === 'models' ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40 font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border-transparent'"
+                  class="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition border">
+            <i class="fa-solid fa-brain text-xs w-4 text-center"></i>
+            <span>大模型接入 (Models)</span>
+          </button>
+          <button @click="switchView('config', 'dict')"
+                  :class="currentView === 'config' && configCategory === 'dict' ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40 font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border-transparent'"
+                  class="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition border">
+            <i class="fa-solid fa-book text-xs w-4 text-center"></i>
+            <span>运行字典 (Dict)</span>
+          </button>
+        </div>
+      </div>
 
-      <!-- Java 后台状态小徽标 -->
-      <div class="flex items-center space-x-2 text-xs">
+      <!-- 一级菜单 4: Mock 仿真中心 -->
+      <div>
+        <div class="px-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+          Mock 仿真中心
+        </div>
+        <div class="space-y-1">
+          <button @click="switchView('mock-rules')"
+                  :class="currentView === 'mock-rules' ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40 font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border-transparent'"
+                  class="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition border">
+            <i class="fa-solid fa-vial-virus text-xs w-4 text-center"></i>
+            <span>动态 Mock 规则</span>
+          </button>
+          <button @click="switchView('mock-tester')"
+                  :class="currentView === 'mock-tester' ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40 font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border-transparent'"
+                  class="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition border">
+            <i class="fa-solid fa-vial text-xs w-4 text-center"></i>
+            <span>规则匹配测试台</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 一级菜单 5: 引擎自省与监控 -->
+      <div>
+        <div class="px-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+          引擎自省与监控
+        </div>
+        <div class="space-y-1">
+          <button @click="switchView('eng-memory')"
+                  :class="currentView === 'eng-memory' ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40 font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border-transparent'"
+                  class="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition border">
+            <i class="fa-solid fa-microchip text-xs w-4 text-center"></i>
+            <span>仓储内存快照 (JSON)</span>
+          </button>
+          <button @click="switchView('eng-logs')"
+                  :class="currentView === 'eng-logs' ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40 font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border-transparent'"
+                  class="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition border">
+            <i class="fa-solid fa-terminal text-xs w-4 text-center"></i>
+            <span>实时日志流监控</span>
+          </button>
+          <button @click="switchView('eng-api')"
+                  :class="currentView === 'eng-api' ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40 font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border-transparent'"
+                  class="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition border">
+            <i class="fa-solid fa-code text-xs w-4 text-center"></i>
+            <span>API 接口速查字典</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 底部状态小卡片 -->
+    <div class="p-3 border-t border-slate-800/90 bg-slate-900/80 space-y-2">
+      <div class="flex items-center justify-between text-xs px-1">
+        <span class="text-slate-400 flex items-center space-x-1.5">
+          <span class="w-2 h-2 rounded-full pulse-dot" :class="javaHealthy ? 'bg-emerald-400' : 'bg-rose-400'"></span>
+          <span x-text="javaHealthy ? 'Java: 8080 在线' : 'Java: 8080 离线'"></span>
+        </span>
+        <button @click="checkJavaStatus()" class="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800" title="检测连接">
+          <i class="fa-solid fa-rotate-right" :class="refreshing ? 'fa-spin' : ''"></i>
+        </button>
+      </div>
+      <button @click="triggerJavaReload()"
+              class="w-full py-1.5 px-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-lg text-xs font-medium transition flex items-center justify-center space-x-1.5 shadow-md shadow-indigo-600/20">
+        <i class="fa-solid fa-bolt text-xs"></i>
+        <span>全量热重载配置</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ============================================== -->
+  <!-- 右侧主内容区域 (Right Main Content) -->
+  <!-- ============================================== -->
+  <div class="flex-1 flex flex-col min-w-0 bg-slate-950 overflow-hidden">
+
+    <!-- 顶部状态导航栏 -->
+    <header class="h-14 bg-slate-900/90 border-b border-slate-800/80 px-6 flex items-center justify-between shrink-0 backdrop-blur z-20">
+      <!-- 面包屑 -->
+      <div class="flex items-center space-x-2 text-xs font-medium text-slate-300">
+        <i class="fa-solid fa-layer-group text-indigo-400"></i>
+        <span class="text-slate-500">/</span>
+        <span x-text="getBreadcrumb()" class="font-bold text-slate-100"></span>
+      </div>
+
+      <!-- 右侧快捷操作与状态徽标 -->
+      <div class="flex items-center space-x-3">
+        <!-- Java 8080 状态 -->
         <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border"
               :class="javaHealthy ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'">
           <span class="w-1.5 h-1.5 rounded-full mr-1.5" :class="javaHealthy ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'"></span>
           <span x-text="javaHealthy ? 'Java: 8080 在线' : 'Java: 离线或未启动'"></span>
         </span>
-        <button @click="checkJavaStatus()" class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-700 transition" title="刷新状态">
+
+        <!-- Python 8000 状态 -->
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border bg-indigo-500/10 text-indigo-400 border-indigo-500/30">
+          <span class="w-1.5 h-1.5 rounded-full mr-1.5 bg-indigo-400"></span>
+          <span>Mock: 8000</span>
+        </span>
+
+        <button @click="triggerJavaReload()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition flex items-center space-x-1 shadow">
+          <i class="fa-solid fa-arrows-rotate text-xs"></i>
+          <span>通知 Java 重载</span>
+        </button>
+
+        <button @click="checkJavaStatus()" class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition" title="刷新状态">
           <i class="fa-solid fa-rotate-right" :class="refreshing ? 'fa-spin' : ''"></i>
         </button>
       </div>
-    </div>
-  </header>
+    </header>
 
-  <!-- 主体内容区域 -->
-  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <!-- 主展示区 (Scrollable) -->
+    <main class="flex-1 overflow-y-auto p-6 lg:p-8 space-y-6">
 
-    <!-- ============================================== -->
-    <!-- Tab 1: Controller 联调交互中心 -->
-    <!-- ============================================== -->
-    <div x-show="activeTab === 'controller'" class="space-y-6">
-      <!-- 次级子 Tab 切换 -->
-      <div class="flex border-b border-slate-700 pb-3 items-center justify-between">
-        <div class="flex space-x-4">
-          <button @click="ctlSubTab = 'chat'" :class="ctlSubTab === 'chat' ? 'border-b-2 border-indigo-500 text-indigo-400 font-semibold' : 'text-slate-400 hover:text-slate-200'" class="pb-2 px-1 text-sm flex items-center space-x-2 transition">
-            <i class="fa-regular fa-comments"></i>
-            <span>1. SSE 流式会话 (POST /chat)</span>
-          </button>
-          <button @click="ctlSubTab = 'invoke'" :class="ctlSubTab === 'invoke' ? 'border-b-2 border-indigo-500 text-indigo-400 font-semibold' : 'text-slate-400 hover:text-slate-200'" class="pb-2 px-1 text-sm flex items-center space-x-2 transition">
-            <i class="fa-solid fa-rocket"></i>
-            <span>2. 异步流程启动 (POST /invoke)</span>
-          </button>
+      <!-- ============================================== -->
+      <!-- View 1: 仪表盘 / 系统看板 (Overview) -->
+      <!-- 首页仅保留: 1. 配置资产全览 (完整名称与数字)  2. 接口速览 (核心 API) -->
+      <!-- ============================================== -->
+      <div x-show="currentView === 'dashboard'" class="space-y-8">
+
+        <!-- 1. 配置资产全览 (完整名称与数字，无截断、无跳转与多余信息) -->
+        <div class="space-y-4">
+          <div class="flex items-center space-x-2.5 border-b border-slate-800 pb-3">
+            <div class="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20 text-xs">
+              <i class="fa-solid fa-chart-pie"></i>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold text-slate-100">配置资产全览</h2>
+              <p class="text-xs text-slate-400 mt-0.5">当前系统各领域资产与运行规则条目统计</p>
+            </div>
+          </div>
+
+          <!-- 6 大配置资产卡片：只展示数字及对应项完整名称，无截断、无跳转 -->
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
+            <!-- 1. 编排策略 -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
+              <span class="text-xs font-semibold text-slate-300">编排策略 (Strategies)</span>
+              <div class="mt-3">
+                <span class="text-3xl font-black text-cyan-400 font-mono tracking-tight" x-text="(configs.strategies || []).length"></span>
+                <span class="text-xs text-slate-500 ml-1">项</span>
+              </div>
+            </div>
+
+            <!-- 2. 业务智能体 -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
+              <span class="text-xs font-semibold text-slate-300">业务智能体 (Agents)</span>
+              <div class="mt-3">
+                <span class="text-3xl font-black text-indigo-400 font-mono tracking-tight" x-text="(configs.agents || []).length"></span>
+                <span class="text-xs text-slate-500 ml-1">个</span>
+              </div>
+            </div>
+
+            <!-- 3. 外部工具 -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
+              <span class="text-xs font-semibold text-slate-300">外部工具 (Tools)</span>
+              <div class="mt-3">
+                <span class="text-3xl font-black text-emerald-400 font-mono tracking-tight" x-text="(configs.tools || []).length"></span>
+                <span class="text-xs text-slate-500 ml-1">个</span>
+              </div>
+            </div>
+
+            <!-- 4. 大模型接入 -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
+              <span class="text-xs font-semibold text-slate-300">大模型接入 (Models)</span>
+              <div class="mt-3">
+                <span class="text-3xl font-black text-purple-400 font-mono tracking-tight" x-text="(configs.models || []).length"></span>
+                <span class="text-xs text-slate-500 ml-1">个</span>
+              </div>
+            </div>
+
+            <!-- 5. 全局运行字典 -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
+              <span class="text-xs font-semibold text-slate-300">全局运行字典 (Dict)</span>
+              <div class="mt-3">
+                <span class="text-3xl font-black text-amber-400 font-mono tracking-tight" x-text="(configs.dict || []).length"></span>
+                <span class="text-xs text-slate-500 ml-1">条</span>
+              </div>
+            </div>
+
+            <!-- 6. 动态 Mock 规则 -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
+              <span class="text-xs font-semibold text-slate-300">动态 Mock 规则 (Rules)</span>
+              <div class="mt-3">
+                <span class="text-3xl font-black text-rose-400 font-mono tracking-tight" x-text="(mockRules || []).length"></span>
+                <span class="text-xs text-slate-500 ml-1">条</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="text-xs text-slate-400">
-          目标服务: <code class="bg-slate-800 px-2 py-0.5 rounded text-indigo-300">http://127.0.0.1:8080/api/agent/*</code>
+        <!-- 2. 接口速览 (系统核心 HTTP / SSE API 矩阵) -->
+        <div class="space-y-4">
+          <div class="flex items-center space-x-2.5 border-b border-slate-800 pb-3">
+            <div class="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20 text-xs">
+              <i class="fa-solid fa-code"></i>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold text-slate-100">接口速览</h2>
+              <p class="text-xs text-slate-400 mt-0.5">系统核心 HTTP / SSE 接口清单与功能定义</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-1.5 shadow-md">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-xs text-sky-400 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">POST</span>
+                <span class="text-[10px] text-slate-500 font-mono">SSE Stream</span>
+              </div>
+              <code class="text-slate-100 font-mono text-xs font-semibold block pt-1">/api/agent/chat</code>
+              <p class="text-[11px] text-slate-400 leading-relaxed">SSE 流式交互会话，多智能体协同思考打字机</p>
+            </div>
+
+            <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-1.5 shadow-md">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-xs text-sky-400 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">POST</span>
+                <span class="text-[10px] text-slate-500 font-mono">Async</span>
+              </div>
+              <code class="text-slate-100 font-mono text-xs font-semibold block pt-1">/api/agent/invoke</code>
+              <p class="text-[11px] text-slate-400 leading-relaxed">异步触发策略流程，立即返回 flowId 实例句柄</p>
+            </div>
+
+            <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-1.5 shadow-md">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-xs text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span>
+                <span class="text-[10px] text-slate-500 font-mono">Query</span>
+              </div>
+              <code class="text-slate-100 font-mono text-xs font-semibold block pt-1">/api/agent/flow/{flowId}</code>
+              <p class="text-[11px] text-slate-400 leading-relaxed">轮询查询流程节点状态机与上下文全生命周期</p>
+            </div>
+
+            <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-1.5 shadow-md">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-xs text-rose-400 font-mono bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">POST</span>
+                <span class="text-[10px] text-slate-500 font-mono">Control</span>
+              </div>
+              <code class="text-slate-100 font-mono text-xs font-semibold block pt-1">/api/agent/stop/{flowId}</code>
+              <p class="text-[11px] text-slate-400 leading-relaxed">主动安全中断并终止正在执行中的流程实例</p>
+            </div>
+
+            <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-1.5 shadow-md">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-xs text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span>
+                <span class="text-[10px] text-slate-500 font-mono">Overview</span>
+              </div>
+              <code class="text-slate-100 font-mono text-xs font-semibold block pt-1">/api/agent/config/overview</code>
+              <p class="text-[11px] text-slate-400 leading-relaxed">查询核心仓储健康状态、配置条目数与同步时间</p>
+            </div>
+
+            <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-1.5 shadow-md">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-xs text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span>
+                <span class="text-[10px] text-slate-500 font-mono">Snapshot</span>
+              </div>
+              <code class="text-slate-100 font-mono text-xs font-semibold block pt-1">/api/agent/config/all</code>
+              <p class="text-[11px] text-slate-400 leading-relaxed">获取 Java 核心引擎内存中的全量配置快照 JSON</p>
+            </div>
+
+            <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-1.5 shadow-md">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-xs text-amber-400 font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">POST</span>
+                <span class="text-[10px] text-slate-500 font-mono">Hot Reload</span>
+              </div>
+              <code class="text-slate-100 font-mono text-xs font-semibold block pt-1">/api/agent/config/reload</code>
+              <p class="text-[11px] text-slate-400 leading-relaxed">通知 Java 核心引擎立即执行全量配置热重载</p>
+            </div>
+
+            <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-1.5 shadow-md">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-xs text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span>
+                <span class="text-[10px] text-slate-500 font-mono">Log Stream</span>
+              </div>
+              <code class="text-slate-100 font-mono text-xs font-semibold block pt-1">/api/agent/logs/stream</code>
+              <p class="text-[11px] text-slate-400 leading-relaxed">SSE 实时流式日志文件监听，支持多级标签过滤</p>
+            </div>
+          </div>
         </div>
+
       </div>
 
-      <!-- 1.1 SSE 流式会话 Chat -->
-      <div x-show="ctlSubTab === 'chat'" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- ============================================== -->
+      <!-- View 2: SSE 流式会话联调 (Chat) -->
+      <!-- ============================================== -->
+      <div x-show="currentView === 'ctl-chat'" class="space-y-6">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div>
+            <h2 class="text-base font-bold text-slate-200 flex items-center space-x-2">
+              <i class="fa-regular fa-comments text-indigo-400"></i>
+              <span>SSE 流式多智能体决策交互中心</span>
+            </h2>
+            <p class="text-xs text-slate-400">直接与 Java 核心引擎暴露的 <code>/api/agent/chat</code> 进行多轮流式对话测试</p>
+          </div>
+          <button @click="clearChat()" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs transition">
+            <i class="fa-regular fa-trash-can mr-1"></i>清空会话
+          </button>
+        </div>
+
+        <!-- 1.1 SSE 流式会话 Chat -->
+      <div x-show="true" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- 左侧参数表单 -->
         <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5 space-y-4 shadow-xl">
           <h3 class="font-semibold text-slate-200 flex items-center space-x-2">
@@ -196,9 +532,24 @@
           </div>
         </div>
       </div>
+      </div>
 
-      <!-- 1.2 异步调用 invoke -->
-      <div x-show="ctlSubTab === 'invoke'" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- ============================================== -->
+      <!-- View 3: 异步流程调度与全周期追踪 (Invoke) -->
+      <!-- ============================================== -->
+      <div x-show="currentView === 'ctl-invoke'" class="space-y-6">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div>
+            <h2 class="text-base font-bold text-slate-200 flex items-center space-x-2">
+              <i class="fa-solid fa-rocket text-indigo-400"></i>
+              <span>异步工作流触发与全生命周期追踪</span>
+            </h2>
+            <p class="text-xs text-slate-400">调用 <code>POST /api/agent/invoke</code> 启动异步流程，并持续轮询 <code>GET /api/agent/flow/{flowId}</code></p>
+          </div>
+        </div>
+
+        <!-- 1.2 异步调用 invoke -->
+      <div x-show="true" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- 左侧：异步流程发起表单 -->
         <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5 space-y-4 shadow-xl flex flex-col justify-between">
           <div class="space-y-4">
@@ -207,28 +558,167 @@
               <span>异步调用入参 (POST /api/agent/invoke)</span>
             </h3>
 
+            <!-- 1. 编排策略选择 -->
             <div>
               <label class="block text-xs font-medium text-slate-400 mb-1">编排策略 (strategyId)</label>
-              <select x-model="invokeForm.strategyId" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+              <select x-model="invokeForm.strategyId" @change="onInvokeStrategyChange()"
+                      class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
                 <template x-for="s in (configs.strategies || [])" :key="s.strategyId">
                   <option :value="s.strategyId" x-text="s.name + ' (' + s.strategyId + ')'"></option>
                 </template>
               </select>
             </div>
 
+            <!-- 2. 策略专属业务参数与 Mock 联动卡片 -->
+            <!-- 2.1 航班智能推荐场景专属参数面板 -->
+            <template x-if="invokeForm.strategyId === 'flight_nearby_recommend_strategy'">
+              <div class="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-3.5 space-y-3 shadow-inner">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-indigo-300 flex items-center space-x-1.5">
+                    <i class="fa-solid fa-plane-departure text-indigo-400"></i>
+                    <span>航班搜索起抵与日期 (联动底层 Mock 数据)</span>
+                  </span>
+                  <button @click="syncMockDataForCurrentStrategy(true)"
+                          class="px-2 py-1 bg-indigo-600/80 hover:bg-indigo-600 text-[11px] text-white rounded-lg transition flex items-center space-x-1 shadow"
+                          title="将当前起抵城市与日期立即同步到底层 Mock 规则中">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>同步 Mock 规则</span>
+                  </button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[11px] text-slate-400 mb-1">出发城市 / 机场</label>
+                    <input type="text" x-model="invokeForm.flightParams.departureCity" @input="onFlightParamsChange()"
+                           class="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] text-slate-400 mb-1">到达城市 / 机场</label>
+                    <input type="text" x-model="invokeForm.flightParams.arrivalCity" @input="onFlightParamsChange()"
+                           class="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[11px] text-slate-400 mb-1">起飞日期 (departureDate)</label>
+                    <input type="date" x-model="invokeForm.flightParams.departureDate" @change="onFlightParamsChange()"
+                           class="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] text-slate-400 mb-1">返程/抵达日期 (arrivalDate)</label>
+                    <input type="date" x-model="invokeForm.flightParams.arrivalDate" @change="onFlightParamsChange()"
+                           class="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
+                  <label class="flex items-center space-x-1.5 cursor-pointer select-none">
+                    <input type="checkbox" x-model="invokeForm.autoSyncMock" class="rounded border-slate-700 text-indigo-600 focus:ring-0">
+                    <span>修改起抵日期时自动同步 Mock 航班现货库</span>
+                  </label>
+                  <span class="text-indigo-400 font-mono text-[10px]">临近浮动: ±1~2天</span>
+                </div>
+              </div>
+            </template>
+
+            <!-- 2.2 航班落地交叉营销场景专属参数面板 -->
+            <template x-if="invokeForm.strategyId === 'flight_arrival_cross_sell'">
+              <div class="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-3.5 space-y-3 shadow-inner">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-indigo-300 flex items-center space-x-1.5">
+                    <i class="fa-solid fa-plane-arrival text-indigo-400"></i>
+                    <span>落地航班与周边服务参数 (联动天气与接送机 Mock)</span>
+                  </span>
+                  <button @click="syncMockDataForCurrentStrategy(true)"
+                          class="px-2 py-1 bg-indigo-600/80 hover:bg-indigo-600 text-[11px] text-white rounded-lg transition flex items-center space-x-1 shadow">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>同步 Mock 规则</span>
+                  </button>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                  <div>
+                    <label class="block text-[11px] text-slate-400 mb-1">落地航班号</label>
+                    <input type="text" x-model="invokeForm.arrivalParams.flightNo" @input="onArrivalParamsChange()"
+                           class="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] text-slate-400 mb-1">落地城市</label>
+                    <input type="text" x-model="invokeForm.arrivalParams.arrivalCity" @input="onArrivalParamsChange()"
+                           class="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] text-slate-400 mb-1">落地机场代码</label>
+                    <input type="text" x-model="invokeForm.arrivalParams.arrivalAirport" @input="onArrivalParamsChange()"
+                           class="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- 3. 用户指令 / 目标 (message) -->
             <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1">用户指令 / 目标 (message)</label>
-              <textarea x-model="invokeForm.message" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+              <div class="flex items-center justify-between mb-1">
+                <label class="text-xs font-medium text-slate-400 flex items-center space-x-1">
+                  <span>用户指令 / 目标 (message)</span>
+                  <span class="text-[10px] text-indigo-400 font-normal">（驱动 Planner/Supervisor 规划与验收的核心）</span>
+                </label>
+                <button @click="updateInvokeMessage(true)"
+                        class="text-[11px] text-slate-400 hover:text-indigo-300 flex items-center space-x-1 transition"
+                        title="依据上方所选策略与业务参数重新组装标准任务目标">
+                  <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i>
+                  <span>重置为标准目标指令</span>
+                </button>
+              </div>
+              <textarea x-model="invokeForm.message" rows="3"
+                        class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 leading-relaxed"></textarea>
+              <p class="text-[11px] text-slate-500 mt-1 flex items-center space-x-1">
+                <i class="fa-solid fa-circle-info text-[10px] text-indigo-400"></i>
+                <span>目标说明：协同规划中枢将以此指令为战略目标进行步骤拆解与执行，质检智能体据此验收交付成果。</span>
+              </p>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
+            <!-- 4. Session ID (自动生成) 与 User ID (当前 Mock 下拉可选) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <!-- Session ID: 自动化生成，无需人工输入 -->
               <div>
-                <label class="block text-xs font-medium text-slate-400 mb-1">Session ID</label>
-                <input type="text" x-model="invokeForm.sessionId" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                <div class="flex items-center justify-between mb-1">
+                  <label class="text-xs font-medium text-slate-400">Session ID (切换策略自动新生成)</label>
+                  <button @click="refreshInvokeSessionId()"
+                          class="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center space-x-1 transition"
+                          title="点击立即换新会话 ID">
+                    <i class="fa-solid fa-arrows-rotate text-[10px]"></i>
+                    <span>换新会话</span>
+                  </button>
+                </div>
+                <div class="relative">
+                  <input type="text" x-model="invokeForm.sessionId" readonly
+                         class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl px-3 py-2 text-xs font-mono text-indigo-300 cursor-default focus:outline-none select-all pr-8"
+                         title="系统自动生成，用于隔离多轮记忆与会话上下文">
+                  <button @click="copyJson(invokeForm.sessionId)" class="absolute right-2.5 top-2.5 text-slate-500 hover:text-slate-300 text-xs" title="复制">
+                    <i class="fa-regular fa-copy"></i>
+                  </button>
+                </div>
               </div>
+
+              <!-- User ID: 从当前 Mock 规则中动态下拉可选 -->
               <div>
-                <label class="block text-xs font-medium text-slate-400 mb-1">User ID</label>
-                <input type="text" x-model="invokeForm.userId" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                <div class="flex items-center justify-between mb-1">
+                  <label class="text-xs font-medium text-slate-400">旅客画像 User ID (当前 Mock 数据可选)</label>
+                  <span class="text-[10px] text-slate-500">匹配会员/历史订单画像</span>
+                </div>
+                <select x-model="invokeForm.userId" @change="onInvokeUserChange()"
+                        class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                  <template x-for="u in availableMockUsers" :key="u.id">
+                    <option :value="u.id" x-text="u.label"></option>
+                  </template>
+                  <option value="__custom__">+ 手动输入自定义 User ID...</option>
+                </select>
+                <!-- 若选择自定义 -->
+                <template x-if="invokeForm.userId === '__custom__'">
+                  <input type="text" x-model="invokeForm.customUserId" @input="updateInvokeMessage()" placeholder="输入自定义旅客 User ID (如 U9999)..."
+                         class="mt-1.5 w-full bg-slate-900 border border-indigo-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none">
+                </template>
               </div>
             </div>
 
@@ -504,266 +994,774 @@
       </div>
     </div>
 
+      <!-- ============================================== -->
+      <!-- View 4: 7 大仓储配置中心 (Config) -->
+      <div x-show="currentView === 'config'" class="space-y-6">
 
-    <!-- ============================================== -->
-    <!-- Tab 2: 7 大仓储 Mock 配置中心 -->
-    <!-- ============================================== -->
-    <div x-show="activeTab === 'config'" class="space-y-6">
-      <!-- 仓储分类切换 -->
-      <div class="flex flex-wrap gap-2 border-b border-slate-700 pb-3 items-center justify-between">
-        <div class="flex flex-wrap gap-2">
-          <button @click="configCategory = 'strategies'" :class="configCategory === 'strategies' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
-            🎯 编排策略 (strategies)
-          </button>
-          <button @click="configCategory = 'agents'" :class="configCategory === 'agents' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
-            🤖 智能体 (agents)
-          </button>
-          <button @click="configCategory = 'tools'" :class="configCategory === 'tools' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
-            🛠️ 外部工具 (tools)
-          </button>
-          <button @click="configCategory = 'models'" :class="configCategory === 'models' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
-            🧠 大模型 (models)
-          </button>
-          <button @click="configCategory = 'dict'" :class="configCategory === 'dict' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
-            📖 运行字典 (dict)
-          </button>
-        </div>
-
-        <div class="flex items-center space-x-2">
-          <!-- 搜索过滤 -->
-          <div class="relative">
-            <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2 text-xs text-slate-400"></i>
-            <input x-model="configSearchKeyword" type="text" placeholder="搜索配置项..."
-                   class="w-36 pl-7 pr-2.5 py-1 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
-          </div>
-          <button @click="openFormModal(null)" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition flex items-center space-x-1.5 shadow">
-            <i class="fa-solid fa-plus text-xs"></i>
-            <span>以表单新增</span>
-          </button>
-          <button @click="resetConfigs()" class="px-3 py-1.5 bg-rose-600/80 hover:bg-rose-600 text-white rounded-lg text-xs font-medium transition flex items-center space-x-1.5">
-            <i class="fa-solid fa-trash-arrow-up text-xs"></i>
-            <span>重置预设</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- 提示横幅 -->
-      <div class="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs text-indigo-300">
-        <div class="flex items-center space-x-2">
-          <i class="fa-solid fa-circle-info text-indigo-400 text-sm"></i>
-          <span>当前分类：<strong class="text-indigo-200" x-text="getCategoryTitle(configCategory)"></strong>。支持以字段表单形式配置与修改，保存后在列表以标准 <strong>JSON 格式</strong> 呈现查看。</span>
-        </div>
-        <button @click="triggerJavaReload()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition flex items-center space-x-1 shadow">
-          <i class="fa-solid fa-arrows-rotate text-xs"></i>
-          <span>通知 Java 立即重载生效</span>
-        </button>
-      </div>
-
-      <!-- 配置项列表卡片 (以标准 JSON 格式展示查看) -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <template x-for="(item, index) in filteredConfigItems" :key="index">
-          <div class="bg-slate-800/80 border border-slate-700 hover:border-slate-600 rounded-xl p-4 space-y-3 transition shadow-lg flex flex-col">
-            <div class="flex items-start justify-between pb-2 border-b border-slate-700/60">
-              <div>
-                <h4 class="font-bold text-slate-100 text-sm flex items-center space-x-2">
-                  <span x-text="item.strategyId || item.code || item.name || item.key"></span>
-                  <span class="text-[10px] bg-slate-700 text-indigo-300 px-2 py-0.5 rounded-full font-mono"
-                        x-text="item.flowTopologyType || item.agentType || item.domain || ''"></span>
-                </h4>
-                <p class="text-xs text-slate-400 mt-0.5 line-clamp-1"
-                   x-text="item.name ? (item.name + (item.description ? ' - ' + item.description : '')) : (item.description || item.title || item.value || '无描述')"></p>
-              </div>
-              <div class="flex items-center space-x-1.5">
-                <button @click="openFormModal(item)" class="px-2.5 py-1 text-xs bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 rounded-lg transition flex items-center space-x-1" title="按字段表单编辑">
-                  <i class="fa-regular fa-pen-to-square text-xs"></i>
-                  <span>表单配置</span>
-                </button>
-                <button @click="copyJson(item)" class="p-1.5 text-slate-400 hover:text-emerald-300 hover:bg-slate-700 rounded-lg transition" title="复制 JSON">
-                  <i class="fa-regular fa-copy"></i>
-                </button>
-                <button @click="deleteItem(item)" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-700 rounded-lg transition" title="删除">
-                  <i class="fa-regular fa-trash-can"></i>
-                </button>
-              </div>
+        <!-- 顶部操作栏 -->
+        <div class="flex flex-wrap gap-3 items-center justify-between border-b border-slate-800 pb-4">
+          <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500/20 to-purple-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30 shadow-sm">
+              <i class="fa-solid fa-database text-sm"></i>
             </div>
-
-            <!-- 标准 JSON 结构展示查看 -->
-            <div class="flex-1 flex flex-col space-y-1">
-              <div class="flex items-center justify-between text-[11px] text-slate-400 px-0.5">
-                <span class="flex items-center space-x-1">
-                  <i class="fa-solid fa-code text-[10px] text-emerald-400"></i>
-                  <span>标准 JSON 配置快照</span>
-                </span>
-                <span class="text-[10px] text-slate-500 font-mono">JSON View</span>
-              </div>
-              <pre class="bg-slate-950 p-3 rounded-xl text-xs font-mono text-emerald-400 overflow-x-auto max-h-56 border border-slate-800/80 select-all"
-                   x-text="JSON.stringify(item, null, 2)"></pre>
+            <div>
+              <h2 class="text-base font-bold text-slate-100 flex items-center space-x-2">
+                <span x-text="getCategoryTitle(configCategory)"></span>
+                <span class="text-xs font-mono bg-slate-800 text-indigo-300 px-2.5 py-0.5 rounded-full border border-slate-700" x-text="filteredConfigItems.length + ' 项'"></span>
+              </h2>
+              <p class="text-xs text-slate-400">仅展示精简核心列，右侧操作列常驻锁定。超长说明与 Prompt 请点击【详情】弹框查阅。</p>
             </div>
           </div>
-        </template>
-        <template x-if="filteredConfigItems.length === 0">
-          <div class="col-span-2 py-16 text-center text-slate-500 space-y-2">
-            <i class="fa-solid fa-inbox text-3xl"></i>
-            <p class="text-sm">暂无该分类配置项或没有匹配搜索词的内容</p>
-            <button @click="openFormModal(null)" class="text-xs text-indigo-400 hover:text-indigo-300">点击此处以表单新增一项</button>
+
+          <div class="flex items-center space-x-2.5">
+            <!-- 搜索过滤 -->
+            <div class="relative">
+              <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-400"></i>
+              <input x-model="configSearchKeyword" type="text" placeholder="搜索配置项..."
+                     class="w-48 pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+            </div>
+            <button @click="openFormModal(null)" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition flex items-center space-x-1.5 shadow">
+              <i class="fa-solid fa-plus text-xs"></i>
+              <span>以表单新增</span>
+            </button>
+            <button @click="resetConfigs()" class="px-3.5 py-1.5 bg-slate-800 hover:bg-rose-900/60 border border-slate-700 hover:border-rose-700/60 text-slate-300 hover:text-rose-200 rounded-lg text-xs transition flex items-center space-x-1.5">
+              <i class="fa-solid fa-trash-arrow-up text-xs"></i>
+              <span>重置预设</span>
+            </button>
+            <button @click="triggerJavaReload()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition flex items-center space-x-1 shadow">
+              <i class="fa-solid fa-arrows-rotate text-xs"></i>
+              <span>通知 Java 重载</span>
+            </button>
           </div>
-        </template>
+        </div>
+
+        <!-- ==================== 1. 编排策略 (Strategies) 表格 ==================== -->
+        <div x-show="configCategory === 'strategies'" class="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+          <div class="overflow-x-auto table-scroll">
+            <table class="w-full min-w-[780px] text-left text-xs text-slate-300">
+              <thead class="text-slate-400 bg-slate-950/90 border-b border-slate-800 text-[11px] uppercase tracking-wider">
+                <tr>
+                  <th class="py-3 px-4 font-semibold w-72">策略名称 / 编码标识</th>
+                  <th class="py-3 px-4 font-semibold w-28">拓扑架构</th>
+                  <th class="py-3 px-4 font-semibold w-24">步数</th>
+                  <th class="py-3 px-4 font-semibold">挂载资源 (工具 / Expert)</th>
+                  <th class="py-3 px-4 font-semibold text-right w-44 sticky-action-th">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60">
+                <template x-for="(item, index) in filteredConfigItems" :key="index">
+                  <tr class="hover:bg-slate-800/40 transition group">
+                    <td class="py-3 px-4">
+                      <div class="flex flex-col space-y-1">
+                        <span class="font-bold text-slate-100 text-xs tracking-wide" x-text="item.name || item.strategyId"></span>
+                        <div>
+                          <span class="font-mono text-[10px] text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded inline-block"
+                                x-text="item.strategyId"></span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="py-3 px-4">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                            x-text="item.flowTopologyType || 'REACT'"></span>
+                    </td>
+                    <td class="py-3 px-4 font-mono text-slate-300 font-medium" x-text="(item.maxStep || 10) + ' 步'"></td>
+                    <td class="py-3 px-4">
+                      <div class="flex items-center space-x-1.5">
+                        <span class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-mono"
+                              x-text="(item.toolCodes ? item.toolCodes.length : 0) + ' 工具'"></span>
+                        <span class="px-2 py-0.5 rounded text-[10px] bg-purple-500/10 text-purple-300 border border-purple-500/20 font-mono"
+                              x-text="((item.expertCodes || item.workerCodes || []).length) + ' Expert'"></span>
+                      </div>
+                    </td>
+                    <td class="py-3 px-4 text-right whitespace-nowrap sticky-action-td">
+                      <div class="flex items-center justify-end space-x-1.5">
+                        <button @click="openDetailModal(item)" class="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg transition flex items-center space-x-1 border border-slate-700 shadow-sm" title="弹框查看结构化详情与快照">
+                          <i class="fa-regular fa-eye text-xs"></i>
+                          <span>详情</span>
+                        </button>
+                        <button @click="openFormModal(item)" class="px-2.5 py-1 text-xs bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 rounded-lg transition flex items-center space-x-1" title="按字段表单编辑">
+                          <i class="fa-regular fa-pen-to-square text-xs"></i>
+                          <span>编辑</span>
+                        </button>
+                        <button @click="copyJson(item)" class="p-1.5 text-slate-400 hover:text-emerald-300 hover:bg-slate-800 rounded-lg transition" title="复制 JSON">
+                          <i class="fa-regular fa-copy"></i>
+                        </button>
+                        <button @click="deleteItem(item)" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition" title="删除">
+                          <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+                <template x-if="filteredConfigItems.length === 0">
+                  <tr>
+                    <td colspan="5" class="py-16 text-center text-slate-500">暂无策略配置项</td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ==================== 2. 业务智能体 (Agents) 表格 ==================== -->
+        <div x-show="configCategory === 'agents'" class="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+          <div class="overflow-x-auto table-scroll">
+            <table class="w-full min-w-[780px] text-left text-xs text-slate-300">
+              <thead class="text-slate-400 bg-slate-950/90 border-b border-slate-800 text-[11px] uppercase tracking-wider">
+                <tr>
+                  <th class="py-3 px-4 font-semibold w-72">智能体名称 / 编码标识</th>
+                  <th class="py-3 px-4 font-semibold w-28">类型</th>
+                  <th class="py-3 px-4 font-semibold w-40">挂载模型</th>
+                  <th class="py-3 px-4 font-semibold">超参配置</th>
+                  <th class="py-3 px-4 font-semibold text-right w-44 sticky-action-th">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60">
+                <template x-for="(item, index) in filteredConfigItems" :key="index">
+                  <tr class="hover:bg-slate-800/40 transition group">
+                    <td class="py-3 px-4">
+                      <div class="flex flex-col space-y-1">
+                        <span class="font-bold text-slate-100 text-xs tracking-wide" x-text="item.name"></span>
+                        <div>
+                          <span class="font-mono text-[10px] text-purple-400 bg-purple-500/10 border border-purple-500/20 px-1.5 py-0.5 rounded inline-block"
+                                x-text="item.code"></span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="py-3 px-4">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold"
+                            :class="item.agentType === 'EXPERT' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'"
+                            x-text="item.agentType"></span>
+                    </td>
+                    <td class="py-3 px-4">
+                      <span class="font-mono text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded text-[11px]" x-text="item.model || '默认模型'"></span>
+                    </td>
+                    <td class="py-3 px-4 text-slate-300 font-mono text-[11px]" x-text="'T:' + (item.temperature ?? 0.2) + ' · ' + (item.maxTokens || 2048) + 'tk'"></td>
+                    <td class="py-3 px-4 text-right whitespace-nowrap sticky-action-td">
+                      <div class="flex items-center justify-end space-x-1.5">
+                        <button @click="openDetailModal(item)" class="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg transition flex items-center space-x-1 border border-slate-700 shadow-sm" title="弹框查看结构化详情与快照">
+                          <i class="fa-regular fa-eye text-xs"></i>
+                          <span>详情</span>
+                        </button>
+                        <button @click="openFormModal(item)" class="px-2.5 py-1 text-xs bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 rounded-lg transition flex items-center space-x-1" title="按字段表单编辑">
+                          <i class="fa-regular fa-pen-to-square text-xs"></i>
+                          <span>编辑</span>
+                        </button>
+                        <button @click="copyJson(item)" class="p-1.5 text-slate-400 hover:text-emerald-300 hover:bg-slate-800 rounded-lg transition" title="复制 JSON">
+                          <i class="fa-regular fa-copy"></i>
+                        </button>
+                        <button @click="deleteItem(item)" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition" title="删除">
+                          <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+                <template x-if="filteredConfigItems.length === 0">
+                  <tr>
+                    <td colspan="5" class="py-16 text-center text-slate-500">暂无智能体配置项</td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ==================== 3. 外部工具 (Tools) 表格 ==================== -->
+        <div x-show="configCategory === 'tools'" class="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+          <div class="overflow-x-auto table-scroll">
+            <table class="w-full min-w-[780px] text-left text-xs text-slate-300">
+              <thead class="text-slate-400 bg-slate-950/90 border-b border-slate-800 text-[11px] uppercase tracking-wider">
+                <tr>
+                  <th class="py-3 px-4 font-semibold w-72">工具中文名 / 编码标识</th>
+                  <th class="py-3 px-4 font-semibold w-24">协议</th>
+                  <th class="py-3 px-4 font-semibold">服务调用端点 (Endpoint)</th>
+                  <th class="py-3 px-4 font-semibold text-right w-44 sticky-action-th">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60">
+                <template x-for="(item, index) in filteredConfigItems" :key="index">
+                  <tr class="hover:bg-slate-800/40 transition group">
+                    <td class="py-3 px-4">
+                      <div class="flex flex-col space-y-1">
+                        <span class="font-bold text-slate-100 text-xs tracking-wide" x-text="item.title || item.name"></span>
+                        <div>
+                          <span class="font-mono text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded inline-block"
+                                x-text="item.name"></span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="py-3 px-4">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30" x-text="item.method || 'POST'"></span>
+                    </td>
+                    <td class="py-3 px-4">
+                      <code class="font-mono text-indigo-300 bg-slate-950 px-2 py-1 rounded text-[11px] border border-slate-800/80 inline-block max-w-md truncate" x-text="item.endpoint"></code>
+                    </td>
+                    <td class="py-3 px-4 text-right whitespace-nowrap sticky-action-td">
+                      <div class="flex items-center justify-end space-x-1.5">
+                        <button @click="openDetailModal(item)" class="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg transition flex items-center space-x-1 border border-slate-700 shadow-sm" title="弹框查看结构化详情与快照">
+                          <i class="fa-regular fa-eye text-xs"></i>
+                          <span>详情</span>
+                        </button>
+                        <button @click="openFormModal(item)" class="px-2.5 py-1 text-xs bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 rounded-lg transition flex items-center space-x-1" title="按字段表单编辑">
+                          <i class="fa-regular fa-pen-to-square text-xs"></i>
+                          <span>编辑</span>
+                        </button>
+                        <button @click="copyJson(item)" class="p-1.5 text-slate-400 hover:text-emerald-300 hover:bg-slate-800 rounded-lg transition" title="复制 JSON">
+                          <i class="fa-regular fa-copy"></i>
+                        </button>
+                        <button @click="deleteItem(item)" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition" title="删除">
+                          <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+                <template x-if="filteredConfigItems.length === 0">
+                  <tr>
+                    <td colspan="4" class="py-16 text-center text-slate-500">暂无外部工具配置项</td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ==================== 4. 大模型接入 (Models) 表格 ==================== -->
+        <div x-show="configCategory === 'models'" class="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+          <div class="overflow-x-auto table-scroll">
+            <table class="w-full min-w-[780px] text-left text-xs text-slate-300">
+              <thead class="text-slate-400 bg-slate-950/90 border-b border-slate-800 text-[11px] uppercase tracking-wider">
+                <tr>
+                  <th class="py-3 px-4 font-semibold w-64">模型别名 / 编码标识</th>
+                  <th class="py-3 px-4 font-semibold w-40">实际 Model Name</th>
+                  <th class="py-3 px-4 font-semibold w-28">Context 上限</th>
+                  <th class="py-3 px-4 font-semibold">能力标签</th>
+                  <th class="py-3 px-4 font-semibold text-right w-44 sticky-action-th">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60">
+                <template x-for="(item, index) in filteredConfigItems" :key="index">
+                  <tr class="hover:bg-slate-800/40 transition group">
+                    <td class="py-3 px-4">
+                      <div class="flex flex-col space-y-1">
+                        <span class="font-bold text-slate-100 text-xs tracking-wide" x-text="item.name || item.code"></span>
+                        <div>
+                          <span class="font-mono text-[10px] text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-1.5 py-0.5 rounded inline-block"
+                                x-text="item.code"></span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="py-3 px-4 font-mono text-amber-300 font-semibold" x-text="item.modelName || item.code"></td>
+                    <td class="py-3 px-4 font-mono text-indigo-300" x-text="(item.contextMaxTokens ? (item.contextMaxTokens/1000) + 'k' : '64k') + ' tk'"></td>
+                    <td class="py-3 px-4">
+                      <div class="flex flex-wrap gap-1">
+                        <template x-for="tag in (Array.isArray(item.tags) ? item.tags : (item.tags || '').split(',').map(s=>s.trim()).filter(Boolean))" :key="tag">
+                          <span class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.2 rounded border border-slate-700" x-text="tag"></span>
+                        </template>
+                      </div>
+                    </td>
+                    <td class="py-3 px-4 text-right whitespace-nowrap sticky-action-td">
+                      <div class="flex items-center justify-end space-x-1.5">
+                        <button @click="openDetailModal(item)" class="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg transition flex items-center space-x-1 border border-slate-700 shadow-sm" title="弹框查看结构化详情与快照">
+                          <i class="fa-regular fa-eye text-xs"></i>
+                          <span>详情</span>
+                        </button>
+                        <button @click="openFormModal(item)" class="px-2.5 py-1 text-xs bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 rounded-lg transition flex items-center space-x-1" title="按字段表单编辑">
+                          <i class="fa-regular fa-pen-to-square text-xs"></i>
+                          <span>编辑</span>
+                        </button>
+                        <button @click="copyJson(item)" class="p-1.5 text-slate-400 hover:text-emerald-300 hover:bg-slate-800 rounded-lg transition" title="复制 JSON">
+                          <i class="fa-regular fa-copy"></i>
+                        </button>
+                        <button @click="deleteItem(item)" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition" title="删除">
+                          <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+                <template x-if="filteredConfigItems.length === 0">
+                  <tr>
+                    <td colspan="5" class="py-16 text-center text-slate-500">暂无大模型配置项</td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ==================== 5. 运行字典 (Dict) 表格 (重点紧凑优化) ==================== -->
+        <div x-show="configCategory === 'dict'" class="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+          <div class="overflow-x-auto table-scroll">
+            <table class="w-full min-w-[680px] text-left text-xs text-slate-300">
+              <thead class="text-slate-400 bg-slate-950/90 border-b border-slate-800 text-[11px] uppercase tracking-wider">
+                <tr>
+                  <th class="py-3 px-4 font-semibold w-64">配置参数键 (Key)</th>
+                  <th class="py-3 px-4 font-semibold w-40">取值 (Value)</th>
+                  <th class="py-3 px-4 font-semibold">业务规则与说明</th>
+                  <th class="py-3 px-4 font-semibold text-right w-44 sticky-action-th">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60">
+                <template x-for="(item, index) in filteredConfigItems" :key="index">
+                  <tr class="hover:bg-slate-800/40 transition group">
+                    <td class="py-3 px-4">
+                      <span class="font-mono text-indigo-300 font-bold tracking-wide" x-text="item.key"></span>
+                    </td>
+                    <td class="py-3 px-4">
+                      <code class="font-mono text-emerald-400 bg-slate-950 px-2 py-1 rounded text-[11px] border border-slate-800/80 inline-block truncate max-w-[150px]" x-text="item.value"></code>
+                    </td>
+                    <td class="py-3 px-4 text-slate-400">
+                      <span class="truncate block max-w-md" x-text="item.description || '全局运行参数'"></span>
+                    </td>
+                    <td class="py-3 px-4 text-right whitespace-nowrap sticky-action-td">
+                      <div class="flex items-center justify-end space-x-1.5">
+                        <button @click="openDetailModal(item)" class="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg transition flex items-center space-x-1 border border-slate-700 shadow-sm" title="弹框查看结构化详情与快照">
+                          <i class="fa-regular fa-eye text-xs"></i>
+                          <span>详情</span>
+                        </button>
+                        <button @click="openFormModal(item)" class="px-2.5 py-1 text-xs bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 rounded-lg transition flex items-center space-x-1" title="按字段表单编辑">
+                          <i class="fa-regular fa-pen-to-square text-xs"></i>
+                          <span>编辑</span>
+                        </button>
+                        <button @click="copyJson(item)" class="p-1.5 text-slate-400 hover:text-emerald-300 hover:bg-slate-800 rounded-lg transition" title="复制 JSON">
+                          <i class="fa-regular fa-copy"></i>
+                        </button>
+                        <button @click="deleteItem(item)" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition" title="删除">
+                          <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+                <template x-if="filteredConfigItems.length === 0">
+                  <tr>
+                    <td colspan="4" class="py-16 text-center text-slate-500">暂无运行字典配置项</td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
-    </div>
 
+      <!-- View 5: Mock 仿真中心 (Rules & Tester) -->
+      <!-- ============================================== -->
+      <!-- ============================================== -->
+    <!-- ============================================== -->
+    <!-- View 5A: 动态 Mock 规则管理中心 (Mock Rules) -->
+    <!-- ============================================== -->
+    <div x-show="currentView === 'mock-rules'" class="space-y-6">
 
-    <!-- ============================================== -->
-    <!-- Tab: 工具 Mock 规则管理与动态匹配中心 -->
-    <!-- ============================================== -->
-    <div x-show="activeTab === 'mock'" class="space-y-6">
-      <div class="flex items-center justify-between border-b border-slate-700 pb-3">
+      <!-- 顶部操作栏 -->
+      <div class="flex flex-wrap gap-3 items-center justify-between border-b border-slate-800 pb-4">
         <div>
-          <h2 class="text-base font-bold text-slate-200 flex items-center space-x-2">
+          <h2 class="text-base font-bold text-slate-100 flex items-center space-x-2">
             <i class="fa-solid fa-vial-virus text-indigo-400"></i>
-            <span>工具 Mock 规则中心与动态匹配引擎</span>
+            <span>动态 Mock 规则管理中心</span>
+            <span class="text-xs font-normal text-slate-400 bg-slate-800 border border-slate-700/80 px-2.5 py-0.5 rounded-full"
+                  x-text="'共 ' + (mockRules.length || 0) + ' 条规则'"></span>
           </h2>
-          <p class="text-xs text-slate-400 mt-0.5">支持依据不同入参返回不同业务场景的 Mock 数据，满足多城市天气、高净值/价格敏感画像及落地供给测试</p>
+          <p class="text-xs text-slate-400 mt-1">按工具编码与入参条件配置仿真响应，支持多城市天气、高净值/价格敏感画像及履约供给规则</p>
         </div>
-        <div class="flex items-center space-x-3">
-          <button @click="resetMockRules()" class="px-3 py-1.5 text-xs bg-slate-700/80 hover:bg-slate-700 text-slate-300 rounded-xl transition flex items-center space-x-1.5">
+
+        <div class="flex items-center space-x-2.5">
+          <button @click="switchView('mock-tester')"
+                  class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 shadow-sm">
+            <i class="fa-solid fa-vial text-amber-400"></i>
+            <span>前往测试台调试</span>
+          </button>
+          <button @click="resetMockRules()"
+                  class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-medium transition flex items-center space-x-1.5">
             <i class="fa-solid fa-rotate-left"></i>
             <span>重置预设规则</span>
           </button>
-          <button @click="openMockModal(null)" class="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition flex items-center space-x-1.5 shadow-lg shadow-indigo-600/30">
+          <button @click="openMockModal(null)"
+                  class="px-3.5 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-semibold transition flex items-center space-x-1.5 shadow-lg shadow-indigo-600/30">
             <i class="fa-solid fa-plus"></i>
             <span>新增 Mock 规则</span>
           </button>
         </div>
       </div>
 
-      <!-- 工具快速筛选与即时测试抽屉 -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- 左侧 2 列: 规则列表 -->
-        <div class="lg:col-span-2 space-y-4">
-          <!-- 工具筛选 Tab -->
-          <div class="flex space-x-2 border-b border-slate-800 pb-2 overflow-x-auto">
-            <button @click="mockFilterTool = ''" :class="mockFilterTool === '' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200 bg-slate-800/60'" class="px-3 py-1 rounded-lg text-xs font-medium transition">
-              全部工具
+      <!-- 工具快捷分类与搜索过滤 -->
+      <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+        <!-- 工具过滤 Tab -->
+        <div class="flex items-center space-x-1.5 overflow-x-auto max-w-2xl py-0.5">
+          <button @click="mockFilterTool = ''"
+                  :class="mockFilterTool === '' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200 bg-slate-800/80 hover:bg-slate-800'"
+                  class="px-3 py-1 rounded-lg text-xs font-medium transition whitespace-nowrap">
+            全部工具 (<span x-text="mockRules.length || 0"></span>)
+          </button>
+          <template x-for="t in (configs.tools || [])" :key="t.name">
+            <button @click="mockFilterTool = t.name"
+                    :class="mockFilterTool === t.name ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200 bg-slate-800/80 hover:bg-slate-800'"
+                    class="px-3 py-1 rounded-lg text-xs font-medium transition whitespace-nowrap flex items-center space-x-1">
+              <span x-text="t.name"></span>
+              <span class="text-[10px] opacity-70" x-text="'(' + (mockRules.filter(r => r.toolCode === t.name).length) + ')'"></span>
             </button>
-            <template x-for="t in (configs.tools || [])" :key="t.name">
-              <button @click="mockFilterTool = t.name" :class="mockFilterTool === t.name ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200 bg-slate-800/60'" class="px-3 py-1 rounded-lg text-xs font-medium transition whitespace-nowrap" x-text="t.name">
-              </button>
-            </template>
-          </div>
-
-          <!-- 规则卡片列表 -->
-          <div class="space-y-3">
-            <template x-for="rule in filteredMockRules" :key="rule.id">
-              <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-4 shadow-lg hover:border-slate-600 transition">
-                <div class="flex items-start justify-between">
-                  <div class="space-y-1">
-                    <div class="flex items-center space-x-2">
-                      <span class="px-2 py-0.5 rounded text-xs font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30" x-text="rule.toolCode"></span>
-                      <span class="text-sm font-semibold text-slate-200" x-text="rule.description || rule.id"></span>
-                      <span class="px-2 py-0.5 rounded text-[10px] font-bold" :class="rule.responseStatus === 200 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'" x-text="'HTTP ' + (rule.responseStatus || 200)"></span>
-                    </div>
-                  </div>
-                  <div class="flex items-center space-x-2">
-                    <button @click="toggleMockRule(rule)" class="text-xs px-2.5 py-1 rounded-lg transition" :class="rule.enabled ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'" x-text="rule.enabled ? '已启用' : '已停用'"></button>
-                    <button @click="openMockModal(rule)" class="p-1.5 text-slate-400 hover:text-indigo-300 rounded-lg hover:bg-slate-700 transition" title="编辑规则">
-                      <i class="fa-regular fa-pen-to-square"></i>
-                    </button>
-                    <button @click="deleteMockRule(rule.id)" class="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-700 transition" title="删除规则">
-                      <i class="fa-regular fa-trash-can"></i>
-                    </button>
-                  </div>
-                </div>
-
-                <!-- 匹配条件与返回示例 -->
-                <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div class="bg-slate-900/80 rounded-xl p-2.5 border border-slate-800">
-                    <span class="text-slate-400 block mb-1 font-medium flex items-center space-x-1">
-                      <i class="fa-solid fa-filter text-amber-400 text-[10px]"></i>
-                      <span>入参匹配条件 (matchParams)</span>
-                    </span>
-                    <pre class="text-slate-300 font-mono text-[11px] overflow-x-auto whitespace-pre-wrap" x-text="JSON.stringify(rule.matchParams || {}, null, 2)"></pre>
-                  </div>
-                  <div class="bg-slate-900/80 rounded-xl p-2.5 border border-slate-800">
-                    <span class="text-slate-400 block mb-1 font-medium flex items-center space-x-1">
-                      <i class="fa-solid fa-reply text-indigo-400 text-[10px]"></i>
-                      <span>模拟返回数据 (responseData)</span>
-                    </span>
-                    <pre class="text-slate-300 font-mono text-[11px] overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap" x-text="JSON.stringify(rule.responseData || {}, null, 2)"></pre>
-                  </div>
-                </div>
-              </div>
-            </template>
-
-            <template x-if="filteredMockRules.length === 0">
-              <div class="text-center py-12 text-slate-500 bg-slate-800/30 rounded-2xl border border-slate-800">
-                <i class="fa-solid fa-vial-circle-check text-4xl mb-3 text-slate-600 block"></i>
-                <p class="text-sm">暂无匹配的 Mock 规则</p>
-                <button @click="openMockModal(null)" class="text-xs text-indigo-400 hover:text-indigo-300 mt-1">点击新增一条规则</button>
-              </div>
-            </template>
-          </div>
+          </template>
         </div>
 
-        <!-- 右侧 1 列: 在线快速测试与调试 -->
-        <div class="space-y-4">
-          <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5 shadow-xl space-y-4">
-            <h3 class="font-semibold text-slate-200 flex items-center space-x-2">
-              <i class="fa-solid fa-vial text-indigo-400"></i>
-              <span>在线调用测试台</span>
-            </h3>
-            <p class="text-xs text-slate-400">直接模拟入参向 Mock 服务发起探测，验证规则命中效果</p>
+        <!-- 搜索输入框 -->
+        <div class="relative w-72">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-500"></i>
+          <input type="text" x-model="mockSearchQuery" placeholder="搜索规则说明、工具编码或参数..."
+                 class="w-full bg-slate-950 border border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
+          <button x-show="mockSearchQuery" @click="mockSearchQuery = ''" class="absolute right-2.5 top-2 text-xs text-slate-500 hover:text-slate-300">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
 
+      <!-- Mock 规则核心表格 (按配置中心模式: 列表 + 详情/编辑弹窗 + 水平滚动 + 粘性操作列) -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+        <div class="overflow-x-auto table-scroll">
+          <table class="w-full min-w-[960px] text-left text-xs text-slate-300">
+            <thead class="text-slate-400 bg-slate-950/90 border-b border-slate-800 text-[11px] uppercase tracking-wider">
+              <tr>
+                <th class="py-3 px-4 font-semibold w-72">规则说明与编码 (Rule & ID)</th>
+                <th class="py-3 px-4 font-semibold w-48">所属工具 (Tool Code)</th>
+                <th class="py-3 px-4 font-semibold">入参匹配条件 (Match Criteria)</th>
+                <th class="py-3 px-4 font-semibold w-36">响应状态 / 权重</th>
+                <th class="py-3 px-4 font-semibold w-28">生效状态</th>
+                <th class="py-3 px-4 font-semibold text-right w-52 sticky-action-th">操作</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60">
+              <template x-for="rule in filteredMockRules" :key="rule.id">
+                <tr class="hover:bg-slate-800/40 transition group">
+                  <!-- 1. 规则说明与编码 -->
+                  <td class="py-3 px-4">
+                    <div class="space-y-0.5">
+                      <div class="font-semibold text-slate-100 text-xs" x-text="rule.description || '自定义 Mock 规则'"></div>
+                      <div class="text-[11px] font-mono text-slate-500" x-text="rule.id"></div>
+                    </div>
+                  </td>
+
+                  <!-- 2. 所属工具 -->
+                  <td class="py-3 px-4">
+                    <span class="px-2 py-0.5 rounded text-xs font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 inline-block"
+                          x-text="rule.toolCode"></span>
+                  </td>
+
+                  <!-- 3. 入参匹配条件 -->
+                  <td class="py-3 px-4">
+                    <template x-if="rule.matchParams && Object.keys(rule.matchParams).length > 0">
+                      <div class="flex flex-wrap gap-1">
+                        <template x-for="(v, k) in rule.matchParams" :key="k">
+                          <span class="inline-flex items-center space-x-1 bg-slate-950/80 border border-slate-800 text-amber-300 px-2 py-0.5 rounded text-[11px] font-mono">
+                            <span class="text-slate-400" x-text="k + ':'"></span>
+                            <span x-text="typeof v === 'string' ? '&quot;' + v + '&quot;' : v"></span>
+                          </span>
+                        </template>
+                      </div>
+                    </template>
+                    <template x-if="!rule.matchParams || Object.keys(rule.matchParams).length === 0">
+                      <span class="inline-flex items-center space-x-1 text-slate-500 text-[11px] italic bg-slate-800/40 px-2 py-0.5 rounded border border-slate-800/60">
+                        <i class="fa-solid fa-asterisk text-[9px]"></i>
+                        <span>默认兜底规则 (任意入参匹配)</span>
+                      </span>
+                    </template>
+                  </td>
+
+                  <!-- 4. 响应状态 / 权重 -->
+                  <td class="py-3 px-4">
+                    <div class="flex items-center space-x-2">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold"
+                            :class="rule.responseStatus === 200 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'"
+                            x-text="'HTTP ' + (rule.responseStatus || 200)"></span>
+                      <span class="text-[10px] text-slate-400 font-mono" x-text="'权重 ' + (rule.priority || 10)"></span>
+                    </div>
+                  </td>
+
+                  <!-- 5. 生效状态 -->
+                  <td class="py-3 px-4">
+                    <button @click="toggleMockRule(rule)"
+                            :class="rule.enabled ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border-emerald-500/30' : 'bg-slate-800 text-slate-500 hover:bg-slate-700 border-slate-700'"
+                            class="px-2.5 py-1 rounded-lg text-xs font-medium border transition flex items-center space-x-1.5">
+                      <i class="fa-solid" :class="rule.enabled ? 'fa-check text-emerald-400' : 'fa-power-off text-slate-500'"></i>
+                      <span x-text="rule.enabled ? '已启用' : '已停用'"></span>
+                    </button>
+                  </td>
+
+                  <!-- 6. 操作 (粘性悬浮固定) -->
+                  <td class="py-3 px-4 text-right whitespace-nowrap sticky-action-td">
+                    <div class="flex items-center justify-end space-x-1.5">
+                      <button @click="openMockDetail(rule)"
+                              class="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg transition flex items-center space-x-1 border border-slate-700 shadow-sm"
+                              title="弹窗查看匹配规则与返回报文详情">
+                        <i class="fa-regular fa-eye text-xs"></i>
+                        <span>详情</span>
+                      </button>
+                      <button @click="openMockModal(rule)"
+                              class="px-2.5 py-1 text-xs bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 rounded-lg transition flex items-center space-x-1"
+                              title="编辑 Mock 规则">
+                        <i class="fa-regular fa-pen-to-square text-xs"></i>
+                        <span>编辑</span>
+                      </button>
+                      <button @click="jumpToMockTester(rule)"
+                              class="p-1.5 text-slate-400 hover:text-amber-300 hover:bg-slate-800 rounded-lg transition"
+                              title="带参跳转至测试台调试验证">
+                        <i class="fa-solid fa-flask-vial"></i>
+                      </button>
+                      <button @click="copyJson(rule)"
+                              class="p-1.5 text-slate-400 hover:text-emerald-300 hover:bg-slate-800 rounded-lg transition"
+                              title="复制完整规则 JSON">
+                        <i class="fa-regular fa-copy"></i>
+                      </button>
+                      <button @click="deleteMockRule(rule.id)"
+                              class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition"
+                              title="删除规则">
+                        <i class="fa-regular fa-trash-can"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+
+              <template x-if="filteredMockRules.length === 0">
+                <tr>
+                  <td colspan="6" class="py-16 text-center text-slate-500">
+                    <i class="fa-solid fa-vial-circle-check text-4xl mb-3 text-slate-600 block"></i>
+                    <p class="text-sm">暂无匹配的 Mock 规则</p>
+                    <button @click="openMockModal(null)" class="text-xs text-indigo-400 hover:text-indigo-300 mt-1">点击新增一条规则</button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================== -->
+    <!-- View 5B: 规则匹配测试台 (Mock Tester - 独立调试页面) -->
+    <!-- ============================================== -->
+    <div x-show="currentView === 'mock-tester'" class="space-y-6">
+
+      <!-- 顶部标题与返回操作栏 -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-100 flex items-center space-x-2">
+            <i class="fa-solid fa-vial text-indigo-400"></i>
+            <span>规则匹配与即时测试台 (Mock Tester)</span>
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">模拟外部工具调用并向 Python Mock 引擎发起实时探测，验证入参规则匹配优先级、命中结果及响应数据</p>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button @click="switchView('mock-rules')"
+                  class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 shadow-sm">
+            <i class="fa-solid fa-list-check text-xs"></i>
+            <span>返回规则管理列表</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 调试工作台: 双列布局 (左侧参数构造器，右侧命中诊断报告) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+        <!-- 左侧 5 列: 测试入参构造与场景用例 -->
+        <div class="lg:col-span-5 space-y-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+            <h3 class="font-bold text-slate-200 text-sm flex items-center space-x-2 border-b border-slate-800 pb-2.5">
+              <i class="fa-solid fa-sliders text-indigo-400"></i>
+              <span>测试目标与入参构造</span>
+            </h3>
+
+            <!-- 目标工具选择 -->
             <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1">测试工具</label>
-              <select x-model="mockTestTool" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+              <label class="block text-xs font-medium text-slate-400 mb-1.5">目标测试工具 (Target Tool)</label>
+              <select x-model="mockTestTool"
+                      class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
                 <template x-for="t in (configs.tools || [])" :key="t.name">
-                  <option :value="t.name" x-text="t.name + ' (' + t.title + ')'"></option>
+                  <option :value="t.name" x-text="t.name + ' (' + (t.title || '外部工具') + ')'"></option>
                 </template>
               </select>
             </div>
 
+            <!-- 场景预设用例快捷填充 -->
             <div>
-              <div class="flex items-center justify-between mb-1">
-                <label class="text-xs font-medium text-slate-400">模拟请求入参 (JSON)</label>
-                <div class="flex space-x-1 text-[11px]">
-                  <button @click="mockTestPayload = '{\"city\": \"上海\", \"airportCode\": \"SHA\"}'" class="text-indigo-400 hover:text-indigo-300">上海</button>
-                  <span class="text-slate-600">|</span>
-                  <button @click="mockTestPayload = '{\"city\": \"北京\", \"airportCode\": \"PEK\"}'" class="text-indigo-400 hover:text-indigo-300">北京</button>
-                  <span class="text-slate-600">|</span>
-                  <button @click="mockTestPayload = '{\"userId\": \"U8801\"}'" class="text-indigo-400 hover:text-indigo-300">U8801</button>
-                  <span class="text-slate-600">|</span>
-                  <button @click="mockTestPayload = '{\"userId\": \"VIP001\"}'" class="text-indigo-400 hover:text-indigo-300">VIP001</button>
-                </div>
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="text-xs font-medium text-slate-400">快捷用例场景 (点击自动填充)</label>
+                <span class="text-[11px] text-slate-500">高频场景推荐</span>
               </div>
-              <textarea x-model="mockTestPayload" rows="4" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+              <div class="flex flex-wrap gap-1.5">
+                <button @click="setMockPreset('query_weather_tool', {city: '上海', airportCode: 'SHA'})"
+                        class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 hover:text-white text-slate-300 rounded-lg text-[11px] transition border border-slate-700/80">
+                  🌧 上海夜间暴雨
+                </button>
+                <button @click="setMockPreset('query_weather_tool', {city: '北京', airportCode: 'PEK'})"
+                        class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 hover:text-white text-slate-300 rounded-lg text-[11px] transition border border-slate-700/80">
+                  ☀ 北京晴朗商务
+                </button>
+                <button @click="setMockPreset('query_weather_tool', {city: '广州', airportCode: 'CAN'})"
+                        class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 hover:text-white text-slate-300 rounded-lg text-[11px] transition border border-slate-700/80">
+                  ⛅ 广州白天多云
+                </button>
+                <button @click="setMockPreset('query_user_profile_tool', {userId: 'VIP001'})"
+                        class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 hover:text-white text-slate-300 rounded-lg text-[11px] transition border border-slate-700/80">
+                  👑 VIP001 高净值
+                </button>
+                <button @click="setMockPreset('query_user_profile_tool', {userId: 'U8801'})"
+                        class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 hover:text-white text-slate-300 rounded-lg text-[11px] transition border border-slate-700/80">
+                  💰 U8801 价格敏感
+                </button>
+                <button @click="setMockPreset('query_arrival_services_tool', {airportCode: 'SHA', serviceType: 'CAR'})"
+                        class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 hover:text-white text-slate-300 rounded-lg text-[11px] transition border border-slate-700/80">
+                  🚗 虹桥接驳专车
+                </button>
+              </div>
             </div>
 
-            <button @click="runMockTest()" :disabled="isTestingMock" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-sm font-medium transition shadow-lg shadow-indigo-600/30 flex items-center justify-center space-x-2">
-              <i class="fa-solid fa-play" :class="isTestingMock ? 'fa-spin' : ''"></i>
-              <span x-text="isTestingMock ? '正在匹配...' : '立即测试匹配'"></span>
-            </button>
-
-            <!-- 测试结果展示 -->
-            <template x-if="mockTestResult">
-              <div class="bg-slate-900 border border-slate-700 rounded-xl p-3 space-y-2 text-xs">
-                <div class="flex items-center justify-between">
-                  <span class="font-semibold text-slate-300">命中结果:</span>
-                  <span class="px-2 py-0.5 rounded text-[10px] font-bold" :class="mockTestResult.matched ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'" x-text="mockTestResult.matched ? '命中自定义规则' : '兜底默认规则'"></span>
+            <!-- 模拟请求入参 (JSON) -->
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="text-xs font-medium text-slate-400">请求入参 JSON Payload</label>
+                <div class="space-x-2 text-[11px]">
+                  <button @click="formatTestPayload()" class="text-indigo-400 hover:text-indigo-300">
+                    <i class="fa-solid fa-align-left mr-0.5"></i>格式化
+                  </button>
+                  <button @click="mockTestPayload = '{\n  \n}'" class="text-slate-500 hover:text-slate-300">
+                    清空
+                  </button>
                 </div>
-                <div class="text-slate-400" x-text="mockTestResult.description"></div>
-                <pre class="bg-slate-950 p-2.5 rounded-lg font-mono text-[11px] text-emerald-300 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap" x-text="JSON.stringify(mockTestResult.responseData, null, 2)"></pre>
+              </div>
+              <textarea x-model="mockTestPayload" rows="7"
+                        class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs font-mono text-emerald-300 focus:outline-none focus:border-indigo-500 shadow-inner select-all"></textarea>
+            </div>
+
+            <!-- 触发探测按钮 -->
+            <button @click="runMockTest()" :disabled="isTestingMock"
+                    class="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition shadow-lg shadow-indigo-600/30 flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-play" :class="isTestingMock ? 'fa-spin' : ''"></i>
+              <span x-text="isTestingMock ? '正在匹配规则...' : '立即测试匹配规则'"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 右侧 7 列: 命中诊断报告与返回数据 -->
+        <div class="lg:col-span-7 space-y-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <h3 class="font-bold text-slate-200 text-sm flex items-center space-x-2">
+                <i class="fa-solid fa-square-poll-vertical text-emerald-400"></i>
+                <span>匹配诊断报告与返回报文</span>
+              </h3>
+              <template x-if="mockTestResult">
+                <button @click="mockTestResult = null" class="text-xs text-slate-500 hover:text-slate-300">
+                  <i class="fa-solid fa-trash-can mr-1"></i>清空报告
+                </button>
+              </template>
+            </div>
+
+            <!-- 未执行测试时的就绪占位卡片 -->
+            <template x-if="!mockTestResult">
+              <div class="py-16 text-center text-slate-500 space-y-3">
+                <i class="fa-solid fa-vial text-4xl text-slate-600 block"></i>
+                <div class="text-sm font-medium text-slate-400">等待触发探测</div>
+                <p class="text-xs text-slate-500 max-w-md mx-auto">
+                  请在左侧选择目标工具并输入测试入参，点击【立即测试匹配规则】，系统将实时通过 Python Mock 引擎匹配规则链条并返回诊断结果。
+                </p>
+                <div class="pt-2 text-[11px] text-slate-600">
+                  当前加载了 <span class="text-indigo-400 font-bold" x-text="mockRules.length"></span> 条动态 Mock 规则
+                </div>
+              </div>
+            </template>
+
+            <!-- 已返回测试结果的完整展示 -->
+            <template x-if="mockTestResult">
+              <div class="space-y-4">
+                <!-- 命中状态判定卡片 -->
+                <div :class="mockTestResult.matched ? 'bg-emerald-950/30 border-emerald-500/40' : 'bg-amber-950/30 border-amber-500/40'"
+                     class="border rounded-xl p-4 flex items-start space-x-3.5">
+                  <div class="mt-0.5">
+                    <i class="fa-solid text-xl"
+                       :class="mockTestResult.matched ? 'fa-circle-check text-emerald-400' : 'fa-triangle-exclamation text-amber-400'"></i>
+                  </div>
+                  <div class="space-y-1 flex-1">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-bold"
+                            :class="mockTestResult.matched ? 'text-emerald-300' : 'text-amber-300'"
+                            x-text="mockTestResult.matched ? '✔ 成功命中自定义专属 Mock 规则' : '⚠ 未命中自定义规则（已回退全局默认兜底）'"></span>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold"
+                            :class="mockTestResult.responseStatus === 200 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'"
+                            x-text="'HTTP ' + (mockTestResult.responseStatus || 200)"></span>
+                    </div>
+                    <div class="text-xs text-slate-300" x-text="mockTestResult.description"></div>
+                    <template x-if="mockTestResult.ruleId">
+                      <div class="text-[11px] font-mono text-slate-500" x-text="'命中规则 ID: ' + mockTestResult.ruleId"></div>
+                    </template>
+                  </div>
+                </div>
+
+                <!-- 诊断详情网格 -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                  <div class="bg-slate-950/70 border border-slate-800 rounded-lg p-2.5">
+                    <div class="text-slate-500 text-[10px]">测试工具</div>
+                    <div class="font-mono text-indigo-300 font-semibold truncate mt-0.5" x-text="mockTestTool"></div>
+                  </div>
+                  <div class="bg-slate-950/70 border border-slate-800 rounded-lg p-2.5">
+                    <div class="text-slate-500 text-[10px]">匹配结果</div>
+                    <div class="font-semibold mt-0.5"
+                         :class="mockTestResult.matched ? 'text-emerald-400' : 'text-amber-400'"
+                         x-text="mockTestResult.matched ? '专属规则命中' : '默认兜底'"></div>
+                  </div>
+                  <div class="bg-slate-950/70 border border-slate-800 rounded-lg p-2.5">
+                    <div class="text-slate-500 text-[10px]">规则 ID</div>
+                    <div class="font-mono text-slate-300 truncate mt-0.5" x-text="mockTestResult.ruleId || 'default'"></div>
+                  </div>
+                  <div class="bg-slate-950/70 border border-slate-800 rounded-lg p-2.5">
+                    <div class="text-slate-500 text-[10px]">HTTP 状态</div>
+                    <div class="font-mono text-emerald-400 font-semibold mt-0.5" x-text="mockTestResult.responseStatus || 200"></div>
+                  </div>
+                </div>
+
+                <!-- 仿真响应数据预览 -->
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between">
+                    <label class="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+                      <i class="fa-solid fa-code text-indigo-400"></i>
+                      <span>返回响应数据 (Response Data)</span>
+                    </label>
+                    <button @click="copyJson(mockTestResult.responseData)"
+                            class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center space-x-1">
+                      <i class="fa-regular fa-copy"></i>
+                      <span>复制响应 JSON</span>
+                    </button>
+                  </div>
+                  <pre class="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-xs text-emerald-300 overflow-x-auto max-h-80 select-all whitespace-pre-wrap shadow-inner"
+                       x-text="JSON.stringify(mockTestResult.responseData, null, 2)"></pre>
+                </div>
+
+                <!-- 快捷动作：一键对此入参新建规则 -->
+                <div class="pt-2 flex items-center justify-between border-t border-slate-800">
+                  <span class="text-[11px] text-slate-500">想要为此特定入参调整返回结果？</span>
+                  <button @click="openMockModalWithInput()"
+                          class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs transition flex items-center space-x-1.5">
+                    <i class="fa-solid fa-plus text-indigo-400"></i>
+                    <span>基于此入参新建/覆盖 Mock 规则</span>
+                  </button>
+                </div>
               </div>
             </template>
           </div>
         </div>
+
       </div>
+
     </div>
 
-
-    <!-- ============================================== -->
+      <!-- ============================================== -->
+      <!-- View 6: 7 大仓储内存快照 (Java Snapshot) -->
+      <!-- ============================================== -->
+      <!-- ============================================== -->
     <!-- Tab 3: Java 内存快照与实时同步状态 -->
     <!-- ============================================== -->
-    <div x-show="activeTab === 'java'" class="space-y-6">
+    <div x-show="currentView === 'eng-memory'" class="space-y-6">
       <div class="flex items-center justify-between border-b border-slate-700 pb-3">
         <div>
           <h2 class="text-base font-bold text-slate-200 flex items-center space-x-2">
@@ -785,24 +1783,47 @@
         </div>
       </div>
 
-      <!-- 7 大仓储概览卡片 -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <!-- 7 大仓储概览卡片 (防溢出与自适应优化) -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
         <template x-for="(repo, index) in javaOverview" :key="index">
-          <div class="bg-slate-800/70 border border-slate-700 rounded-xl p-4 space-y-2 shadow-lg">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-bold text-slate-200" x-text="repo.name"></span>
-              <span class="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                    :class="repo.healthy ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'"
-                    x-text="repo.healthy ? 'Healthy' : 'Unhealthy'"></span>
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl overflow-hidden flex flex-col justify-between space-y-3 min-w-0 hover:border-slate-700 transition">
+            <!-- 标题与健康状态 -->
+            <div class="flex items-center justify-between gap-2 min-w-0">
+              <span class="text-xs font-bold text-slate-100 truncate flex-1"
+                    :title="repo.name"
+                    x-text="getRepoDisplayName(repo.name)"></span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0"
+                    :class="repo.healthy ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'"
+                    x-text="repo.healthy ? '正常' : '异常'"></span>
             </div>
-            <div class="flex items-baseline space-x-2">
-              <div class="text-2xl font-black text-indigo-300" x-text="repo.itemCount"></div>
-              <div class="text-xs text-slate-400">条缓存配置</div>
+
+            <!-- 配置条数与原类名 -->
+            <div>
+              <div class="flex items-baseline space-x-1.5">
+                <div class="text-2xl font-black text-indigo-400 font-mono tracking-tight" x-text="repo.itemCount"></div>
+                <div class="text-xs text-slate-400">项配置缓存</div>
+              </div>
+              <div class="text-[10px] font-mono text-slate-500 truncate mt-1" x-text="repo.name" :title="repo.name"></div>
             </div>
-            <div class="text-[11px] text-slate-500 flex items-center justify-between border-t border-slate-700/60 pt-2">
-              <span x-text="'轮询周期: ' + (repo.refreshIntervalSeconds || 10) + 's'"></span>
-              <span x-text="repo.lastRefreshTime || '未刷新'"></span>
+
+            <!-- 轮询周期与同步时间 (多行紧凑排版，彻底杜绝内容溢出方块) -->
+            <div class="text-[11px] text-slate-400 border-t border-slate-800/80 pt-2 space-y-1">
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="text-slate-500">刷新周期:</span>
+                <span class="font-mono text-slate-300" x-text="(repo.refreshIntervalSeconds || 10) + 's'"></span>
+              </div>
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="text-slate-500">最近同步:</span>
+                <span class="font-mono text-slate-300 truncate max-w-[120px]" :title="repo.lastRefreshTime"
+                      x-text="repo.lastRefreshTime ? (repo.lastRefreshTime.includes(' ') ? repo.lastRefreshTime.split(' ')[1] : repo.lastRefreshTime) : '未刷新'"></span>
+              </div>
             </div>
+          </div>
+        </template>
+        <template x-if="!javaOverview || javaOverview.length === 0">
+          <div class="col-span-full py-8 text-center text-slate-500 bg-slate-900/60 rounded-xl border border-slate-800">
+            <i class="fa-solid fa-rotate text-lg mb-1" :class="refreshing ? 'fa-spin' : ''"></i>
+            <p class="text-xs">正在连接 Java 8080 获取仓储概览信息...</p>
           </div>
         </template>
       </div>
@@ -817,10 +1838,13 @@
       </div>
     </div>
 
-    <!-- ============================================== -->
+      <!-- ============================================== -->
+      <!-- View 7: 实时日志流终端监控台 (Logs) -->
+      <!-- ============================================== -->
+      <!-- ============================================== -->
     <!-- Tab 4: 实时日志流监控控制台 -->
     <!-- ============================================== -->
-    <div x-show="activeTab === 'logs'" class="space-y-4">
+    <div x-show="currentView === 'eng-logs'" class="space-y-4">
       <!-- 快捷工具栏 -->
       <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-xl">
         <div class="flex items-center space-x-2">
@@ -904,7 +1928,236 @@
         </div>
       </div>
     </div>
-  </main>
+
+            <!-- ============================================== -->
+      <!-- View 8: 系统核心 API 接口速查字典 (API Reference) -->
+      <!-- ============================================== -->
+      <div x-show="currentView === 'eng-api'" class="space-y-6">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div>
+            <h2 class="text-base font-bold text-slate-200 flex items-center space-x-2">
+              <i class="fa-solid fa-code text-indigo-400"></i>
+              <span>OrchestrAgent 核心 API 接口速查字典</span>
+            </h2>
+            <p class="text-xs text-slate-400">Java 核心引擎 (8080) 与 Python Mock 控制中心 (8000) 提供的所有标准接口端点与参数速查</p>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="text-slate-400 bg-slate-950/70 border-b border-slate-800">
+                <tr>
+                  <th class="py-3 px-4 font-semibold">请求方式</th>
+                  <th class="py-3 px-4 font-semibold">接口路径 (Endpoint)</th>
+                  <th class="py-3 px-4 font-semibold">服务归属</th>
+                  <th class="py-3 px-4 font-semibold">功能职责说明</th>
+                  <th class="py-3 px-4 font-semibold">典型入参 / 返回</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/70">
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3 px-4 font-mono font-bold text-sky-400">POST</td>
+                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/chat</td>
+                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                  <td class="py-3 px-4">SSE 实时流式会话交互</td>
+                  <td class="py-3 px-4 text-slate-400">JSON: {strategyCode, message, sessionId, userId}</td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3 px-4 font-mono font-bold text-sky-400">POST</td>
+                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/invoke</td>
+                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                  <td class="py-3 px-4">异步启动多智能体策略编排工作流</td>
+                  <td class="py-3 px-4 text-slate-400">返回 {flowId, state: "RUNNING"}</td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3 px-4 font-mono font-bold text-emerald-400">GET</td>
+                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/flow/{flowId}</td>
+                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                  <td class="py-3 px-4">根据 flowId 查询流程执行状态、上下文与各节点输出</td>
+                  <td class="py-3 px-4 text-slate-400">返回 {flowId, state, steps, result}</td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3 px-4 font-mono font-bold text-emerald-400">GET</td>
+                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/flow/{flowId}/logs</td>
+                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                  <td class="py-3 px-4">检索指定 flowId 的全量执行日志行列表</td>
+                  <td class="py-3 px-4 text-slate-400">返回 List&lt;String&gt; 日志行</td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3 px-4 font-mono font-bold text-rose-400">POST</td>
+                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/stop/{flowId}</td>
+                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                  <td class="py-3 px-4">主动中断/取消正在运行的工作流实例</td>
+                  <td class="py-3 px-4 text-slate-400">置终态为 STOPPED，返回 Boolean</td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3 px-4 font-mono font-bold text-emerald-400">GET</td>
+                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/config/overview</td>
+                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                  <td class="py-3 px-4">获取 7 大仓储健康状态、条目数与刷新时间</td>
+                  <td class="py-3 px-4 text-slate-400">返回 7 仓储的健康指标数组</td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3 px-4 font-mono font-bold text-emerald-400">GET</td>
+                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/config/all</td>
+                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                  <td class="py-3 px-4">获取 Java 内存中 7 大仓储的全量快照结构</td>
+                  <td class="py-3 px-4 text-slate-400">返回完整 JSON 实体对象</td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3 px-4 font-mono font-bold text-amber-400">POST</td>
+                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/config/reload</td>
+                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                  <td class="py-3 px-4">通知 Java 核心引擎立即触发全量配置热重载</td>
+                  <td class="py-3 px-4 text-slate-400">可选参数 repoName，返回重载结果</td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3 px-4 font-mono font-bold text-emerald-400">GET</td>
+                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/logs/stream</td>
+                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                  <td class="py-3 px-4">SSE 实时流式日志文件监听推送</td>
+                  <td class="py-3 px-4 text-slate-400">参数 ?tail=100&filter=xxx</td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3 px-4 font-mono font-bold text-emerald-400">GET</td>
+                  <td class="py-3 px-4 font-mono text-slate-100">/admin/configs</td>
+                  <td class="py-3 px-4 text-cyan-300">Python :8000</td>
+                  <td class="py-3 px-4">拉取 Python Mock 控制台持久化的全部配置数据</td>
+                  <td class="py-3 px-4 text-slate-400">strategies, agents, tools, models, dict</td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3 px-4 font-mono font-bold text-sky-400">POST</td>
+                  <td class="py-3 px-4 font-mono text-slate-100">/admin/configs</td>
+                  <td class="py-3 px-4 text-cyan-300">Python :8000</td>
+                  <td class="py-3 px-4">保存/更新单项配置数据并持久化到 JSON 文件</td>
+                  <td class="py-3 px-4 text-slate-400">{category, item}</td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3 px-4 font-mono font-bold text-emerald-400">GET</td>
+                  <td class="py-3 px-4 font-mono text-slate-100">/admin/mocks</td>
+                  <td class="py-3 px-4 text-cyan-300">Python :8000</td>
+                  <td class="py-3 px-4">获取所有自定义动态 Mock 规则列表</td>
+                  <td class="py-3 px-4 text-slate-400">规则数组，包含 matchParams 与 responseData</td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3 px-4 font-mono font-bold text-sky-400">POST</td>
+                  <td class="py-3 px-4 font-mono text-slate-100">/mock/tools/{toolCode}</td>
+                  <td class="py-3 px-4 text-cyan-300">Python :8000</td>
+                  <td class="py-3 px-4">业务工具仿真 Mock 端点 (天气、画像、周边服务等)</td>
+                  <td class="py-3 px-4 text-slate-400">根据入参动态匹配命中规则并返回 Mock 响应</td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3 px-4 font-mono font-bold text-sky-400">POST</td>
+                  <td class="py-3 px-4 font-mono text-slate-100">/mock/llm/v1/chat/completions</td>
+                  <td class="py-3 px-4 text-cyan-300">Python :8000</td>
+                  <td class="py-3 px-4">OpenAI 兼容协议的大模型仿真 Mock 端点</td>
+                  <td class="py-3 px-4 text-slate-400">返回标准 choices / delta / message 结构</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+
+    </main>
+  </div>
+
+    <!-- ============================================== -->
+  <!-- 配置项详情查看模态窗 (Detail Modal) -->
+  <!-- ============================================== -->
+  <div x-show="detailModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div @click.away="detailModalOpen = false" class="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      <!-- 模态窗顶部栏 -->
+      <div class="bg-slate-800/90 border-b border-slate-700 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="w-8 h-8 rounded-lg bg-indigo-600/30 text-indigo-400 flex items-center justify-center text-sm border border-indigo-500/30">
+            <i class="fa-solid fa-file-lines"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-base text-slate-100 flex items-center space-x-2">
+              <span x-text="detailItem ? (detailItem.name || detailItem.strategyId || detailItem.code || detailItem.key || detailItem.description || detailItem.id) : '配置详情'"></span>
+              <span class="text-xs font-normal text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-full" x-text="currentView === 'mock-rules' ? 'Mock 仿真规则' : getCategoryTitle(configCategory)"></span>
+            </h3>
+            <p class="text-xs text-slate-400" x-text="detailItem ? (detailItem.description || detailItem.title || '配置元数据详情与快照') : ''"></p>
+          </div>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button @click="copyJson(detailItem)" class="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition flex items-center space-x-1 border border-slate-700">
+            <i class="fa-regular fa-copy"></i>
+            <span>复制 JSON</span>
+          </button>
+          <button @click="detailModalOpen = false" class="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- 模态窗主体内容区 -->
+      <div class="flex-1 overflow-y-auto p-6 space-y-4">
+        <!-- 切换视图 Tab -->
+        <div class="border-b border-slate-800 flex space-x-4 pb-2 text-xs">
+          <button @click="detailModalTab = 'formatted'"
+                  :class="detailModalTab === 'formatted' ? 'border-b-2 border-indigo-500 text-indigo-400 font-semibold' : 'text-slate-400 hover:text-slate-200'"
+                  class="pb-1 transition flex items-center space-x-1.5">
+            <i class="fa-solid fa-table-list"></i>
+            <span>结构化字段属性</span>
+          </button>
+          <button @click="detailModalTab = 'json'"
+                  :class="detailModalTab === 'json' ? 'border-b-2 border-indigo-500 text-indigo-400 font-semibold' : 'text-slate-400 hover:text-slate-200'"
+                  class="pb-1 transition flex items-center space-x-1.5">
+            <i class="fa-solid fa-code"></i>
+            <span>完整 JSON 快照</span>
+          </button>
+        </div>
+
+        <!-- Tab 1: 结构化属性展示 -->
+        <div x-show="detailModalTab === 'formatted'" class="space-y-3 text-xs">
+          <template x-if="detailItem">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <template x-for="(val, k) in detailItem" :key="k">
+                <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3.5 space-y-1.5 flex flex-col justify-between">
+                  <div class="flex items-center justify-between border-b border-slate-800/60 pb-1">
+                    <span class="text-indigo-300 font-mono text-[11px] font-semibold" x-text="k"></span>
+                    <span class="text-[10px] text-slate-500 font-mono" x-text="typeof val"></span>
+                  </div>
+                  <div class="text-slate-200 break-words font-mono text-xs">
+                    <template x-if="typeof val === 'object' && val !== null">
+                      <pre class="text-[11px] font-mono text-emerald-400 overflow-x-auto max-h-48 p-2 bg-slate-950 rounded-lg border border-slate-900" x-text="JSON.stringify(val, null, 2)"></pre>
+                    </template>
+                    <template x-if="typeof val !== 'object' || val === null">
+                      <span class="whitespace-pre-wrap select-all" x-text="val !== null && val !== undefined ? String(val) : '无'"></span>
+                    </template>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <!-- Tab 2: 完整 JSON 结构 -->
+        <div x-show="detailModalTab === 'json'">
+          <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400 overflow-x-auto max-h-[500px] border border-slate-800 select-all"
+               x-text="JSON.stringify(detailItem, null, 2)"></pre>
+        </div>
+      </div>
+
+      <!-- 模态窗底部操作区 -->
+      <div class="bg-slate-800/80 border-t border-slate-700/80 px-6 py-3 flex items-center justify-between">
+        <span class="text-xs text-slate-500">提示：点击编辑可直接修改此配置项</span>
+        <div class="flex items-center space-x-2">
+          <button @click="detailModalOpen = false" class="px-4 py-2 bg-slate-700 text-slate-300 rounded-xl text-xs hover:bg-slate-600 transition">
+            关闭
+          </button>
+          <button @click="detailModalOpen = false; if (currentView === 'mock-rules') openMockModal(detailItem); else openFormModal(detailItem)" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-500 transition flex items-center space-x-1.5 shadow">
+            <i class="fa-regular fa-pen-to-square"></i>
+            <span x-text="currentView === 'mock-rules' ? '编辑此 Mock 规则' : '编辑此配置'"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- 编辑 / 新增结构化表单模态窗 (支持按照字段以 Form 形式配置，保存后按 JSON 展示) -->
   <div x-show="editModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -1418,6 +2671,122 @@
   <script>
     function appData() {
       return {
+        // 当前主视图 (左侧菜单驱动)
+        currentView: 'dashboard',
+        detailModalOpen: false,
+        detailItem: null,
+        detailModalTab: 'formatted',
+
+        openDetailModal(item) {
+          this.detailItem = item;
+          this.detailModalTab = 'formatted';
+          this.detailModalOpen = true;
+        }, // 'dashboard' | 'ctl-chat' | 'ctl-invoke' | 'config' | 'mock-rules' | 'mock-tester' | 'eng-memory' | 'eng-logs' | 'eng-api'
+        dashTab: 'strategy', // 'strategy' | 'agent' | 'tool'
+
+        // 首页快速触发调试表单
+        dashInvokeForm: {
+          strategyId: 'flight_arrival_cross_sell',
+          message: '我的航班刚刚落地虹桥机场，当前正在下雨，请为我推荐适合的落地后服务',
+          sessionId: 'dash-' + Math.floor(Math.random() * 10000),
+          userId: 'U8801'
+        },
+        dashInvokeResult: null,
+        isDashInvoking: false,
+        dashFlowIdInput: '',
+        dashFlowResult: null,
+        isDashFlowQuerying: false,
+
+        // 视图与菜单切换
+        switchView(view, category = null) {
+          this.currentView = view;
+          if (category) {
+            this.configCategory = category;
+          }
+          if (view === 'eng-logs') {
+            if (!this.logEventSource) this.initLogStream();
+          }
+          if (view === 'dashboard') {
+            this.checkJavaStatus();
+            this.loadConfigs();
+          }
+          if (view === 'eng-memory') {
+            this.fetchJavaData();
+          }
+          if (view === 'mock-rules' || view === 'mock-tester') {
+            this.loadMockRules();
+          }
+        },
+
+        getBreadcrumb() {
+          const map = {
+            'dashboard': '仪表盘 / 系统看板 (Overview)',
+            'ctl-chat': '编排联调 / SSE 流式会话 (Chat)',
+            'ctl-invoke': '编排联调 / 异步流程调度与追踪 (Invoke & Tracker)',
+            'config': '配置中心 / ' + this.getCategoryTitle(this.configCategory),
+            'mock-rules': 'Mock 仿真 / 动态 Mock 规则管理',
+            'mock-tester': 'Mock 仿真 / 在线入参匹配测试台',
+            'eng-memory': '引擎监控 / 7 大仓储当前内存快照',
+            'eng-logs': '引擎监控 / 实时日志流监控台',
+            'eng-api': '引擎速查 / 系统 API 接口速查字典'
+          };
+          return map[this.currentView] || '系统控制台';
+        },
+
+        async runDashInvoke() {
+          this.isDashInvoking = true;
+          this.dashInvokeResult = null;
+          try {
+            const res = await fetch('/proxy/invoke', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                strategyCode: this.dashInvokeForm.strategyId,
+                message: this.dashInvokeForm.message,
+                sessionId: this.dashInvokeForm.sessionId,
+                userId: this.dashInvokeForm.userId,
+                bizData: {}
+              })
+            });
+            const data = await res.json();
+            this.dashInvokeResult = data;
+            if (data.success && data.data && data.data.flowId) {
+              this.dashFlowIdInput = data.data.flowId;
+              this.showToast('异步流程已启动: ' + data.data.flowId);
+              await this.queryDashFlow();
+            }
+          } catch (e) {
+            this.dashInvokeResult = { success: false, message: e.message };
+          } finally {
+            this.isDashInvoking = false;
+          }
+        },
+
+        async queryDashFlow() {
+          if (!this.dashFlowIdInput || !this.dashFlowIdInput.trim()) {
+            this.showToast('请输入要查询的 flowId');
+            return;
+          }
+          this.isDashFlowQuerying = true;
+          try {
+            const res = await fetch(`/proxy/flow/${encodeURIComponent(this.dashFlowIdInput.trim())}`);
+            this.dashFlowResult = await res.json();
+          } catch (e) {
+            this.dashFlowResult = { success: false, message: e.message };
+          } finally {
+            this.isDashFlowQuerying = false;
+          }
+        },
+
+        jumpToTracker(flowId) {
+          const id = flowId || this.dashFlowIdInput;
+          if (!id) return;
+          this.queryFlowId = id;
+          this.switchView('ctl-invoke');
+          this.fetchFlowStatus(id);
+          this.startAutoPoll();
+        },
+
         activeTab: 'controller',
         ctlSubTab: 'chat',
         configCategory: 'strategies',
@@ -1465,10 +2834,49 @@
         isChatStreaming: false,
 
         invokeForm: {
-          strategyId: 'flight_arrival_cross_sell',
-          message: '航班MU5101落地推荐执行',
-          sessionId: 'session-' + Math.floor(Math.random() * 10000),
-          userId: 'U8801'
+          strategyId: 'flight_nearby_recommend_strategy',
+          message: '',
+          sessionId: '',
+          userId: 'U1001',
+          customUserId: '',
+          flightParams: {
+            departureCity: '北京',
+            arrivalCity: '上海',
+            departureDate: '2026-11-10',
+            arrivalDate: '2026-11-13',
+            flexibleDays: 1
+          },
+          arrivalParams: {
+            flightNo: 'MU5101',
+            arrivalCity: '上海',
+            arrivalAirport: 'SHA'
+          },
+          autoSyncMock: true
+        },
+
+        get availableMockUsers() {
+          const map = new Map();
+          const presets = [
+            { id: 'U1001', label: 'U1001 - 张先生 (国航金卡 · 偏好早班机 · 价格不敏感)' },
+            { id: 'U1002', label: 'U1002 - 李女士 (普通会员 · 休闲旅游 · 价格敏感/大兴)' },
+            { id: 'U8801', label: 'U8801 - 价格优先型旅客 (落地经济接送/3星酒店)' },
+            { id: 'VIP001', label: 'VIP001 - 高净值商务尊享 (豪华专车/五星酒店偏好)' }
+          ];
+          presets.forEach(p => map.set(p.id, p));
+          (this.mockRules || []).forEach(r => {
+            const uid = (r.matchParams && r.matchParams.userId) || (r.responseData && r.responseData.userId);
+            if (uid && !map.has(uid) && uid !== 'DEFAULT_USER') {
+              map.set(uid, { id: uid, label: `${uid} - ${r.description || 'Mock用户'}` });
+            }
+          });
+          return Array.from(map.values());
+        },
+
+        get effectiveInvokeUserId() {
+          if (this.invokeForm.userId === '__custom__') {
+            return (this.invokeForm.customUserId || '').trim() || 'U1001';
+          }
+          return this.invokeForm.userId || 'U1001';
         },
         invokeResult: null,
         isInvoking: false,
@@ -1514,6 +2922,7 @@
         // Mock 规则中心状态
         mockRules: [],
         mockFilterTool: '',
+        mockSearchQuery: '',
         mockModalOpen: false,
         isMockEditMode: false,
         mockTestTool: 'query_weather_tool',
@@ -1532,14 +2941,82 @@
         },
 
         get filteredMockRules() {
-          if (!this.mockFilterTool) return this.mockRules;
-          return this.mockRules.filter(r => r.toolCode === this.mockFilterTool);
+          let list = this.mockRules || [];
+          if (this.mockFilterTool) {
+            list = list.filter(r => r.toolCode === this.mockFilterTool);
+          }
+          if (this.mockSearchQuery && this.mockSearchQuery.trim()) {
+            const q = this.mockSearchQuery.trim().toLowerCase();
+            list = list.filter(r => {
+              const desc = (r.description || '').toLowerCase();
+              const code = (r.toolCode || '').toLowerCase();
+              const id = (r.id || '').toLowerCase();
+              const params = JSON.stringify(r.matchParams || {}).toLowerCase();
+              return desc.includes(q) || code.includes(q) || id.includes(q) || params.includes(q);
+            });
+          }
+          return list;
+        },
+
+        openMockDetail(rule) {
+          this.detailItem = rule;
+          this.detailModalTab = 'formatted';
+          this.detailModalOpen = true;
+        },
+
+        jumpToMockTester(rule) {
+          this.mockTestTool = rule.toolCode || 'query_weather_tool';
+          if (rule.matchParams && Object.keys(rule.matchParams).length > 0) {
+            this.mockTestPayload = JSON.stringify(rule.matchParams, null, 2);
+          } else {
+            this.mockTestPayload = '{\n  \n}';
+          }
+          this.currentView = 'mock-tester';
+          this.mockTestResult = null;
+        },
+
+        setMockPreset(tool, payload) {
+          this.mockTestTool = tool;
+          this.mockTestPayload = JSON.stringify(payload, null, 2);
+          this.mockTestResult = null;
+        },
+
+        formatTestPayload() {
+          try {
+            const parsed = JSON.parse(this.mockTestPayload || '{}');
+            this.mockTestPayload = JSON.stringify(parsed, null, 2);
+          } catch (e) {
+            alert('JSON 格式有误，无法格式化: ' + e.message);
+          }
+        },
+
+        openMockModalWithInput() {
+          let payload = {};
+          try {
+            payload = JSON.parse(this.mockTestPayload || '{}');
+          } catch (e) {
+            payload = {};
+          }
+          this.isMockEditMode = false;
+          this.mockFormData = {
+            id: '',
+            toolCode: this.mockTestTool || 'query_weather_tool',
+            description: '基于测试台录入的仿真规则',
+            priority: 15,
+            responseStatus: 200,
+            enabled: true,
+            matchParamsJson: JSON.stringify(payload, null, 2),
+            responseDataJson: '{\n  "status": "success",\n  "message": "自定义仿真响应"\n}'
+          };
+          this.mockModalOpen = true;
         },
 
         async init() {
           await this.loadConfigs();
           await this.loadMockRules();
           await this.checkJavaStatus();
+          this.refreshInvokeSessionId();
+          this.updateInvokeMessage();
         },
 
         async loadMockRules() {
@@ -1828,12 +3305,209 @@
           this.currentStreamChunk = '';
         },
 
+        // ==========================================
+        // 异步调用 (invoke) 辅助与联动方法
+        // ==========================================
+        generateNewSessionId(prefix = 'sess') {
+          const rand = Math.floor(Math.random() * 9000 + 1000);
+          return `${prefix}-${Date.now().toString(36)}-${rand}`;
+        },
+
+        refreshInvokeSessionId() {
+          this.invokeForm.sessionId = this.generateNewSessionId('sess');
+        },
+
+        onInvokeStrategyChange() {
+          // 1. 每次切换策略均重新生成全新 sessionId，无需人工录入
+          this.refreshInvokeSessionId();
+
+          // 2. 根据策略智能预设对应的典型 mock 用户画像
+          if (this.invokeForm.strategyId === 'flight_nearby_recommend_strategy') {
+            this.invokeForm.userId = 'U1001';
+          } else if (this.invokeForm.strategyId === 'flight_arrival_cross_sell') {
+            this.invokeForm.userId = 'U8801';
+          }
+
+          // 3. 自动根据当前策略业务参数生成推荐指令
+          this.updateInvokeMessage();
+
+          // 4. 若开启联动则自动同步底层 Mock 规则
+          if (this.invokeForm.autoSyncMock) {
+            this.syncMockDataForCurrentStrategy(false);
+          }
+        },
+
+        onInvokeUserChange() {
+          this.updateInvokeMessage();
+        },
+
+        onFlightParamsChange() {
+          this.updateInvokeMessage();
+          if (this.invokeForm.autoSyncMock) {
+            this.syncMockDataForCurrentStrategy(false);
+          }
+        },
+
+        onArrivalParamsChange() {
+          this.updateInvokeMessage();
+          if (this.invokeForm.autoSyncMock) {
+            this.syncMockDataForCurrentStrategy(false);
+          }
+        },
+
+        updateInvokeMessage(notify = false) {
+          const uid = this.effectiveInvokeUserId;
+          const sid = this.invokeForm.strategyId;
+          if (sid === 'flight_nearby_recommend_strategy') {
+            const fp = this.invokeForm.flightParams;
+            this.invokeForm.message = `请为用户【${uid}】查询 ${fp.departureDate} 从${fp.departureCity}到${fp.arrivalCity}的航班（期望返程/抵达日期：${fp.arrivalDate}），请结合我的历史出行偏好推荐临近日期和周边机场的最优航班方案。`;
+          } else if (sid === 'flight_arrival_cross_sell') {
+            const ap = this.invokeForm.arrivalParams;
+            this.invokeForm.message = `针对刚落地的航班【${ap.flightNo}】上的用户【${uid}】，到达地为${ap.arrivalCity}（${ap.arrivalAirport}），请结合当地实时天气与我的消费偏好推荐合适的接机专车或周边酒店。`;
+          } else if (sid === 'multi_chat_strategy') {
+            this.invokeForm.message = `你好，我是用户【${uid}】，想了解落地上海后的交通与周边推荐服务。`;
+          }
+          if (notify) {
+            this.showToast('已重置为标准目标指令');
+          }
+        },
+
+        // 将当前表单的业务参数同步修改到底层对应 Mock 规则中
+        async syncMockDataForCurrentStrategy(manualTrigger = true) {
+          try {
+            const sid = this.invokeForm.strategyId;
+            let updatedCount = 0;
+
+            if (sid === 'flight_nearby_recommend_strategy') {
+              const fp = this.invokeForm.flightParams;
+              // 寻找 query_flight_schedule_tool 规则
+              const rule = (this.mockRules || []).find(r => r.toolCode === 'query_flight_schedule_tool' && r.id === 'rule_flight_schedule_bj_sh')
+                        || (this.mockRules || []).find(r => r.toolCode === 'query_flight_schedule_tool');
+              if (rule) {
+                const cloned = JSON.parse(JSON.stringify(rule));
+                cloned.matchParams = cloned.matchParams || {};
+                cloned.matchParams.departureCity = fp.departureCity;
+                cloned.matchParams.arrivalCity = fp.arrivalCity;
+
+                if (cloned.responseData) {
+                  cloned.responseData.searchCondition = cloned.responseData.searchCondition || {};
+                  cloned.responseData.searchCondition.departureCity = fp.departureCity;
+                  cloned.responseData.searchCondition.arrivalCity = fp.arrivalCity;
+                  cloned.responseData.searchCondition.departureDate = fp.departureDate;
+
+                  // 自动计算临近次日日期
+                  let nextDate = fp.departureDate;
+                  try {
+                    const d = new Date(fp.departureDate);
+                    d.setDate(d.getDate() + (fp.flexibleDays || 1));
+                    nextDate = d.toISOString().split('T')[0];
+                  } catch (e) {
+                    nextDate = fp.departureDate;
+                  }
+
+                  if (Array.isArray(cloned.responseData.flights)) {
+                    cloned.responseData.flights.forEach(f => {
+                      if (f.isNearbyDate) {
+                        f.depDate = nextDate;
+                      } else {
+                        f.depDate = fp.departureDate;
+                      }
+                    });
+                  }
+                }
+                const res = await fetch('/admin/mocks', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(cloned)
+                });
+                const d = await res.json();
+                if (d.success) updatedCount++;
+              }
+            } else if (sid === 'flight_arrival_cross_sell') {
+              const ap = this.invokeForm.arrivalParams;
+              // 更新天气规则匹配城市
+              const weatherRule = (this.mockRules || []).find(r => r.toolCode === 'query_weather_tool' && r.priority >= 10);
+              if (weatherRule) {
+                const cloned = JSON.parse(JSON.stringify(weatherRule));
+                cloned.matchParams = cloned.matchParams || {};
+                cloned.matchParams.city = ap.arrivalCity;
+                if (cloned.responseData) {
+                  cloned.responseData.city = ap.arrivalCity;
+                  cloned.responseData.airportCode = ap.arrivalAirport;
+                }
+                await fetch('/admin/mocks', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(cloned)
+                });
+                updatedCount++;
+              }
+              // 更新周边服务规则匹配机场代码
+              const serviceRule = (this.mockRules || []).find(r => r.toolCode === 'query_arrival_services_tool' && r.priority >= 10);
+              if (serviceRule) {
+                const cloned = JSON.parse(JSON.stringify(serviceRule));
+                cloned.matchParams = cloned.matchParams || {};
+                cloned.matchParams.airportCode = ap.arrivalAirport;
+                if (cloned.responseData) {
+                  cloned.responseData.airportCode = ap.arrivalAirport;
+                }
+                await fetch('/admin/mocks', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(cloned)
+                });
+                updatedCount++;
+              }
+            }
+
+            if (updatedCount > 0) {
+              await this.loadMockRules();
+              if (manualTrigger) {
+                this.showToast('已同步更新当前策略的 Mock 仿真规则！');
+              }
+            }
+          } catch (e) {
+            console.error('同步 Mock 数据失败:', e);
+            if (manualTrigger) {
+              this.showToast('同步 Mock 数据失败: ' + e.message);
+            }
+          }
+        },
+
         // invoke 异步启动
         async sendInvoke() {
           this.isInvoking = true;
           this.invokeResult = null;
           this.stopAutoPoll();
           try {
+            // 如果开启了自动同步 Mock，提交前先保证 Mock 规则与当前表单起抵日期一致
+            if (this.invokeForm.autoSyncMock) {
+              await this.syncMockDataForCurrentStrategy(false);
+            }
+
+            const sid = this.invokeForm.strategyId;
+            const uid = this.effectiveInvokeUserId;
+            let bizData = { userId: uid };
+            if (sid === 'flight_nearby_recommend_strategy') {
+              const fp = this.invokeForm.flightParams;
+              bizData = {
+                ...bizData,
+                departureCity: fp.departureCity,
+                arrivalCity: fp.arrivalCity,
+                departureDate: fp.departureDate,
+                arrivalDate: fp.arrivalDate,
+                flexibleDays: String(fp.flexibleDays || 1)
+              };
+            } else if (sid === 'flight_arrival_cross_sell') {
+              const ap = this.invokeForm.arrivalParams;
+              bizData = {
+                ...bizData,
+                flightNo: ap.flightNo,
+                arrivalCity: ap.arrivalCity,
+                arrivalAirport: ap.arrivalAirport
+              };
+            }
+
             const res = await fetch('/proxy/invoke', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -1841,8 +3515,8 @@
                 strategyCode: this.invokeForm.strategyId,
                 message: this.invokeForm.message,
                 sessionId: this.invokeForm.sessionId,
-                userId: this.invokeForm.userId,
-                bizData: {}
+                userId: uid,
+                bizData: bizData
               })
             });
             const data = await res.json();
@@ -1933,6 +3607,17 @@
         // ==========================================
         // 配置项结构化表单与 JSON 交互操作
         // ==========================================
+        getRepoDisplayName(name) {
+          const map = {
+            'strategyConfigRepository': '编排策略仓储',
+            'agentConfigRepository': '智能体仓储',
+            'toolConfigRepository': '外部工具仓储',
+            'modelConfigRepository': '大模型接入仓储',
+            'dictRepository': '运行字典仓储'
+          };
+          return map[name] || name;
+        },
+
         getCategoryTitle(cat) {
           const map = {
             strategies: '编排策略 (Strategy)',

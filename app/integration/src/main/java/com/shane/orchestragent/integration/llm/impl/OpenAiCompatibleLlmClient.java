@@ -50,6 +50,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
 
     public OpenAiCompatibleLlmClient() {
         this.httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
     }
@@ -154,6 +155,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
             }
 
             HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .version(HttpClient.Version.HTTP_1_1)
                     .uri(URI.create(resolved.endpoint()))
                     .header("Content-Type", "application/json")
                     .header("Authorization", "Bearer " + resolved.apiKey())
@@ -223,6 +225,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
             String outgoingJson = JsonUtils.toJsonString(bodyMap);
 
             HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .version(HttpClient.Version.HTTP_1_1)
                     .uri(URI.create(resolved.endpoint()))
                     .header("Content-Type", "application/json")
                     .header("Authorization", "Bearer " + resolved.apiKey())
@@ -240,7 +243,13 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
                             });
                             future.complete(null);
                         } else {
-                            BizException ex = new BizException("LLM_HTTP_ERROR", "HTTP Status " + response.statusCode());
+                            String errorBody = "";
+                            try {
+                                errorBody = response.body().reduce("", (a, b) -> a + "\n" + b);
+                            } catch (Exception ignored) {
+                            }
+                            log.error("[LlmClient] LLM 请求失败 HTTP Status {}: {}", response.statusCode(), errorBody);
+                            BizException ex = new BizException("LLM_HTTP_ERROR", "大模型接口返回异常 HTTP " + response.statusCode() + (StringUtils.isNotBlank(errorBody) ? (": " + errorBody) : ""));
                             if (listener != null) {
                                 listener.onError(ex);
                             }

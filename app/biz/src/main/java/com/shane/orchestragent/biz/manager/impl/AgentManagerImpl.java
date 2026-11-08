@@ -125,7 +125,8 @@ public class AgentManagerImpl implements AgentManager {
 
     /**
      * SSE 流式会话方法实现
-     * 组装带 Coordinator 智能体的多轮会话流，首轮进行意图识别与分流，通过 SseService#attachFlow 统一纳管流式推送与生命周期监听
+     * 多轮对话入参不携带策略，由会话编排流程 (SessionOrchestrationFlow) 基于候选策略目录进行意图识别、
+     * 按策略入参定义跨轮收集参数，必填齐备后触发目标策略流；通过 SseService#attachFlow 统一纳管流式推送与生命周期监听
      */
     @Override
     public SseEmitterUTF8 chat(AgentChatRequestVO request) throws BizException {
@@ -133,30 +134,26 @@ public class AgentManagerImpl implements AgentManager {
             throw new BizException("REQUEST_NULL", "请求参数不能为空");
         }
 
-        // 1. 获取策略配置
-        String strategyCode = request.getStrategyCode();
-        StrategyConfigDO strategyConfig = getStrategyConfigByCode(strategyCode);
-
-        // 2. 初始化流程 ID 与会话 ID
+        // 1. 初始化流程 ID 与会话 ID
         String flowId = UUID.randomUUID().toString();
         String sessionId = StringUtils.defaultIfBlank(request.getSessionId(), UUID.randomUUID().toString());
 
-        // 3. 构建多轮会话运行上下文
-        StrategyContext context = buildContext(strategyConfig, flowId, sessionId, request.getMessage(),
+        // 2. 构建无策略运行上下文 (目标策略由意图识别动态选定)
+        StrategyContext context = buildContext(null, flowId, sessionId, request.getMessage(),
                 null, request.getProperties(), request.getUserId(), request.getTraceId());
         log.info("[FLOW: {}][INPUT] 流式会话上下文初始化完成: sessionId={}, userId={}, target='{}'",
                 flowId, sessionId, request.getUserId(), context.getStrategyTarget());
 
-        // 4. 构建包含 Coordinator 意图识别的多轮会话策略流程
-        StrategyFlow strategyFlow = strategyFlowFactory.createMultipleChatFlow(strategyConfig, context);
+        // 3. 构建会话编排流程 (意图识别 + 参数收集 + 策略触发)
+        StrategyFlow strategyFlow = strategyFlowFactory.createSessionOrchestrationFlow(context);
 
-        // 5. 绑定 SSE 流式事件推送与生命周期监听
+        // 4. 绑定 SSE 流式事件推送与生命周期监听
         SseEmitterUTF8 emitter = (sseService != null)
                 ? sseService.attachFlow(strategyFlow)
                 : new SseEmitterUTF8(60000L);
 
-        // 6. 虚拟线程异步启动流程（逻辑完全内化，与 invoke 对齐）
-        log.info("[FLOW: {}][START] 启动 MultipleChat 意图分流与会话流水线...", flowId);
+        // 5. 虚拟线程异步启动流程
+        log.info("[FLOW: {}][START] 启动会话编排流水线 (意图识别与策略调度)...", flowId);
         Thread.ofVirtual().name("flow-chat-" + flowId).start(strategyFlow::execute);
 
         return emitter;
@@ -289,6 +286,13 @@ public class AgentManagerImpl implements AgentManager {
 
         if (properties != null) {
             properties.forEach(context::setProperties);
+        }
+        if (bizData != null) {
+            bizData.forEach(context::setProperties);
+        }
+        if (StringUtils.isNotBlank(userId)) {
+            context.setProperties(PropertyKeys.KEY_USER_ID, userId);
+            context.setProperties("user_id", userId);
         }
 
         // 统一设定用户目标: 优先使用 message，次优从 bizData 中提取 query

@@ -86,8 +86,32 @@ public class DefaultStrategyContext implements StrategyContext {
     }
 
     @Override
+    public void setUserId(String userId) {
+        this.userId = userId;
+        if (StringUtils.isNotBlank(userId)) {
+            this.properties.put("userId", userId);
+            this.properties.put("user_id", userId);
+        }
+    }
+
+    @Override
     public Object getProperty(String key) {
-        return key != null ? properties.get(key) : null;
+        if (key == null) {
+            return null;
+        }
+        Object val = properties.get(key);
+        if (val == null && "userId".equalsIgnoreCase(key)) {
+            return userId;
+        }
+        return val;
+    }
+
+    @Override
+    public void setPlanResult(PlanResult planResult) {
+        this.planResult = planResult;
+        if (planResult != null && planResult.getSteps() != null) {
+            this.properties.put(PropertyKeys.KEY_PLAN_STEPS, planResult.getSteps());
+        }
     }
 
     @Override

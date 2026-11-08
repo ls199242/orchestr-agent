@@ -353,45 +353,61 @@ public class RepositoryIntegrationTest {
     @Test
     @DisplayName("9. 验证 DeepSeek 模型配置解析与实际模型名称映射")
     public void testDeepseekModelConfigResolution() throws Exception {
-        ModelConfigApiClient mockClient = () -> List.of(
-                ModelConfigDO.builder()
-                        .code("Deepseek")
-                        .name("Deepseek")
-                        .modelName("deepseek-flash")
-                        .endpoint("https://api.deepseek.com")
-                        .apiKey("sk-********************************")
-                        .build()
-        );
-        ReflectionTestUtils.setField(modelRepo, "modelConfigApiClient", mockClient);
-        modelRepo.reload();
+        com.sun.net.httpserver.HttpServer mockServer = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress(0), 0);
+        mockServer.createContext("/chat/completions", exchange -> {
+            String respBody = "{\"id\":\"mock-chat\",\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"2\"}}]}";
+            byte[] bytes = respBody.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.getResponseBody().close();
+        });
+        mockServer.start();
+        int port = mockServer.getAddress().getPort();
 
-        // 通过编码 "Deepseek" 获取
-        ModelConfigDO resolved = modelRepo.getByCode("Deepseek");
-        assertNotNull(resolved);
-        assertEquals("Deepseek", resolved.getName());
-        assertEquals("deepseek-flash", resolved.getActualModelName());
+        try {
+            ModelConfigApiClient mockClient = () -> List.of(
+                    ModelConfigDO.builder()
+                            .code("Deepseek")
+                            .name("Deepseek")
+                            .modelName("deepseek-flash")
+                            .endpoint("http://127.0.0.1:" + port)
+                            .apiKey("mock-test-key")
+                            .build()
+            );
+            ReflectionTestUtils.setField(modelRepo, "modelConfigApiClient", mockClient);
+            modelRepo.reload();
 
-        // 验证默认模型也是该模型
-        ModelConfigDO defaultModel = modelRepo.getDefaultModel();
-        assertNotNull(defaultModel);
-        assertEquals("Deepseek", defaultModel.getName());
-        assertEquals("deepseek-flash", defaultModel.getActualModelName());
+            // 通过编码 "Deepseek" 获取
+            ModelConfigDO resolved = modelRepo.getByCode("Deepseek");
+            assertNotNull(resolved);
+            assertEquals("Deepseek", resolved.getName());
+            assertEquals("deepseek-flash", resolved.getActualModelName());
 
-        // 验证大小写不敏感编码查询
-        assertNotNull(modelRepo.getByCode("deepseek"));
+            // 验证默认模型也是该模型
+            ModelConfigDO defaultModel = modelRepo.getDefaultModel();
+            assertNotNull(defaultModel);
+            assertEquals("Deepseek", defaultModel.getName());
+            assertEquals("deepseek-flash", defaultModel.getActualModelName());
 
-        // 验证 OpenAiCompatibleLlmClient 端到端加载并调用 Deepseek
-        OpenAiCompatibleLlmClient client = new OpenAiCompatibleLlmClient();
-        client.setModelConfigRepository(modelRepo);
-        com.shane.orchestragent.integration.llm.model.ChatResponseVO resp = client.chat(
-                com.shane.orchestragent.integration.llm.model.ChatRequestDTO.builder()
-                        .model("Deepseek")
-                        .messages(java.util.List.of(com.shane.orchestragent.integration.llm.model.ChatMessageDTO.builder().role("user").content("1+1=? 请只输出数字结果").build()))
-                        .build()
-        );
-        assertNotNull(resp);
-        assertNotNull(resp.getFirstMessage());
-        assertNotNull(resp.getFirstMessage().getContent());
-        assertTrue(resp.getFirstMessage().getContent().contains("2"));
+            // 验证大小写不敏感编码查询
+            assertNotNull(modelRepo.getByCode("deepseek"));
+
+            // 验证 OpenAiCompatibleLlmClient 端到端加载并调用 Deepseek
+            OpenAiCompatibleLlmClient client = new OpenAiCompatibleLlmClient();
+            client.setModelConfigRepository(modelRepo);
+            com.shane.orchestragent.integration.llm.model.ChatResponseVO resp = client.chat(
+                    com.shane.orchestragent.integration.llm.model.ChatRequestDTO.builder()
+                            .model("Deepseek")
+                            .messages(java.util.List.of(com.shane.orchestragent.integration.llm.model.ChatMessageDTO.builder().role("user").content("1+1=? 请只输出数字结果").build()))
+                            .build()
+            );
+            assertNotNull(resp);
+            assertNotNull(resp.getFirstMessage());
+            assertNotNull(resp.getFirstMessage().getContent());
+            assertTrue(resp.getFirstMessage().getContent().contains("2"));
+        } finally {
+            mockServer.stop(0);
+        }
     }
 }

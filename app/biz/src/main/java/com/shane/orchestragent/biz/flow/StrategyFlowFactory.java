@@ -11,9 +11,11 @@ import com.shane.orchestragent.biz.service.LlmService;
 import com.shane.orchestragent.common.enums.AgentTypeEnum;
 import com.shane.orchestragent.common.exception.BizErrorFactory;
 import com.shane.orchestragent.common.exception.BizException;
+import com.shane.orchestragent.memory.session.SessionStateStore;
 import com.shane.orchestragent.prompt.service.PromptService;
 import com.shane.orchestragent.repository.AgentConfigRepository;
 import com.shane.orchestragent.repository.DictRepository;
+import com.shane.orchestragent.repository.StrategyConfigRepository;
 import com.shane.orchestragent.repository.ToolConfigRepository;
 import com.shane.orchestragent.repository.model.AgentConfigDO;
 import com.shane.orchestragent.repository.model.StrategyConfigDO;
@@ -49,16 +51,18 @@ public class StrategyFlowFactory {
     private final FlowExecutionRecorder flowExecutionRecorder;
     private AgentConfigRepository agentConfigRepository;
     private ToolConfigRepository toolConfigRepository;
+    private StrategyConfigRepository strategyConfigRepository;
+    private SessionStateStore sessionStateStore;
 
     public StrategyFlowFactory(LlmService llmService, PromptService promptService) {
-        this(llmService, promptService, null, null, null, null, null);
+        this(llmService, promptService, null, null, null, null, null, null, null);
     }
 
     public StrategyFlowFactory(LlmService llmService,
                                PromptService promptService,
                                FlowService flowService,
                                FlowExecutionRecorder flowExecutionRecorder) {
-        this(llmService, promptService, flowService, flowExecutionRecorder, null, null, null);
+        this(llmService, promptService, flowService, flowExecutionRecorder, null, null, null, null, null);
     }
 
     public StrategyFlowFactory(LlmService llmService,
@@ -66,7 +70,7 @@ public class StrategyFlowFactory {
                                FlowService flowService,
                                FlowExecutionRecorder flowExecutionRecorder,
                                DictRepository dictRepository) {
-        this(llmService, promptService, flowService, flowExecutionRecorder, dictRepository, null, null);
+        this(llmService, promptService, flowService, flowExecutionRecorder, dictRepository, null, null, null, null);
     }
 
     @Autowired
@@ -76,7 +80,9 @@ public class StrategyFlowFactory {
                                @Autowired(required = false) FlowExecutionRecorder flowExecutionRecorder,
                                @Autowired(required = false) DictRepository dictRepository,
                                @Autowired(required = false) AgentConfigRepository agentConfigRepository,
-                               @Autowired(required = false) ToolConfigRepository toolConfigRepository) {
+                               @Autowired(required = false) ToolConfigRepository toolConfigRepository,
+                               @Autowired(required = false) StrategyConfigRepository strategyConfigRepository,
+                               @Autowired(required = false) SessionStateStore sessionStateStore) {
         this.llmService = llmService;
         this.promptService = promptService;
         this.flowService = flowService;
@@ -84,6 +90,8 @@ public class StrategyFlowFactory {
         this.dictRepository = dictRepository;
         this.agentConfigRepository = agentConfigRepository;
         this.toolConfigRepository = toolConfigRepository;
+        this.strategyConfigRepository = strategyConfigRepository;
+        this.sessionStateStore = sessionStateStore;
 
         if (dictRepository != null) {
             int expireMins = dictRepository.getValue(DictRepository.Keys.KEY_FLOW_INSTANCE_EXPIRE_MINUTES, DictRepository.Defaults.DEFAULT_FLOW_INSTANCE_EXPIRE_MINUTES);
@@ -107,6 +115,30 @@ public class StrategyFlowFactory {
 
     public void setToolConfigRepository(ToolConfigRepository toolConfigRepository) {
         this.toolConfigRepository = toolConfigRepository;
+    }
+
+    public void setStrategyConfigRepository(StrategyConfigRepository strategyConfigRepository) {
+        this.strategyConfigRepository = strategyConfigRepository;
+    }
+
+    public void setSessionStateStore(SessionStateStore sessionStateStore) {
+        this.sessionStateStore = sessionStateStore;
+    }
+
+    /**
+     * 创建多轮会话编排流程 (会话级意图识别前置编排: 意图选策略 + 按策略入参定义收集参数 + 必填齐备后触发目标策略流)
+     *
+     * @param context 策略运行上下文 (config 为 null，目标策略由意图识别动态选定)
+     * @return 会话编排流程实例
+     */
+    public StrategyFlow createSessionOrchestrationFlow(StrategyContext context) throws BizException {
+        int maxStep = resolveMaxStep(null);
+        log.info("[FLOW_FACTORY][BUILD] 创建会话编排流程: flowId={}, maxStep={}", context.getFlowId(), maxStep);
+
+        CoordinatorAgent coordinatorAgent = new CoordinatorAgent(
+                resolveSystemAgentLlmConfig(AgentTypeEnum.COORDINATOR, 0.1), llmService, promptService);
+        return new SessionOrchestrationFlow(context, coordinatorAgent, strategyConfigRepository,
+                sessionStateStore, this, maxStep);
     }
 
     /**
@@ -147,7 +179,7 @@ public class StrategyFlowFactory {
     }
 
     /**
-     * 创建多轮会话策略流程 (包含 Coordinator 智能体，首轮进行意图识别与分流决策)
+     * 创建多轮会话策略流程 (注入会话历史后执行标准 ReAct 协同循环，作为多轮场景的目标策略拓扑)
      *
      * @param strategyConfig 策略配置实体
      * @param context 策略运行上下文
@@ -213,9 +245,8 @@ public class StrategyFlowFactory {
 
     private Map<AgentTypeEnum, Agent> buildSystemAgents() throws BizException {
         Map<AgentTypeEnum, Agent> map = new HashMap<>();
-        map.put(AgentTypeEnum.COORDINATOR, new CoordinatorAgent(resolveSystemAgentLlmConfig(AgentTypeEnum.COORDINATOR, 0.1), llmService, promptService));
         map.put(AgentTypeEnum.PLANNER, new PlannerAgent(resolveSystemAgentLlmConfig(AgentTypeEnum.PLANNER, 0.2), llmService, promptService));
-        map.put(AgentTypeEnum.SUPERVISOR, new SupervisorAgent(resolveSystemAgentLlmConfig(AgentTypeEnum.SUPERVISOR, 0.2), llmService, promptService));
+        map.put(AgentTypeEnum.SUPERVISOR, new SupervisorAgent());
         map.put(AgentTypeEnum.EVALUATOR, new EvaluatorAgent(resolveSystemAgentLlmConfig(AgentTypeEnum.EVALUATOR, 0.1), llmService, promptService));
         map.put(AgentTypeEnum.REPORTER, new ReporterAgent(resolveSystemAgentLlmConfig(AgentTypeEnum.REPORTER, 0.3), llmService, promptService));
         return map;

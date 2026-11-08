@@ -98,7 +98,8 @@ public class ToolAgent extends BaseAgent<AgentContext> {
             throw BizErrorFactory.getInstance().toolEndpointMissing(getName());
         }
 
-        log.info("[ToolAgent: {}] 正在向真实外部端点发起调用: endpoint={}, requestBody={}", getName(), endpoint, requestJson);
+        String flowId = (context instanceof StrategyContext sc) ? sc.getFlowId() : "N/A";
+        log.info("[Flow: {}][ToolAgent: {}] 正在向真实外部端点发起调用: endpoint={}, requestBody={}", flowId, getName(), endpoint, requestJson);
 
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(endpoint))
@@ -112,21 +113,21 @@ public class ToolAgent extends BaseAgent<AgentContext> {
         try {
             HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                log.warn("[ToolAgent: {}] 接口调用非成功状态码: code={}, body={}", getName(), response.statusCode(), response.body());
+                log.warn("[Flow: {}][ToolAgent: {}] 接口调用非成功状态码: code={}, body={}", flowId, getName(), response.statusCode(), response.body());
                 throw BizErrorFactory.getInstance().toolExecutionError(getName(), "HTTP " + response.statusCode() + ": " + response.body());
             }
-            log.info("[ToolAgent: {}] 真实接口调用成功，响应大小: {} 字符", getName(), response.body() != null ? response.body().length() : 0);
+            log.info("[Flow: {}][ToolAgent: {}] 真实接口调用成功，响应内容: {}", flowId, getName(), response.body());
             return response.body();
         } catch (BizException e) {
             throw e;
         } catch (IOException e) {
-            log.error("[ToolAgent: {}] 工具 HTTP 网络 IO 异常: endpoint={}, error={}", getName(), endpoint, e.getMessage());
+            log.error("[Flow: {}][ToolAgent: {}] 工具 HTTP 网络 IO 异常: endpoint={}, error={}", flowId, getName(), endpoint, e.getMessage());
             throw BizErrorFactory.getInstance().toolExecutionError(getName(), "网络连接异常: " + e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw BizErrorFactory.getInstance().toolExecutionError(getName(), "调用被中断");
         } catch (Exception e) {
-            log.error("[ToolAgent: {}] 工具执行未知异常: endpoint={}, error={}", getName(), endpoint, e.getMessage());
+            log.error("[Flow: {}][ToolAgent: {}] 工具执行未知异常: endpoint={}, error={}", flowId, getName(), endpoint, e.getMessage());
             throw BizErrorFactory.getInstance().toolExecutionError(getName(), "未知异常: " + e.getMessage());
         }
     }

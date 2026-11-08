@@ -51,6 +51,9 @@ public class StrategyConfigDO implements Serializable {
     /** 适用的工具代码列表 (从 ToolConfigRepository 加载挂载) */
     private List<String> toolCodes;
 
+    /** 策略入参定义列表 (供多轮意图识别进行参数收集与完整性终审) */
+    private List<StrategyParamDO> params;
+
     /** 策略拓扑类型 (REACT / MULTIPLE_CHAT) */
     private String flowTopologyType;
 

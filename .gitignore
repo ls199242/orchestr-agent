@@ -17,6 +17,7 @@ Thumbs.db
 .settings/
 .classpath
 .project
+.zcode/
 
 # Maven Build Outputs
 target/
@@ -46,6 +47,11 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+
+# Environment Variables & Secrets
+.env
+.env.*
+*.env
 
 # Python Mock Console Private Configurations & Local Runtime Data
 # 注意：config.py 包含用户私有配置/模型密钥，禁止提交至外部仓库

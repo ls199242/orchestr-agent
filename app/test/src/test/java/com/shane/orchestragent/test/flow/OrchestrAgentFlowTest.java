@@ -1,12 +1,17 @@
 package com.shane.orchestragent.test.flow;
 
 import com.shane.orchestragent.biz.agent.Agent;
+import com.shane.orchestragent.biz.agent.base.BaseAgent;
 import com.shane.orchestragent.biz.agent.flow.*;
 import com.shane.orchestragent.biz.context.StrategyContext;
 import com.shane.orchestragent.biz.context.impl.DefaultStrategyContext;
-import com.shane.orchestragent.biz.flow.MultipleChatStrategyFlow;
 import com.shane.orchestragent.biz.flow.ReActStrategyFlow;
+import com.shane.orchestragent.biz.flow.SessionOrchestrationFlow;
 import com.shane.orchestragent.biz.flow.StrategyFlowFactory;
+import com.shane.orchestragent.biz.model.flow.FlowDagStep;
+import com.shane.orchestragent.biz.model.flow.PlanResult;
+import com.shane.orchestragent.memory.session.SessionPendingState;
+import com.shane.orchestragent.memory.session.SessionStateStore;
 import com.shane.orchestragent.biz.model.agent.AgentResult;
 import com.shane.orchestragent.biz.model.agent.LlmConfig;
 import com.shane.orchestragent.biz.model.flow.FlowAgentMessage;
@@ -26,11 +31,15 @@ import com.shane.orchestragent.prompt.render.TemplateRender;
 import com.shane.orchestragent.prompt.service.PromptService;
 import com.shane.orchestragent.prompt.service.impl.PromptServiceImpl;
 import com.shane.orchestragent.repository.client.AgentConfigApiClient;
+import com.shane.orchestragent.repository.client.StrategyConfigApiClient;
 import com.shane.orchestragent.repository.impl.AgentConfigRepositoryImpl;
 import com.shane.orchestragent.repository.impl.StrategyConfigRepositoryImpl;
 import com.shane.orchestragent.repository.impl.ToolConfigRepositoryImpl;
 import com.shane.orchestragent.repository.model.AgentConfigDO;
+
+import java.util.Set;
 import com.shane.orchestragent.repository.model.StrategyConfigDO;
+import com.shane.orchestragent.repository.model.StrategyParamDO;
 import com.shane.orchestragent.repository.model.ToolConfigDO;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,6 +72,9 @@ public class OrchestrAgentFlowTest {
     private LlmConfig reporterConfig;
     private LlmConfig coordinatorConfig;
     private AgentConfigRepositoryImpl agentRepo;
+    private StrategyConfigRepositoryImpl strategyRepo;
+    private SessionStateStore sessionStateStore;
+    private StrategyFlowFactory flowFactory;
 
     @BeforeEach
     public void setup() throws Exception {
@@ -101,8 +113,8 @@ public class OrchestrAgentFlowTest {
         this.coordinatorConfig = LlmConfig.builder()
                 .model("gpt-4o")
                 .nodeWaitTime(5000L)
-                .systemPrompt("# CoordinatorAgent\n分析意图: {\"handoffToPlanner\": true, \"reply\": \"\"}")
-                .userPrompt("用户诉求: ${strategy_target}")
+                .systemPrompt("# CoordinatorAgent\n意图决策: {\"action\": \"DIRECT_REPLY|COLLECT|EXECUTE\", \"reply\": \"\", \"strategyCode\": \"\", \"params\": {}}")
+                .userPrompt("【用户最新消息】：${strategy_target}")
                 .build();
 
         this.defaultConfig = LlmConfig.builder()
@@ -125,6 +137,31 @@ public class OrchestrAgentFlowTest {
         );
         org.springframework.test.util.ReflectionTestUtils.setField(agentRepo, "agentConfigApiClient", (AgentConfigApiClient) () -> systemAgents);
         agentRepo.afterPropertiesSet();
+
+        // 带参数定义的策略目录与编排流工厂 (会话编排层意图选策略 + 参数收集测试依赖)
+        this.strategyRepo = new StrategyConfigRepositoryImpl();
+        StrategyConfigDO flightStrategy = StrategyConfigDO.builder()
+                .strategyId("flight_strategy")
+                .code("flight_strategy")
+                .name("航班落地服务策略")
+                .description("航班落地场景的接机/酒店/门票推荐")
+                .maxStep(10)
+                .flowTopologyType("REACT")
+                .expertCodes(List.of("search_worker"))
+                .params(List.of(
+                        StrategyParamDO.builder().name("flightNo").type("string").description("航班号，如 CA1234").required(true).build(),
+                        StrategyParamDO.builder().name("arrivalCity").type("string").description("落地城市").required(true).build(),
+                        StrategyParamDO.builder().name("userId").type("string").description("旅客会员ID（系统注入）").required(true).build()
+                ))
+                .build();
+        org.springframework.test.util.ReflectionTestUtils.setField(strategyRepo, "strategyConfigApiClient", (StrategyConfigApiClient) () -> List.of(flightStrategy));
+        strategyRepo.afterPropertiesSet();
+
+        this.sessionStateStore = new SessionStateStore();
+        this.flowFactory = new StrategyFlowFactory(llmService, promptService);
+        flowFactory.setAgentConfigRepository(agentRepo);
+        flowFactory.setStrategyConfigRepository(strategyRepo);
+        flowFactory.setSessionStateStore(sessionStateStore);
     }
 
     @Test
@@ -135,7 +172,7 @@ public class OrchestrAgentFlowTest {
 
         Map<AgentTypeEnum, Agent> systemAgents = new HashMap<>();
         systemAgents.put(AgentTypeEnum.PLANNER, new PlannerAgent(plannerConfig, llmService, promptService));
-        systemAgents.put(AgentTypeEnum.SUPERVISOR, new SupervisorAgent(supervisorConfig, llmService, promptService));
+        systemAgents.put(AgentTypeEnum.SUPERVISOR, new SupervisorAgent());
         systemAgents.put(AgentTypeEnum.EVALUATOR, new EvaluatorAgent(evaluatorConfig, llmService, promptService));
         systemAgents.put(AgentTypeEnum.REPORTER, new ReporterAgent(reporterConfig, llmService, promptService));
 
@@ -179,7 +216,7 @@ public class OrchestrAgentFlowTest {
 
         Map<AgentTypeEnum, Agent> systemAgents = new HashMap<>();
         systemAgents.put(AgentTypeEnum.PLANNER, new PlannerAgent(plannerConfig, llmService, promptService));
-        systemAgents.put(AgentTypeEnum.SUPERVISOR, new SupervisorAgent(supervisorConfig, llmService, promptService));
+        systemAgents.put(AgentTypeEnum.SUPERVISOR, new SupervisorAgent());
         systemAgents.put(AgentTypeEnum.EVALUATOR, strictEvaluator);
         systemAgents.put(AgentTypeEnum.REPORTER, new ReporterAgent(reporterConfig, llmService, promptService));
 
@@ -204,7 +241,7 @@ public class OrchestrAgentFlowTest {
     }
 
     @Test
-    @DisplayName("测试 CoordinatorAgent 意图识别与直接回复 (不触发后续流程)")
+    @DisplayName("测试会话编排流: 意图识别判定闲聊直答 (不触发任何策略)")
     public void testCoordinatorDirectReply() throws BizException {
         StrategyContext context = new DefaultStrategyContext();
         context.setProperties(PropertyKeys.KEY_STRATEGY_TARGET, "你好呀");
@@ -213,59 +250,178 @@ public class OrchestrAgentFlowTest {
             @Override
             public com.shane.orchestragent.biz.model.agent.AgentResult execute(StrategyContext ctx) {
                 return new com.shane.orchestragent.biz.model.agent.LlmAgentResult(
-                        "{\"handoffToPlanner\": false, \"reply\": \"您好！我是 OrchestrAgent，很高兴为您服务。\"}",
+                        "{\"action\": \"DIRECT_REPLY\", \"reply\": \"您好！我是 OrchestrAgent，很高兴为您服务。\"}",
                         null, null
                 );
             }
         };
 
-        Map<AgentTypeEnum, Agent> systemAgents = new HashMap<>();
-        systemAgents.put(AgentTypeEnum.COORDINATOR, directCoordinator);
-        systemAgents.put(AgentTypeEnum.PLANNER, new PlannerAgent(plannerConfig, llmService, promptService));
-        systemAgents.put(AgentTypeEnum.SUPERVISOR, new SupervisorAgent(supervisorConfig, llmService, promptService));
-        systemAgents.put(AgentTypeEnum.EVALUATOR, new EvaluatorAgent(evaluatorConfig, llmService, promptService));
-        systemAgents.put(AgentTypeEnum.REPORTER, new ReporterAgent(reporterConfig, llmService, promptService));
-
-        MultipleChatStrategyFlow flow = new MultipleChatStrategyFlow(context, systemAgents, 10);
+        SessionOrchestrationFlow flow = new SessionOrchestrationFlow(
+                context, directCoordinator, strategyRepo, sessionStateStore, flowFactory, 10);
         flow.execute();
         String reply = context.getRecommendResult();
 
         Assertions.assertEquals("您好！我是 OrchestrAgent，很高兴为您服务。", reply);
         Assertions.assertNull(context.getPlanResult());
+        Assertions.assertEquals(FlowStateEnum.FINISHED, flow.getState());
     }
 
     @Test
-    @DisplayName("测试 MultipleChatStrategyFlow: CoordinatorAgent 返回直接答复但内容为空时 Fail-Fast 阻断")
+    @DisplayName("测试会话编排流: 意图识别直答但 reply 为空时 Fail-Fast 阻断")
     public void testMultipleChatCoordinatorEmptyReplyFailFast() {
-        StrategyConfigDO config = StrategyConfigDO.builder()
-                .strategyId("chat_strategy")
-                .code("chat_strategy")
-                .name("客服多轮问答策略")
-                .maxStep(10)
-                .flowTopologyType("MULTIPLE_CHAT")
-                .build();
-        StrategyContext context = new DefaultStrategyContext(config, "test_flow_coordinator_empty", "test_session", null);
+        StrategyContext context = new DefaultStrategyContext(null, "test_flow_coordinator_empty", "test_session_empty", null);
+        context.setProperties(PropertyKeys.KEY_STRATEGY_TARGET, "你好");
 
         CoordinatorAgent blankReplyCoordinator = new CoordinatorAgent(coordinatorConfig, llmService, promptService) {
             @Override
             public AgentResult execute(StrategyContext ctx) {
-                return new AgentResult("{\"handoffToPlanner\": false, \"reply\": \"\"}", null);
+                return new AgentResult("{\"action\": \"DIRECT_REPLY\", \"reply\": \"\"}", null);
             }
         };
 
-        Map<AgentTypeEnum, Agent> systemAgents = new HashMap<>();
-        systemAgents.put(AgentTypeEnum.COORDINATOR, blankReplyCoordinator);
-        systemAgents.put(AgentTypeEnum.PLANNER, new PlannerAgent(plannerConfig, llmService, promptService));
-        systemAgents.put(AgentTypeEnum.SUPERVISOR, new SupervisorAgent(supervisorConfig, llmService, promptService));
-        systemAgents.put(AgentTypeEnum.EVALUATOR, new EvaluatorAgent(evaluatorConfig, llmService, promptService));
-        systemAgents.put(AgentTypeEnum.REPORTER, new ReporterAgent(reporterConfig, llmService, promptService));
-
-        MultipleChatStrategyFlow flow = new MultipleChatStrategyFlow(context, systemAgents, 10);
+        SessionOrchestrationFlow flow = new SessionOrchestrationFlow(
+                context, blankReplyCoordinator, strategyRepo, sessionStateStore, flowFactory, 10);
         flow.execute();
         Assertions.assertEquals(FlowStateEnum.ERROR, flow.getState());
         Throwable lastError = (Throwable) context.getProperty("lastError");
         Assertions.assertTrue(lastError instanceof BizException);
         Assertions.assertEquals("COORDINATOR_REPLY_EMPTY", ((BizException) lastError).getErrorCode());
+    }
+
+    @Test
+    @DisplayName("测试会话编排流: 缺参追问落盘待定状态并跨轮累积参数")
+    public void testSessionCollectParamsAcrossRounds() throws BizException {
+        // 第一轮: 命中策略但缺少 arrivalCity，COLLECT 追问并落盘待定状态
+        StrategyContext round1 = new DefaultStrategyContext(null, "test_flow_collect_1", "test_session_collect", null);
+        round1.setProperties(PropertyKeys.KEY_STRATEGY_TARGET, "CA1234 落地了帮我安排接机");
+        round1.setUserId("U001");
+
+        CoordinatorAgent collectCoordinator = new CoordinatorAgent(coordinatorConfig, llmService, promptService) {
+            @Override
+            public AgentResult execute(StrategyContext ctx) {
+                return new AgentResult("{\"action\": \"COLLECT\", \"reply\": \"请问您落地哪座城市？\", "
+                        + "\"strategyCode\": \"flight_strategy\", \"params\": {\"flightNo\": \"CA1234\"}}", null);
+            }
+        };
+
+        SessionOrchestrationFlow flow1 = new SessionOrchestrationFlow(
+                round1, collectCoordinator, strategyRepo, sessionStateStore, flowFactory, 10);
+        flow1.execute();
+
+        Assertions.assertEquals("请问您落地哪座城市？", round1.getRecommendResult());
+        Assertions.assertNull(round1.getPlanResult());
+        SessionPendingState pending = sessionStateStore.get("test_session_collect");
+        Assertions.assertNotNull(pending);
+        Assertions.assertEquals("flight_strategy", pending.getStrategyCode());
+        Assertions.assertEquals("CA1234", pending.getCollectedParams().get("flightNo"));
+
+        // 第二轮: 补充 arrivalCity 后必填齐备，EXECUTE 触发策略流
+        StrategyContext round2 = new DefaultStrategyContext(null, "test_flow_collect_2", "test_session_collect", null);
+        round2.setProperties(PropertyKeys.KEY_STRATEGY_TARGET, "上海虹桥");
+        round2.setUserId("U001");
+
+        CoordinatorAgent executeCoordinator = new CoordinatorAgent(coordinatorConfig, llmService, promptService) {
+            @Override
+            public AgentResult execute(StrategyContext ctx) {
+                return new AgentResult("{\"action\": \"EXECUTE\", \"reply\": \"\", "
+                        + "\"strategyCode\": \"flight_strategy\", \"params\": {\"arrivalCity\": \"上海\"}}", null);
+            }
+        };
+
+        SessionOrchestrationFlow flow2 = new SessionOrchestrationFlow(
+                round2, executeCoordinator, strategyRepo, sessionStateStore, flowFactory, 10);
+        flow2.execute();
+
+        // 跨轮累积参数已合并 (flightNo + arrivalCity + userId 系统注入) 且策略流真实执行
+        Assertions.assertNotNull(round2.getRecommendResult());
+        Assertions.assertNull(sessionStateStore.get("test_session_collect"));
+        Assertions.assertEquals(FlowStateEnum.FINISHED, flow2.getState());
+
+        // 委托策略流以同一 flowId 注册于 FlowStore: 验证其独立上下文中的规划结果与平铺入参
+        com.shane.orchestragent.biz.flow.StrategyFlow delegate = com.shane.orchestragent.biz.flow.store.FlowStore.get("test_flow_collect_2");
+        Assertions.assertNotNull(delegate);
+        Assertions.assertNotNull(delegate.getContext().getPlanResult());
+        Assertions.assertEquals("CA1234", delegate.getContext().getProperty("flightNo"));
+        Assertions.assertEquals("上海", delegate.getContext().getProperty("arrivalCity"));
+        Assertions.assertEquals("U001", delegate.getContext().getProperty("userId"));
+    }
+
+    @Test
+    @DisplayName("测试会话编排流: LLM 误判 EXECUTE 但必填参数缺失时强制降级为追问 (严禁假通过)")
+    public void testSessionExecuteWithMissingParamsDowngrade() throws BizException {
+        StrategyContext context = new DefaultStrategyContext(null, "test_flow_downgrade", "test_session_downgrade", null);
+        context.setProperties(PropertyKeys.KEY_STRATEGY_TARGET, "帮我安排接机");
+        context.setUserId("U001");
+
+        CoordinatorAgent prematureExecuteCoordinator = new CoordinatorAgent(coordinatorConfig, llmService, promptService) {
+            @Override
+            public AgentResult execute(StrategyContext ctx) {
+                return new AgentResult("{\"action\": \"EXECUTE\", \"reply\": \"\", "
+                        + "\"strategyCode\": \"flight_strategy\", \"params\": {}}", null);
+            }
+        };
+
+        SessionOrchestrationFlow flow = new SessionOrchestrationFlow(
+                context, prematureExecuteCoordinator, strategyRepo, sessionStateStore, flowFactory, 10);
+        flow.execute();
+
+        // 完整性终审拦截: 未触发策略流，落盘待定状态并返回确定性追问话术
+        Assertions.assertNull(context.getPlanResult());
+        String reply = context.getRecommendResult();
+        Assertions.assertNotNull(reply);
+        Assertions.assertTrue(reply.contains("flightNo") && reply.contains("arrivalCity"));
+        SessionPendingState pending = sessionStateStore.get("test_session_downgrade");
+        Assertions.assertNotNull(pending);
+        Assertions.assertEquals("flight_strategy", pending.getStrategyCode());
+    }
+
+    @Test
+    @DisplayName("测试会话编排流: 意图识别编造目录外策略编码时 Fail-Fast 阻断")
+    public void testSessionUnknownStrategyFailFast() {
+        StrategyContext context = new DefaultStrategyContext(null, "test_flow_unknown", "test_session_unknown", null);
+        context.setProperties(PropertyKeys.KEY_STRATEGY_TARGET, "帮我退票");
+
+        CoordinatorAgent hallucinatedCoordinator = new CoordinatorAgent(coordinatorConfig, llmService, promptService) {
+            @Override
+            public AgentResult execute(StrategyContext ctx) {
+                return new AgentResult("{\"action\": \"EXECUTE\", \"reply\": \"\", "
+                        + "\"strategyCode\": \"not_exist_strategy\", \"params\": {}}", null);
+            }
+        };
+
+        SessionOrchestrationFlow flow = new SessionOrchestrationFlow(
+                context, hallucinatedCoordinator, strategyRepo, sessionStateStore, flowFactory, 10);
+        flow.execute();
+
+        Assertions.assertEquals(FlowStateEnum.ERROR, flow.getState());
+        Throwable lastError = (Throwable) context.getProperty("lastError");
+        Assertions.assertTrue(lastError instanceof BizException);
+        Assertions.assertEquals("COORDINATOR_STRATEGY_UNKNOWN", ((BizException) lastError).getErrorCode());
+    }
+
+    @Test
+    @DisplayName("测试会话编排流: 系统级必填参数 userId 上下文缺失时 Fail-Fast (严禁向用户追问)")
+    public void testSessionSystemParamMissingFailFast() {
+        StrategyContext context = new DefaultStrategyContext(null, "test_flow_sysparam", "test_session_sysparam", null);
+        context.setProperties(PropertyKeys.KEY_STRATEGY_TARGET, "CA1234 落地上海帮我安排接机");
+
+        CoordinatorAgent executeCoordinator = new CoordinatorAgent(coordinatorConfig, llmService, promptService) {
+            @Override
+            public AgentResult execute(StrategyContext ctx) {
+                return new AgentResult("{\"action\": \"EXECUTE\", \"reply\": \"\", "
+                        + "\"strategyCode\": \"flight_strategy\", \"params\": {\"flightNo\": \"CA1234\", \"arrivalCity\": \"上海\"}}", null);
+            }
+        };
+
+        SessionOrchestrationFlow flow = new SessionOrchestrationFlow(
+                context, executeCoordinator, strategyRepo, sessionStateStore, flowFactory, 10);
+        flow.execute();
+
+        // userId 声明必填但请求上下文未提供: Fail-Fast 而非向终端用户追问
+        Assertions.assertEquals(FlowStateEnum.ERROR, flow.getState());
+        Throwable lastError = (Throwable) context.getProperty("lastError");
+        Assertions.assertTrue(lastError instanceof BizException);
+        Assertions.assertEquals("STRATEGY_PARAM_MISSING", ((BizException) lastError).getErrorCode());
     }
 
     @Test
@@ -285,46 +441,67 @@ public class OrchestrAgentFlowTest {
     }
 
     @Test
-    @DisplayName("测试 SupervisorAgent 多轮消息组装与系统提示词动态渲染")
-    public void testSupervisorAgentMultiRoundMessageRendering() throws BizException {
-        SupervisorAgent supervisor = new SupervisorAgent(supervisorConfig, llmService, promptService);
+    @DisplayName("测试纯代码 SupervisorAgent 之 DAG 校验、并发调度与局部重跑")
+    public void testSupervisorAgentDagExecutionAndValidation() throws BizException {
+        SupervisorAgent supervisor = new SupervisorAgent();
         StrategyContext context = new DefaultStrategyContext();
-        context.setProperties(PropertyKeys.KEY_STRATEGY_TARGET, "北京到上海机票");
+        context.setProperties("orderId", "A1024");
+        context.setProperties(PropertyKeys.KEY_STRATEGY_TARGET, "退货审批");
 
-        // 1. 系统消息渲染
-        ChatMessageDTO systemMsg = supervisor.formatSystemMessage(context);
-        Assertions.assertNotNull(systemMsg);
-        Assertions.assertTrue(systemMsg.getContent().contains("# SupervisorAgent"));
+        // 注册两个测试子节点
+        Agent s1Agent = new BaseAgent<StrategyContext>("s1_worker", "步骤1工作节点", AgentTypeEnum.EXPERT) {
+            @Override
+            protected AgentResult doExecute(StrategyContext ctx) throws BizException {
+                return new AgentResult("{\"eligible\": true, \"evidence\": \"符合条件\"}", null);
+            }
+        };
+        Agent s2Agent = new BaseAgent<StrategyContext>("s2_worker", "步骤2工作节点", AgentTypeEnum.EXPERT) {
+            @Override
+            protected AgentResult doExecute(StrategyContext ctx) throws BizException {
+                Map<String, Object> req = ctx.getNextAgentRequest();
+                Assertions.assertNotNull(req);
+                return new AgentResult("{\"approved\": true}", null);
+            }
+        };
+        context.registerAgent(s1Agent);
+        context.registerAgent(s2Agent);
 
-        // 2. 模拟多轮中间协同产物追加到 context
-        context.getChatMessages().add(FlowAgentMessage.builder()
-                .agentType(AgentTypeEnum.PLANNER)
-                .agentName("PLANNER")
-                .output("{\"steps\": [{\"step\": 1, \"agent\": \"search_worker\"}]}")
-                .build());
-        context.getChatMessages().add(FlowAgentMessage.builder()
-                .agentType(AgentTypeEnum.EXPERT)
-                .agentName("search_worker")
-                .output("已查询到3个推荐航班")
-                .build());
-        context.getChatMessages().add(FlowAgentMessage.builder()
-                .agentType(AgentTypeEnum.TOOL)
-                .agentName("weather_tool")
-                .output("上海晴天 25度")
-                .build());
-        context.getChatMessages().add(FlowAgentMessage.builder()
-                .agentType(AgentTypeEnum.EVALUATOR)
-                .agentName("EVALUATOR")
-                .output("缺少行李额说明")
-                .build());
+        // 1. 测试有环检测 (Kahn 算法 Fail-Fast)
+        FlowDagStep cycle1 = FlowDagStep.builder().id("c1").agent("s1_worker").dependsOn(List.of("c2")).build();
+        FlowDagStep cycle2 = FlowDagStep.builder().id("c2").agent("s2_worker").dependsOn(List.of("c1")).build();
+        PlanResult cyclePlan = PlanResult.builder().steps(List.of(cycle1, cycle2)).build();
+        Assertions.assertThrows(BizException.class, () -> supervisor.run(cyclePlan, context));
 
-        // 3. 完整多轮消息格式化
-        List<ChatMessageDTO> formatted = supervisor.formatMessages(context);
-        Assertions.assertTrue(formatted.size() >= 5); // 1 system + 4 round messages (+ 1 supervisor instruction prompt)
-        Assertions.assertTrue(formatted.get(1).getContent().contains("【任务规划步骤】"));
-        Assertions.assertTrue(formatted.get(2).getContent().contains("【专精节点 search_worker 执行结果】"));
-        Assertions.assertTrue(formatted.get(3).getContent().contains("【工具 weather_tool 真实调用返回结果】"));
-        Assertions.assertTrue(formatted.get(4).getContent().contains("【整改要求】: 缺少行李额说明"));
+        // 2. 测试正常 DAG 并发调度与参数机械求值 ($global.orderId, $s1.output)
+        FlowDagStep step1 = FlowDagStep.builder()
+                .id("s1")
+                .agent("s1_worker")
+                .goal("查询是否符合退货")
+                .inputs(Map.of("orderId", "$global.orderId"))
+                .dependsOn(List.of())
+                .outputKeys(Set.of("eligible"))
+                .build();
+        FlowDagStep step2 = FlowDagStep.builder()
+                .id("s2")
+                .agent("s2_worker")
+                .goal("审批决策")
+                .inputs(Map.of("s1Result", "$s1.output", "eligible", "$s1.output.eligible"))
+                .dependsOn(List.of("s1"))
+                .outputKeys(Set.of("approved"))
+                .build();
+        PlanResult normalPlan = PlanResult.builder().steps(List.of(step1, step2)).build();
+
+        com.shane.orchestragent.biz.flow.dag.DagExecutionState state = supervisor.run(normalPlan, context);
+        Assertions.assertTrue(state.isAllSucceeded());
+        Assertions.assertEquals(1, state.getAttempts().get("s1"));
+        Assertions.assertEquals(1, state.getAttempts().get("s2"));
+
+        // 3. 测试 Evaluator 点名局部重跑 (传递下游闭包计算: s2 作废重跑，s1 尝试次数仍为 1 原样复用)
+        Map<String, String> feedback = Map.of("s2", "缺少审批备注，请补充");
+        state = supervisor.rerun(normalPlan, state, feedback, context);
+        Assertions.assertTrue(state.isAllSucceeded());
+        Assertions.assertEquals(1, state.getAttempts().get("s1")); // s1 未被打回，尝试次数不变
+        Assertions.assertEquals(2, state.getAttempts().get("s2")); // s2 被点名重跑，尝试次数增加到 2
     }
 
     @Test

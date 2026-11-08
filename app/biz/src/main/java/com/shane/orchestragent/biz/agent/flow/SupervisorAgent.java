@@ -1,128 +1,123 @@
 package com.shane.orchestragent.biz.agent.flow;
 
-import com.shane.orchestragent.biz.agent.base.BaseLlmAgent;
+import com.shane.orchestragent.biz.agent.Agent;
+import com.shane.orchestragent.biz.agent.base.BaseAgent;
 import com.shane.orchestragent.biz.context.StrategyContext;
-import com.shane.orchestragent.biz.model.agent.LlmConfig;
-import com.shane.orchestragent.biz.model.flow.FlowAgentMessage;
-import com.shane.orchestragent.biz.service.LlmService;
+import com.shane.orchestragent.biz.flow.dag.DagExecutionState;
+import com.shane.orchestragent.biz.flow.dag.DagSupervisorEngine;
+import com.shane.orchestragent.biz.model.agent.AgentResult;
+import com.shane.orchestragent.biz.model.flow.PlanResult;
+import com.shane.orchestragent.biz.model.flow.SupervisorResult;
 import com.shane.orchestragent.common.enums.AgentTypeEnum;
-import com.shane.orchestragent.common.exception.BizErrorFactory;
 import com.shane.orchestragent.common.exception.BizException;
-import com.shane.orchestragent.common.utils.JsonUtils;
-import com.shane.orchestragent.integration.llm.model.AssistantChatMessageDTO;
-import com.shane.orchestragent.integration.llm.model.ChatMessageDTO;
-import com.shane.orchestragent.integration.llm.model.SystemChatMessageDTO;
-import com.shane.orchestragent.integration.llm.model.UserChatMessageDTO;
-import com.shane.orchestragent.prompt.service.PromptService;
-import org.apache.commons.lang3.StringUtils;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.function.BiConsumer;
 
 /**
- * 步进调度指挥智能体 (严格基于配置中心渲染，精准驱动状态机与自愈响应)
+ * 纯代码 DAG 并发调度指挥智能体
+ * <p>
+ * 彻底剥离大模型推理耗时与幻觉风险，基于 Kahn 算法静态校验 DAG，
+ * 通过线程池并发驱动就绪节点，机械化解析数据引用，并支持基于传递闭包的局部自愈重跑。
  *
  * @author Shane
  */
-public class SupervisorAgent extends BaseLlmAgent<StrategyContext> {
+public class SupervisorAgent extends BaseAgent<StrategyContext> {
 
-    public SupervisorAgent(LlmConfig llmConfig, LlmService llmService, PromptService promptService) {
-        super(AgentTypeEnum.SUPERVISOR, llmConfig, llmService, promptService);
+    private final DagSupervisorEngine dagEngine;
+    private final ThreadLocal<BiConsumer<Agent, AgentResult>> stepCallbackHolder = new ThreadLocal<>();
+
+    public SupervisorAgent() {
+        this(null);
+    }
+
+    public SupervisorAgent(ExecutorService executorService) {
+        super(AgentTypeEnum.SUPERVISOR.name(), AgentTypeEnum.SUPERVISOR.getDescription(), AgentTypeEnum.SUPERVISOR);
+        this.dagEngine = new DagSupervisorEngine(executorService);
+    }
+
+    /**
+     * 首次调度执行完整 DAG
+     *
+     * @param plan    全局规划 Plan
+     * @param context 策略运行上下文
+     * @return 执行黑板状态
+     * @throws BizException 若发生依赖缺失、环依赖或执行错误
+     */
+    public DagExecutionState run(PlanResult plan, StrategyContext context) throws BizException {
+        return dagEngine.run(plan, context, stepCallbackHolder.get());
+    }
+
+    /**
+     * 首次调度执行完整 DAG (携带单步执行结果监听回调)
+     *
+     * @param plan         全局规划 Plan
+     * @param context      策略运行上下文
+     * @param stepCallback 单步完成回调
+     * @return 执行黑板状态
+     * @throws BizException 若发生依赖缺失、环依赖或执行错误
+     */
+    public DagExecutionState run(PlanResult plan, StrategyContext context,
+                                 BiConsumer<Agent, AgentResult> stepCallback) throws BizException {
+        stepCallbackHolder.set(stepCallback);
+        try {
+            return run(plan, context);
+        } finally {
+            stepCallbackHolder.remove();
+        }
+    }
+
+    /**
+     * Evaluator 打回后的局部自愈重跑
+     *
+     * @param plan     全局规划 Plan
+     * @param state    已有执行黑板
+     * @param feedback 针对被点名节点的整改意见
+     * @param context  策略运行上下文
+     * @return 更新后的执行黑板状态
+     * @throws BizException 若重跑失败
+     */
+    public DagExecutionState rerun(PlanResult plan, DagExecutionState state,
+                                   Map<String, String> feedback, StrategyContext context) throws BizException {
+        return dagEngine.rerun(plan, state, feedback, context, stepCallbackHolder.get());
+    }
+
+    /**
+     * Evaluator 打回后的局部自愈重跑 (携带单步执行结果监听回调)
+     *
+     * @param plan         全局规划 Plan
+     * @param state        已有执行黑板
+     * @param feedback     针对被点名节点的整改意见
+     * @param context      策略运行上下文
+     * @param stepCallback 单步完成回调
+     * @return 更新后的执行黑板状态
+     * @throws BizException 若重跑失败
+     */
+    public DagExecutionState rerun(PlanResult plan, DagExecutionState state,
+                                   Map<String, String> feedback, StrategyContext context,
+                                   BiConsumer<Agent, AgentResult> stepCallback) throws BizException {
+        stepCallbackHolder.set(stepCallback);
+        try {
+            return rerun(plan, state, feedback, context);
+        } finally {
+            stepCallbackHolder.remove();
+        }
     }
 
     @Override
-    protected SystemChatMessageDTO buildSystemPrompt(StrategyContext context) throws BizException {
-        Map<String, Object> properties = new HashMap<>(context.getProperties());
-        properties.put("strategy_target", context.getStrategyTarget());
-
-        if (context.getPlanResult() != null) {
-            properties.put("plan_steps", JsonUtils.toJsonString(context.getPlanResult().getSteps()));
-        } else {
-            properties.put("plan_steps", "[]");
+    protected AgentResult doExecute(StrategyContext context) throws BizException {
+        PlanResult plan = context.getPlanResult();
+        if (plan == null) {
+            throw new BizException("PLAN_RESULT_MISSING", "Supervisor 缺少待调度的全局任务 Plan");
         }
-
-        properties.put("history_messages", JsonUtils.toJsonString(context.getChatMessages()));
-
-        // 提取当前流程中挂载的所有外部工具定义与入参 Schema
-        List<Map<String, Object>> toolList = new ArrayList<>();
-        if (context.getAgents() != null) {
-            for (com.shane.orchestragent.biz.agent.Agent agent : context.getAgents().values()) {
-                if (agent.getType() == AgentTypeEnum.TOOL && agent instanceof ToolAgent toolAgent) {
-                    Map<String, Object> toolMap = new HashMap<>();
-                    toolMap.put("name", toolAgent.getName());
-                    toolMap.put("description", toolAgent.getDescription());
-                    if (toolAgent.getToolConfig() != null) {
-                        toolMap.put("title", toolAgent.getToolConfig().getTitle());
-                        toolMap.put("requestJsonSchema", toolAgent.getToolConfig().getRequestJsonSchema());
-                    }
-                    toolList.add(toolMap);
-                }
-            }
-        }
-        properties.put("tool_list", JsonUtils.toJsonString(toolList));
-
-        // 注入来自 Evaluator 的打回批评反馈 (如有)
-        String feedback = context.getEvaluationFeedback();
-        properties.put("evaluator_feedback", StringUtils.isNotEmpty(feedback) ? feedback : "无 (前序执行正常)");
-
-        String template = llmConfig != null ? llmConfig.getSystemPrompt() : null;
-        if (StringUtils.isBlank(template)) {
-            throw BizErrorFactory.getInstance().agentSystemPromptMissing("SUPERVISOR");
-        }
-        String prompt = promptService.renderPrompt(template, properties);
-        return new SystemChatMessageDTO(prompt);
+        DagExecutionState state = run(plan, context);
+        return new AgentResult(state.isAllSucceeded() ? "DAG_SUCCESS" : "DAG_FAILED", null);
     }
 
     @Override
-    protected List<ChatMessageDTO> buildMessages(StrategyContext context) throws BizException {
-        List<ChatMessageDTO> chatMessages = new ArrayList<>();
-
-        for (FlowAgentMessage chatMessage : context.getChatMessages()) {
-            if (chatMessage == null || chatMessage.getAgentType() == null) {
-                continue;
-            }
-            switch (chatMessage.getAgentType()) {
-                case PLANNER -> {
-                    chatMessages.add(new UserChatMessageDTO("【任务规划步骤】: " + chatMessage.getOutput()));
-                }
-                case TOOL -> {
-                    chatMessages.add(new UserChatMessageDTO("【工具 " + chatMessage.getAgentName() + " 真实调用返回结果】: " + chatMessage.getOutput()));
-                }
-                case SUPERVISOR -> {
-                    chatMessages.add(new AssistantChatMessageDTO(chatMessage.getOutput()));
-                }
-                case EXPERT -> {
-                    chatMessages.add(new UserChatMessageDTO("【专精节点 " + chatMessage.getAgentName() + " 执行结果】: " + chatMessage.getOutput()));
-                }
-                case EVALUATOR -> {
-                    chatMessages.add(new UserChatMessageDTO("【整改要求】: " + chatMessage.getOutput()));
-                }
-                default -> {
-                    if (StringUtils.isNotEmpty(chatMessage.getOutput())) {
-                        chatMessages.add(new UserChatMessageDTO(chatMessage.getOutput()));
-                    }
-                }
-            }
-        }
-
-        // 如果存在打回自愈意见且尚未以 EVALUATOR 消息记录，注入提醒
-        if (StringUtils.isNotEmpty(context.getEvaluationFeedback())) {
-            boolean hasEvaluatorMsg = context.getChatMessages().stream()
-                    .anyMatch(m -> m.getAgentType() == AgentTypeEnum.EVALUATOR);
-            if (!hasEvaluatorMsg) {
-                chatMessages.add(new UserChatMessageDTO("【特别注意】战略评估器提出整改要求: " + context.getEvaluationFeedback() + "\n请优先指派对应 Expert 执行修补！"));
-            }
-        }
-
-        String supervisorPrompt = llmConfig != null ? llmConfig.getUserPrompt() : null;
-        if (StringUtils.isNotBlank(supervisorPrompt)) {
-            chatMessages.add(new UserChatMessageDTO("【调度指令与核验提醒】: " + supervisorPrompt));
-        } else if (chatMessages.isEmpty()) {
-            throw BizErrorFactory.getInstance().agentUserPromptMissing("SUPERVISOR");
-        }
-
-        return chatMessages;
+    public void stop() {
+        super.stop();
+        dagEngine.shutdown();
     }
 }

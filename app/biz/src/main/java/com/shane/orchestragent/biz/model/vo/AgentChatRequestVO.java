@@ -9,7 +9,7 @@ import java.io.Serializable;
 import java.util.Map;
 
 /**
- * 智能体流式会话请求业务对象 (VO)
+ * 智能体流式会话请求业务对象 (VO) (不携带策略，由意图识别基于策略目录动态选定)
  *
  * @author Shane
  */
@@ -18,9 +18,6 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 public class AgentChatRequestVO implements Serializable {
-
-    /** 目标策略业务编码 */
-    private String strategyCode;
 
     /** 用户本次发送的自然语言对话消息 */
     private String message;

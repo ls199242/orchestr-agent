@@ -74,6 +74,107 @@ DEFAULT_CONFIGS = {
             "expertCodes": [],
             "properties": {},
         },
+        {
+            "strategyId": "flight_nearby_recommend_strategy",
+            "code": "flight_nearby_recommend_strategy",
+            "name": "智能航班查询与临近推荐策略",
+            "description": "输入起飞抵达日期，结合旅客偏好画像与历史行程，推荐临近日期及周边机场的高匹配度航班",
+            "prompt": """# 策略总目标
+针对用户【${userId}】从【${departureCity}】飞往【${arrivalCity}】的出行诉求（期望起飞日期：${departureDate}，期望返程/抵达日期：${arrivalDate}），深度融合用户的常客会员等级、历史乘机时段与价格偏好画像，检索并比对目标日期及临近 ±1~2 天、周边备选机场的航班，为用户输出兼顾舒适度、性价比与准点率的最优航班推荐组合。
+
+# 执行协同 SOP 规范（请 Planner 严格按照此顺序规划步骤）
+1. 【采集旅客画像与乘机偏好】：
+   - 并行或先后调度 `query_user_info_tool`（获取会员卡级、常旅客标签）与 `query_user_orders_tool`（获取历史订单与时段习惯）。
+2. 【旅客个性化偏好特征提炼】：
+   - 调度 `customer_preference_expert`（客户偏好分析专家），深度解析并生成旅客偏好特征报告（价格敏感度、偏好起飞时段、主选航司、同城机场接驳容忍度）。
+3. 【检索候选航班大盘】：
+   - 依据偏好特征，调度 `query_flight_schedule_tool` 查询目标日期及临近日期、邻近机场的候选航班现货信息。
+4. 【综合权重比选与推荐方案决策】：
+   - 调度 `flight_recommend_expert`（航班推荐专家），结合旅客画像、候选航班及伴生退改签/服务权益知识，输出 2~3 个差异化推荐方案（如：最优契合推荐、临近日期特惠优选、周边枢纽机场舒适优选）。
+5. 【终版结构化成果渲染】：
+   - 由 Reporter 严格按照 Output Schema 汇编为结构化推荐响应。""",
+            "maxStep": 14,
+            "flowTopologyType": "REACT",
+            "stream": True,
+            "toolCodes": [
+                "query_user_info_tool",
+                "query_user_orders_tool",
+                "query_flight_schedule_tool",
+            ],
+            "expertCodes": [
+                "customer_preference_expert",
+                "flight_recommend_expert",
+            ],
+            "params": [
+                {"name": "userId", "type": "string", "description": "旅客会员ID，如 U1001", "required": True},
+                {"name": "departureCity", "type": "string", "description": "出发城市或机场代码，如 北京 或 PEK", "required": True},
+                {"name": "arrivalCity", "type": "string", "description": "到达城市或机场代码，如 上海 或 SHA", "required": True},
+                {"name": "departureDate", "type": "string", "description": "期望起飞日期，格式 YYYY-MM-DD", "required": True},
+                {"name": "arrivalDate", "type": "string", "description": "返程或抵达日期，格式 YYYY-MM-DD", "required": False},
+                {"name": "flexibleDays", "type": "integer", "description": "临近日期浮动容忍天数，如 1", "required": False},
+            ],
+            "properties": {
+                "outputJsonSchema": json.dumps(
+                    {
+                        "type": "object",
+                        "required": ["strategyCode", "userId", "searchSummary", "recommendedFlights"],
+                        "properties": {
+                            "strategyCode": {"type": "string"},
+                            "userId": {"type": "string"},
+                            "searchSummary": {
+                                "type": "object",
+                                "properties": {
+                                    "route": {"type": "string"},
+                                    "targetDate": {"type": "string"},
+                                    "userPreferenceSummary": {"type": "string"},
+                                },
+                            },
+                            "recommendedFlights": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "required": [
+                                        "flightNo",
+                                        "airline",
+                                        "depAirport",
+                                        "arrAirport",
+                                        "depDate",
+                                        "depTime",
+                                        "price",
+                                        "recommendTag",
+                                        "recommendReason",
+                                    ],
+                                    "properties": {
+                                        "flightNo": {"type": "string"},
+                                        "airline": {"type": "string"},
+                                        "depAirport": {"type": "string"},
+                                        "arrAirport": {"type": "string"},
+                                        "depDate": {"type": "string"},
+                                        "depTime": {"type": "string"},
+                                        "arrTime": {"type": "string"},
+                                        "price": {"type": "number"},
+                                        "seatClass": {"type": "string"},
+                                        "recommendTag": {
+                                            "type": "string",
+                                            "enum": [
+                                                "BEST_MATCH",
+                                                "NEARBY_DATE_SAVER",
+                                                "NEARBY_AIRPORT_COMFORT",
+                                            ],
+                                        },
+                                        "isNearbyDate": {"type": "boolean"},
+                                        "isNearbyAirport": {"type": "boolean"},
+                                        "recommendReason": {"type": "string"},
+                                        "policyTips": {"type": "string"},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    ensure_ascii=False,
+                )
+            },
+        },
     ],
 
     # 2.2 智能体基础配置 (AgentConfigDO)
@@ -94,27 +195,27 @@ DEFAULT_CONFIGS = {
         {
             "name": "PLANNER",
             "code": "PLANNER",
-            "description": "任务分解与执行路径全局规划智能体",
+            "description": "任务分解与有向无环图 (DAG) 全局规划智能体",
             "agentType": "SYSTEM",
             "model": "Deepseek",
             "temperature": 0.2,
             "maxTokens": 2048,
             "nodeWaitTime": 15000,
-            "systemPrompt": "# 角色定义\n你是一位出色的规划大师 PlannerAgent。请根据用户的战略目标进行任务拆解与执行步骤规划，输出格式严格为 JSON。\n【候选外部工具与专精节点】：\n${agent_list}\n\n【输出格式要求】：严格输出符合以下结构的 JSON，不要添加多余解释：\n{\n  \"steps\": [\n    {\"step\": 1, \"agent\": \"节点名称\", \"description\": \"执行该步骤的具体指令说明\"}\n  ]\n}",
+            "systemPrompt": "# 角色定义\n你是一位出色的规划大师 PlannerAgent。请根据用户的战略目标进行任务拆解，规划生成无环依赖图 (DAG)，并以 JSON 格式输出。\n【候选外部工具与专精节点】：\n${agent_list}\n\n【DAG 规划规则与输入参数绑定规范】：\n1. 步骤划分：每个步骤定义一个独立的子任务 (stepId 如 s1, s2, s3 等)。无依赖关系的步骤应并行（dependsOn 为空），有数据依赖的步骤需在 dependsOn 中显式声明依赖的前序步骤。\n2. 参数引用与绑定规则 (inputs)：\n   - 全局请求参数引用：使用 \"$global.参数名\" (如 \"$global.city\", \"$global.userId\")；\n   - 前序节点输出引用：使用 \"$步骤Id.output\" (如 \"$s1.output\")，或抽取特定字段 \"$步骤Id.output.字段名\" (如 \"$s1.output.weather\")；\n   - 固定值：直接填写字面量字符串或数值。\n3. 契约校验 (outputKeys)：若该步骤输出要求具备特定字段，可在 outputKeys 中列出，为空则填空数组 []。\n4. 失败策略 (onFailure)：ABORT (失败立即终止流程) 或 SKIP (允许跳过，不阻断后续无关流程)。\n5. 重试与超时：maxRetries (默认 0 或 1)，timeoutMs (默认 15000 毫秒)。\n\n【输出格式要求】：严格输出符合以下结构的纯 JSON，严禁输出任何 markdown 代码块标记或多余解释文字：\n{\n  \"steps\": [\n    {\n      \"id\": \"s1\",\n      \"agent\": \"节点名称\",\n      \"goal\": \"执行该步骤的具体目标说明\",\n      \"inputs\": {\n        \"参数名\": \"$global.xxx 或 $s1.output.xxx 或 固定值\"\n      },\n      \"dependsOn\": [],\n      \"outputKeys\": [],\n      \"maxRetries\": 1,\n      \"timeoutMs\": 15000,\n      \"onFailure\": \"ABORT\"\n    }\n  ]\n}",
             "userPrompt": "【战略目标】：${strategy_target}",
             "extraProperties": {},
         },
         {
             "name": "SUPERVISOR",
             "code": "SUPERVISOR",
-            "description": "执行流水线调度中枢与自愈驱动智能体",
+            "description": "纯代码 DAG 并发调度中枢 (无模型推理损耗)",
             "agentType": "SYSTEM",
             "model": "Deepseek",
-            "temperature": 0.2,
-            "maxTokens": 2048,
-            "nodeWaitTime": 20000,
-            "systemPrompt": "# 角色定义\n你是协同执行中枢 SupervisorAgent。请根据全局战略目标、规划分解步骤（plan_steps）、当前策略挂载的可用工具定义（tool_list）以及流水线执行历史反馈（history_messages），精准做出下一步调度决策。\n战略目标：${strategy_target}\n\n<#if tool_list??>\n【可用外部工具列表与调用入参 Schema 定义】：\n${tool_list}\n</#if>\n\n【核心调度规则与前置核验铁律】：\n1. 【先行核验上一步执行结果（可用性把关）】：\n   - 在做出下一步调度决策前，必须首先仔细审视历史反馈（history_messages）中【最新一步】的执行产出结果（工具真实调用返回或 Expert 执行产出）。\n   - 检查该结果是否有效可用：是否包含业务数据？是否为空、异常、网络超时或明确报错？\n   - 若上一步执行失败、结果无效或报错：\n     - 若属于可修正自愈情况（例如入参缺失或传参错误），请重新调度该节点，并提供修正后的精准入参进行重试；\n     - 若属于不可逆错误或连续重试失败，严禁假装成功继续规划下一步，必须果断中断流程，输出：\n       {\"next\": \"ERROR\", \"request\": {\"reason\": \"上一步执行结果无效或调用失败: 具体原因说明\"}}\n2. 【工具调用精准入参规范（Schema-First）】：\n   - 当调度目标为工具（Tool）时，`request` 必须严格为该工具所需的 JSON 参数对象（依据上述工具 Schema 填写具体键值对，例如 {\"city\": \"上海\", \"airportCode\": \"SHA\"} 或 {\"userId\": \"U8801\"}）。\n   - 【严禁违规】：绝对严禁在 request 中只写自然语言描述（如严禁输出 {\"query\": \"查询天气\"}）！必须给出具体工具的调用入参。\n3. 【业务专精节点调度】：\n   - 当调度目标为 Expert 时，`request` 为针对该 Expert 的具体业务工单上下文与决策指令。\n4. 【任务完结判定】：\n   - 当所有规划步骤均已保质保量执行完毕且成果完备时，输出 \"FINISH\"，`request` 可为空对象 {}。\n\n【输出格式要求】：严格输出符合以下结构的纯 JSON，严禁输出任何 markdown 代码块标记或多余解释文字：\n{\n  \"next\": \"目标节点名称（工具名/Expert名） 或 FINISH 或 ERROR\",\n  \"request\": {\n    \"具体参数名\": \"参数值\"\n  }\n}",
-            "userPrompt": "请依据历史执行结果先核验上一步是否有效可用，再调度下一步。若全部步骤已完成请输出 FINISH，若异常不可恢复请输出 ERROR。",
+            "temperature": 0.0,
+            "maxTokens": 1024,
+            "nodeWaitTime": 5000,
+            "systemPrompt": "纯代码 DAG 并发调度中枢，基于拓扑排序与依赖分析自动并发驱动节点，无需大模型提示词推理。",
+            "userPrompt": "",
             "extraProperties": {},
         },
         {
@@ -126,7 +227,7 @@ DEFAULT_CONFIGS = {
             "temperature": 0.1,
             "maxTokens": 1500,
             "nodeWaitTime": 15000,
-            "systemPrompt": "# 角色定义\n你是严谨的质检验收专家 EvaluatorAgent。请对整个协同流各阶段的产出成果进行全方位质量评估与合规审计。\n战略目标：${strategy_target}\n\n【输出格式要求】：严格输出以下 JSON：\n{\n  \"pass\": true,\n  \"score\": 90,\n  \"critique\": \"验收意见或缺陷分析\",\n  \"suggestedRemedy\": \"自愈整改建议\"\n}",
+            "systemPrompt": "# 角色定义\n你是严谨的质检验收专家 EvaluatorAgent。请对整个协同流各阶段的产出成果进行全方位质量评估与合规审计。\n战略目标：${strategy_target}\n\n【输出格式要求】：严格输出以下 JSON：\n{\n  \"pass\": true,\n  \"score\": 90,\n  \"critique\": \"验收意见或缺陷分析\",\n  \"suggestedRemedy\": \"自愈整改建议\",\n  \"blamedStepIds\": [\"验收未通过时点名需要打回重跑的步骤ID，如 s2；若全部通过则为空数组 []\"]\n}",
             "userPrompt": "【各节点产出汇报汇总】：\n${allAgentOutputs}",
             "extraProperties": {},
         },
@@ -156,6 +257,65 @@ DEFAULT_CONFIGS = {
             "userPrompt": "【总体战略目标】：${strategy_target}\n【当前调度工单入参】：${agent_request}",
             "datasets": [],
             "tools": [],
+            "extraProperties": {},
+        },
+        {
+            "name": "customer_preference_expert",
+            "code": "customer_preference_expert",
+            "description": "客户偏好分析专家，负责分析旅客历史订单与画像，提炼时段偏好、航司黏性、价格敏感度与临近日期/机场接受度",
+            "agentType": "EXPERT",
+            "model": "Deepseek",
+            "temperature": 0.2,
+            "maxTokens": 2048,
+            "nodeWaitTime": 20000,
+            "systemPrompt": """# 专精业务智能体: 客户偏好分析专家 (customer_preference_expert)
+【岗位职责与核心任务】：
+你是一位资深民航旅客行为特征分析专家。负责根据旅客的基础画像与历史飞行订单，提炼出清晰量化的偏好矩阵：
+1. 【时段偏好】：分析旅客历史高频起飞时段（早航班 07:00-09:30、午间 11:00-14:00、晚间 17:00-20:00、避免红眼航班等）；
+2. 【航司与联盟偏好】：识别旅客主航司黏性（国航系、东航系、南航系等）及会员权益最大化偏向；
+3. 【价格与舱位敏感度】：判断属于“商务品质型（优先大机型/超经/商务舱/退改宽松）”还是“价格敏感型（优先低价直飞/可接受非高峰时段）”；
+4. 【灵活性与容忍度】：分析用户对临近日期（±1~2天）调期、以及同城邻近机场（如北京首都vs大兴，上海虹桥vs浦东）地面接驳耗时的接受意愿。
+
+【输出格式规范】：请输出结构清晰的偏好分析报告，突出核心判定结论与航班比选权重指引。""",
+            "userPrompt": "【总体战略目标】：${strategy_target}\n【当前调度工单入参】：${agent_request}",
+            "datasets": [],
+            "tools": [
+                "query_user_info_tool",
+                "query_user_orders_tool",
+            ],
+            "extraProperties": {},
+        },
+        {
+            "name": "flight_recommend_expert",
+            "code": "flight_recommend_expert",
+            "description": "航班推荐决策专家，综合客户偏好、实时候选航班及伴生退改签/通达性知识，比选临近日期与机场方案并给出推荐",
+            "agentType": "EXPERT",
+            "model": "Deepseek",
+            "temperature": 0.2,
+            "maxTokens": 3072,
+            "nodeWaitTime": 25000,
+            "systemPrompt": """# 专精业务智能体: 航班推荐决策专家 (flight_recommend_expert)
+【岗位职责与核心任务】：
+你是一位精通航班时刻价值与旅客行程体验的航旅推荐专家。请综合【客户偏好分析报告】、【实时候选航班列表】以及【伴生民航政策与机场通达性知识】，完成最终的推荐决策与话术包装：
+1. 【基准班期匹配】：重点匹配用户指定起飞/抵达日期的黄金时段航班；
+2. 【临近日期/机场比对挖掘】：
+   - 若临近日期（如前后 1 天）存在同航司同航线显著价差（省 30%+）或更优起降时刻（避免晚到延误），重点作为“灵活省心/省钱”方案推荐；
+   - 若同城临近机场（如首都 vs 大兴，虹桥 vs 浦东）有机型更好（宽体机）、准点率更高或附带快线服务/免费轨道接驳的航班，作为“周边机场舒适”方案推荐；
+3. 【结合退改与会员规则】：结合伴生知识库中的航司舱位退改梯次、会员免退改政策给出贴心避坑提示。
+
+<#if rag_result?? && rag_result?length gt 0>
+【伴生知识库检索参考结果】：
+${rag_result}
+</#if>
+
+【输出要求】：提炼出 2~3 个最具代表性的候选推荐项，每个推荐项明确说明：航班号、起降时间与机场、推荐理由（针对客户偏好点精准击中）。""",
+            "userPrompt": "【总体战略目标】：${strategy_target}\n【当前调度工单入参】：${agent_request}",
+            "datasets": [
+                "flight_service_and_policy_kb",
+            ],
+            "tools": [
+                "query_flight_schedule_tool",
+            ],
             "extraProperties": {},
         },
     ],
@@ -286,6 +446,140 @@ DEFAULT_CONFIGS = {
             ),
             "parameters": {},
         },
+        {
+            "name": "query_user_info_tool",
+            "code": "query_user_info_tool",
+            "title": "旅客基础信息与会员画像查询工具",
+            "description": "根据旅客会员 ID 查询旅客姓名、会员等级（普通/银卡/金卡/白金卡）、常驻城市、主选航司、价格敏感度画像",
+            "endpoint": "http://127.0.0.1:8000/mock/tools/user-info",
+            "requestJsonSchema": json.dumps(
+                {
+                    "type": "object",
+                    "properties": {
+                        "userId": {"type": "string", "description": "旅客会员唯一ID，如 U1001"},
+                    },
+                    "required": ["userId"],
+                },
+                ensure_ascii=False,
+            ),
+            "responseJsonSchema": json.dumps(
+                {
+                    "type": "object",
+                    "properties": {
+                        "userId": {"type": "string"},
+                        "userName": {"type": "string"},
+                        "memberTier": {"type": "string", "enum": ["REGULAR", "SILVER", "GOLD", "PLATINUM"]},
+                        "homeCity": {"type": "string"},
+                        "preferredAirlines": {"type": "array", "items": {"type": "string"}},
+                        "preferredCabin": {"type": "string", "enum": ["ECONOMY", "PREMIUM_ECONOMY", "BUSINESS", "FIRST"]},
+                        "priceSensitivity": {"type": "string", "enum": ["HIGH", "MEDIUM", "LOW"]},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            "parameters": {},
+        },
+        {
+            "name": "query_user_orders_tool",
+            "code": "query_user_orders_tool",
+            "title": "旅客历史机票订单与出行习惯查询工具",
+            "description": "查询旅客近半年内的机票历史行程、实际起降时段、机型喜好、购票均价与退改签频次",
+            "endpoint": "http://127.0.0.1:8000/mock/tools/user-orders",
+            "requestJsonSchema": json.dumps(
+                {
+                    "type": "object",
+                    "properties": {
+                        "userId": {"type": "string", "description": "旅客会员ID"},
+                        "limit": {"type": "integer", "description": "返回历史订单最大条数"},
+                    },
+                    "required": ["userId"],
+                },
+                ensure_ascii=False,
+            ),
+            "responseJsonSchema": json.dumps(
+                {
+                    "type": "object",
+                    "properties": {
+                        "userId": {"type": "string"},
+                        "totalOrders": {"type": "integer"},
+                        "orders": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "orderId": {"type": "string"},
+                                    "flightNo": {"type": "string"},
+                                    "airline": {"type": "string"},
+                                    "depAirport": {"type": "string"},
+                                    "arrAirport": {"type": "string"},
+                                    "depDate": {"type": "string"},
+                                    "depTime": {"type": "string"},
+                                    "cabinClass": {"type": "string"},
+                                    "ticketPrice": {"type": "number"},
+                                },
+                            },
+                        },
+                        "frequentDepTimeSlot": {"type": "string"},
+                        "frequentAirlines": {"type": "array", "items": {"type": "string"}},
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            "parameters": {},
+        },
+        {
+            "name": "query_flight_schedule_tool",
+            "code": "query_flight_schedule_tool",
+            "title": "实时航班时刻与周边机场航班检索工具",
+            "description": "查询指定出发地与目的地航线的航班，支持入参扩展临近日期（±1~2天）与同城临近机场（如 SHA/PVG, PEK/PKX）",
+            "endpoint": "http://127.0.0.1:8000/mock/tools/flights",
+            "requestJsonSchema": json.dumps(
+                {
+                    "type": "object",
+                    "properties": {
+                        "departureCity": {"type": "string", "description": "出发城市或机场代码，如 北京/PEK"},
+                        "arrivalCity": {"type": "string", "description": "到达城市或机场代码，如 上海/SHA"},
+                        "departureDate": {"type": "string", "description": "期望起飞日期，YYYY-MM-DD"},
+                        "returnDate": {"type": "string", "description": "返程/抵达日期（可选）"},
+                        "includeNearbyDays": {"type": "integer", "description": "前后临近浮动天数，如 1"},
+                        "includeNearbyAirports": {"type": "boolean", "description": "是否自动扩展同城及临近机场"},
+                    },
+                    "required": ["departureCity", "arrivalCity", "departureDate"],
+                },
+                ensure_ascii=False,
+            ),
+            "responseJsonSchema": json.dumps(
+                {
+                    "type": "object",
+                    "properties": {
+                        "flights": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "flightNo": {"type": "string"},
+                                    "airline": {"type": "string"},
+                                    "depAirport": {"type": "string"},
+                                    "arrAirport": {"type": "string"},
+                                    "depDate": {"type": "string"},
+                                    "depTime": {"type": "string"},
+                                    "arrTime": {"type": "string"},
+                                    "price": {"type": "number"},
+                                    "seatClass": {"type": "string"},
+                                    "punctualityRate": {"type": "string"},
+                                    "isNearbyDate": {"type": "boolean"},
+                                    "isNearbyAirport": {"type": "boolean"},
+                                    "aircraftType": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            "parameters": {},
+        },
     ],
 
     # 2.4 大模型接入配置 (ModelConfigDO)
@@ -295,8 +589,8 @@ DEFAULT_CONFIGS = {
             "name": "Deepseek",
             "modelName": "deepseek-flash",
             "contextMaxTokens": 64000,
-            "endpoint": "https://api.deepseek.com",
-            "apiKey": "sk-********************************",  # 替换为你的真实 API Key（从环境变量 DEEPSEEK_API_KEY 读取或手动填入）
+            "endpoint": "http://127.0.0.1:8000/mock/llm/v1",
+            "apiKey": "mock-api-key",  # 可替换为真实 API Key (如需直连线上 DeepSeek) 或保留本地 Mock 端点
             "temperature": 0.7,
             "supportImage": False,
             "tags": ["chat", "reasoning"],

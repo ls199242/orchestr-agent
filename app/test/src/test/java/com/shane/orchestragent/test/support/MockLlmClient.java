@@ -86,8 +86,8 @@ public class MockLlmClient implements LlmClient {
             return ChatResponseVO.ofSingle("{\"steps\": [{\"step\": 1, \"agent\": \"search_worker\", \"description\": \"查询目标信息\"}]}", null);
         } else if (text.contains("EvaluatorAgent") || text.contains("战略目标审查") || text.contains("战略核验") || text.contains("\"pass\":")) {
             return ChatResponseVO.ofSingle("{\"pass\": true, \"score\": 100, \"critique\": \"目标完全达成\", \"suggestedRemedy\": \"\"}", null);
-        } else if (text.contains("CoordinatorAgent") || text.contains("handoffToPlanner")) {
-            return ChatResponseVO.ofSingle("{\"handoffToPlanner\": true, \"reply\": \"正在为您规划任务...\"}", null);
+        } else if (text.contains("CoordinatorAgent") || text.contains("意图识别") || text.contains("strategy_catalog")) {
+            return ChatResponseVO.ofSingle("{\"action\": \"DIRECT_REPLY\", \"reply\": \"您好！我是 OrchestrAgent，很高兴为您服务。\"}", null);
         } else if (text.contains("ReporterAgent") || text.contains("成果汇报") || text.contains("交付成果报告")) {
             return ChatResponseVO.ofSingle("【OrchestrAgent 任务完成】已成功处理您的需求，各智能体协同顺畅完成规划与交付。", null);
         } else {

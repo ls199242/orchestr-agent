@@ -88,8 +88,8 @@ public class OrchestrAgentControllerTest {
                         .name("COORDINATOR")
                         .code("COORDINATOR")
                         .model("Deepseek")
-                        .systemPrompt("# CoordinatorAgent\n分析意图: {\"handoffToPlanner\": true, \"reply\": \"\"}")
-                        .userPrompt("用户诉求: ${strategy_target}")
+                        .systemPrompt("# CoordinatorAgent\n意图决策: {\"action\": \"DIRECT_REPLY|COLLECT|EXECUTE\", \"reply\": \"\", \"strategyCode\": \"\", \"params\": {}}")
+                        .userPrompt("【用户最新消息】：${strategy_target}")
                         .build(),
                 AgentConfigDO.builder()
                         .name("CHAT_SUMMARY")
@@ -134,6 +134,8 @@ public class OrchestrAgentControllerTest {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+        flowFactory.setStrategyConfigRepository(strategyRepo);
+        flowFactory.setSessionStateStore(new com.shane.orchestragent.memory.session.SessionStateStore());
 
         AgentManagerImpl agentManagerImpl = new AgentManagerImpl(flowFactory, strategyRepo, flowService);
         CaffeineMemoryContext memoryContext = new CaffeineMemoryContext();
@@ -182,10 +184,9 @@ public class OrchestrAgentControllerTest {
     }
 
     @Test
-    @DisplayName("测试 chat 流式会话: 调用 Coordinator 进行意图识别分流，并返回 SseEmitterUTF8")
+    @DisplayName("测试 chat 流式会话: 无策略入参，由会话编排层意图识别分流，并返回 SseEmitterUTF8")
     public void testChatSseStreamSuccess() throws BizException {
         AgentChatRequestDTO request = AgentChatRequestDTO.builder()
-                .strategyCode("biz_travel")
                 .message("请问有什么差旅推荐？")
                 .sessionId("test-session-chat-1")
                 .userId("user-002")

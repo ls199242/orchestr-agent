@@ -31,6 +31,9 @@ public class EvaluatorResult implements Serializable {
     /** 调度修正建议 (供 Supervisor 派发补救任务) */
     private String suggestedRemedy;
 
+    /** 责任步骤溯源清单 (指定哪些 stepId 验收失败需要局部重跑) */
+    private List<String> blamedStepIds;
+
     /** 细项检查列表 */
     private List<EvaluationCheckItem> checkItems;
 }

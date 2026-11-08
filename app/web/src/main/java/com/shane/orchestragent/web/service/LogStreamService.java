@@ -110,6 +110,35 @@ public class LogStreamService {
     }
 
     /**
+     * 根据 flowId 检索流程的全部历史日志行
+     *
+     * @param flowId 流程唯一标识
+     * @return 匹配该 flowId 的全部历史日志行
+     */
+    public List<String> getLogsByFlowId(String flowId) {
+        if (StringUtils.isBlank(flowId)) {
+            return Collections.emptyList();
+        }
+        File file = getActiveLogFile();
+        if (!file.exists() || file.length() == 0) {
+            return Collections.emptyList();
+        }
+
+        List<String> result = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.contains(flowId)) {
+                    result.add(line);
+                }
+            }
+        } catch (IOException e) {
+            log.error("[LogStreamService] 根据 flowId 读取日志异常: flowId={}, error={}", flowId, e.getMessage());
+        }
+        return result;
+    }
+
+    /**
      * 创建并启动日志流式监听 SSE 发射客户端
      *
      * @param tailLines 初始历史行数
