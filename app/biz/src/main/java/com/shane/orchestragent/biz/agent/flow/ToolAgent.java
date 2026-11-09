@@ -3,6 +3,7 @@ package com.shane.orchestragent.biz.agent.flow;
 import com.shane.orchestragent.biz.agent.base.BaseAgent;
 import com.shane.orchestragent.biz.context.AgentContext;
 import com.shane.orchestragent.biz.context.StrategyContext;
+import com.shane.orchestragent.biz.eval.context.EvalCaseContext;
 import com.shane.orchestragent.biz.model.agent.AgentResult;
 import com.shane.orchestragent.biz.model.flow.FlowAgentMessage;
 import com.shane.orchestragent.common.enums.AgentTypeEnum;
@@ -92,7 +93,52 @@ public class ToolAgent extends BaseAgent<AgentContext> {
         return new AgentResult(output, null);
     }
 
+    /**
+     * 发起工具调用
+     * <p>
+     * 区分评测模式（走 MockEngine 与故障注入）与生产模式（发起真实外部 HTTP 请求）。
+     *
+     * @param requestJson 请求 JSON 字符串
+     * @param context     执行上下文
+     * @return 工具执行产出的原始报文字符串
+     * @throws BizException 若调用失败、超时或 Mock 匹配缺失
+     */
     protected String callTool(String requestJson, AgentContext context) throws BizException {
+        if (context instanceof StrategyContext sc && sc.getEvalCaseContext() != null) {
+            return executeWithEvalMock(requestJson, sc);
+        }
+        return executeRealHttpRequest(requestJson, context);
+    }
+
+    /**
+     * 评测模式下的 Mock 工具执行逻辑
+     */
+    private String executeWithEvalMock(String requestJson, StrategyContext sc) throws BizException {
+        EvalCaseContext evalCtx = sc.getEvalCaseContext();
+        String toolCode = getName();
+
+        // 1. 故障注入评估 (超时/报错/慢响应)
+        evalCtx.getFaultInjector().checkAndTriggerFault(toolCode);
+
+        // 2. Mock 数据匹配与全量 Trace 记录 (耗时度量使用真实流逝时间)
+        long startTs = System.currentTimeMillis();
+        try {
+            String mockResult = evalCtx.getMockEngine().matchToolMock(toolCode, requestJson);
+            long latency = Math.max(0, System.currentTimeMillis() - startTs);
+            evalCtx.getTraceCollector().recordToolCall(toolCode, parseArgsMap(requestJson), mockResult, null, latency);
+            log.info("[Flow: {}][ToolAgent: {}] 评测 Mock 命中，返回响应 (耗时: {}ms)", sc.getFlowId(), toolCode, latency);
+            return mockResult;
+        } catch (BizException e) {
+            long latency = Math.max(0, System.currentTimeMillis() - startTs);
+            evalCtx.getTraceCollector().recordToolCall(toolCode, parseArgsMap(requestJson), null, e.getMessage(), latency);
+            throw e;
+        }
+    }
+
+    /**
+     * 真实生产环境下的外部 HTTP 接口调用
+     */
+    private String executeRealHttpRequest(String requestJson, AgentContext context) throws BizException {
         String endpoint = toolConfig.getEndpoint();
         if (StringUtils.isBlank(endpoint)) {
             throw BizErrorFactory.getInstance().toolEndpointMissing(getName());
@@ -129,6 +175,24 @@ public class ToolAgent extends BaseAgent<AgentContext> {
         } catch (Exception e) {
             log.error("[Flow: {}][ToolAgent: {}] 工具执行未知异常: endpoint={}, error={}", flowId, getName(), endpoint, e.getMessage());
             throw BizErrorFactory.getInstance().toolExecutionError(getName(), "未知异常: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 将请求 JSON 字符串安全解析为 Map 结构，供 Trace 记录使用
+     *
+     * @param json 入参 JSON 字符串
+     * @return 解析后的 Map，若解析失败或为空则返回空 Map
+     */
+    private java.util.Map<String, Object> parseArgsMap(String json) {
+        if (StringUtils.isBlank(json)) {
+            return java.util.Collections.emptyMap();
+        }
+        try {
+            java.util.Map<String, Object> map = JsonUtils.parseMap(json);
+            return map != null ? map : java.util.Collections.emptyMap();
+        } catch (Exception e) {
+            return java.util.Collections.emptyMap();
         }
     }
 

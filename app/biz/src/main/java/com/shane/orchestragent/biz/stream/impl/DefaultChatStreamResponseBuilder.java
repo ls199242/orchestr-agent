@@ -24,6 +24,9 @@ public class DefaultChatStreamResponseBuilder implements ChatStreamResponseBuild
 
     private final AtomicReference<String> id = new AtomicReference<>();
     private final AtomicReference<String> model = new AtomicReference<>();
+    private final AtomicReference<Integer> promptTokens = new AtomicReference<>();
+    private final AtomicReference<Integer> completionTokens = new AtomicReference<>();
+    private final AtomicReference<Integer> totalTokens = new AtomicReference<>();
 
     @SuppressWarnings("unchecked")
     @Override
@@ -51,6 +54,18 @@ public class DefaultChatStreamResponseBuilder implements ChatStreamResponseBuild
             }
             if (map.get("model") != null && model.get() == null) {
                 model.set(String.valueOf(map.get("model")));
+            }
+            Object usageObj = map.get("usage");
+            if (usageObj instanceof Map<?, ?> usageMap) {
+                if (usageMap.get("prompt_tokens") instanceof Number n) {
+                    promptTokens.set(n.intValue());
+                }
+                if (usageMap.get("completion_tokens") instanceof Number n) {
+                    completionTokens.set(n.intValue());
+                }
+                if (usageMap.get("total_tokens") instanceof Number n) {
+                    totalTokens.set(n.intValue());
+                }
             }
 
             List<Map<String, Object>> choices = (List<Map<String, Object>>) map.get("choices");
@@ -95,6 +110,9 @@ public class DefaultChatStreamResponseBuilder implements ChatStreamResponseBuild
                 .id(id.get())
                 .model(model.get())
                 .chatMessages(Collections.singletonList(messageVO))
+                .promptTokens(promptTokens.get())
+                .completionTokens(completionTokens.get())
+                .totalTokens(totalTokens.get())
                 .build();
     }
 }

@@ -2,6 +2,8 @@ package com.shane.orchestragent.biz.agent.base;
 
 import com.shane.orchestragent.biz.context.AgentContext;
 import com.shane.orchestragent.biz.context.StrategyContext;
+import com.shane.orchestragent.biz.eval.context.EvalCaseContext;
+import com.shane.orchestragent.biz.eval.trace.TraceCollector;
 import com.shane.orchestragent.biz.listener.LlmAgentStreamListener;
 import com.shane.orchestragent.biz.model.agent.AgentResult;
 import com.shane.orchestragent.biz.model.agent.LlmAgentResult;
@@ -163,6 +165,9 @@ public abstract class BaseLlmAgent<CONTEXT extends AgentContext> extends BaseAge
      */
     @Override
     protected AgentResult doExecute(CONTEXT context) throws BizException {
+        triggerFaultInjectionIfConfigured(context);
+
+        long startTs = System.currentTimeMillis();
         List<ChatMessageDTO> messages = buildChatMessages(context);
 
         ChatRequestDTO chatRequest = ChatRequestDTO.builder()
@@ -174,7 +179,44 @@ public abstract class BaseLlmAgent<CONTEXT extends AgentContext> extends BaseAge
                 .stream(true)
                 .build();
 
-        ChatResponseVO responseVO;
+        ChatResponseVO responseVO = executeLlmChat(chatRequest);
+        if (responseVO == null || CollectionUtils.isEmpty(responseVO.getChatMessages())) {
+            throw new BizException("LLM_EMPTY_RESPONSE", "大模型返回结果为空");
+        }
+
+        long latencyMs = Math.max(0, System.currentTimeMillis() - startTs);
+        ChatMessageVO chatMessage = responseVO.getFirstMessage();
+        String content = chatMessage != null ? com.shane.orchestragent.biz.tool.ChatJsonFormattingUtils.format(chatMessage.getContent()) : "";
+        String reasoning = chatMessage != null ? com.shane.orchestragent.biz.tool.ChatJsonFormattingUtils.format(chatMessage.getReasoningContent()) : null;
+
+        // 提取并记录 Token 与指标
+        int tokensIn = responseVO.getPromptTokens() != null ? responseVO.getPromptTokens() : estimatePromptTokens(messages);
+        int tokensOut = responseVO.getCompletionTokens() != null ? responseVO.getCompletionTokens() : estimateContentTokens(content);
+        recordExecutionMetrics(context, latencyMs, tokensIn, tokensOut);
+
+        // 扩展点处理与上下文沉淀
+        String finalResponse = afterExtensionHandler(context, content);
+        addAgentResponse(context, finalResponse);
+
+        // Reporter 角色 Trace 沉淀
+        recordReporterTraceIfApplicable(context, finalResponse, tokensIn, tokensOut, latencyMs);
+
+        return new LlmAgentResult(finalResponse, reasoning, responseVO);
+    }
+
+    /**
+     * 评测故障注入检查
+     */
+    private void triggerFaultInjectionIfConfigured(CONTEXT context) throws BizException {
+        if (context instanceof StrategyContext sc && sc.getEvalCaseContext() != null) {
+            sc.getEvalCaseContext().getFaultInjector().checkAndTriggerFault(getName());
+        }
+    }
+
+    /**
+     * 执行大模型异步调用并等待完成
+     */
+    private ChatResponseVO executeLlmChat(ChatRequestDTO chatRequest) throws BizException {
         CompletableFuture<ChatResponseVO> future = new CompletableFuture<>();
         CompletableFuture<Void> callFuture = null;
         synchronized (this) {
@@ -201,7 +243,7 @@ public abstract class BaseLlmAgent<CONTEXT extends AgentContext> extends BaseAge
             synchronized (this) {
                 this.serviceFuture = callFuture;
             }
-            responseVO = future.get(llmConfig.getNodeWaitTime(), TimeUnit.MILLISECONDS);
+            return future.get(llmConfig.getNodeWaitTime(), TimeUnit.MILLISECONDS);
         } catch (CancellationException | InterruptedException e) {
             log.info("[Agent: {}] LLM 执行被主动中断或取消", getName());
             throw BizErrorFactory.getInstance().strategyFlowStopped();
@@ -226,20 +268,32 @@ public abstract class BaseLlmAgent<CONTEXT extends AgentContext> extends BaseAge
                 }
             }
         }
+    }
 
-        if (responseVO == null || CollectionUtils.isEmpty(responseVO.getChatMessages())) {
-            throw new BizException("LLM_EMPTY_RESPONSE", "大模型返回结果为空");
+    /**
+     * 记录本次执行耗时与 Token 指标到上下文
+     */
+    private void recordExecutionMetrics(CONTEXT context, long latencyMs, int tokensIn, int tokensOut) {
+        if (context instanceof StrategyContext sc) {
+            sc.setProperties("_lastLatencyMs_" + getName(), latencyMs);
+            sc.setProperties("_lastTokensIn_" + getName(), tokensIn);
+            sc.setProperties("_lastTokensOut_" + getName(), tokensOut);
+            sc.setProperties("_lastLatencyMs", latencyMs);
+            sc.setProperties("_lastTokensIn", tokensIn);
+            sc.setProperties("_lastTokensOut", tokensOut);
         }
+    }
 
-        ChatMessageVO chatMessage = responseVO.getFirstMessage();
-        String content = chatMessage != null ? com.shane.orchestragent.biz.tool.ChatJsonFormattingUtils.format(chatMessage.getContent()) : "";
-        String reasoning = chatMessage != null ? com.shane.orchestragent.biz.tool.ChatJsonFormattingUtils.format(chatMessage.getReasoningContent()) : null;
-
-        // 扩展点处理与上下文沉淀
-        String finalResponse = afterExtensionHandler(context, content);
-        addAgentResponse(context, finalResponse);
-
-        return new LlmAgentResult(finalResponse, reasoning, responseVO);
+    /**
+     * 若为成果汇报 Reporter 角色，向 Trace 记录输出
+     */
+    private void recordReporterTraceIfApplicable(CONTEXT context, String finalResponse, int tokensIn, int tokensOut, long latencyMs) {
+        if (context instanceof StrategyContext sc && sc.getEvalCaseContext() != null) {
+            EvalCaseContext evalCtx = sc.getEvalCaseContext();
+            if (evalCtx.getTraceCollector() != null && getType() == AgentTypeEnum.REPORTER) {
+                evalCtx.getTraceCollector().recordReporter(finalResponse, tokensIn, tokensOut, latencyMs);
+            }
+        }
     }
 
     /**
@@ -315,14 +369,37 @@ public abstract class BaseLlmAgent<CONTEXT extends AgentContext> extends BaseAge
      */
     protected void addAgentResponse(CONTEXT context, String output) {
         if (context instanceof StrategyContext strategyContext) {
+            long nowTs = strategyContext.getTimeProvider() != null
+                    ? strategyContext.getTimeProvider().currentTimeMillis()
+                    : System.currentTimeMillis();
             FlowAgentMessage message = FlowAgentMessage.builder()
                     .agentType(agentType)
                     .agentName(getName())
                     .output(output)
-                    .timestamp(System.currentTimeMillis())
+                    .timestamp(nowTs)
                     .build();
             strategyContext.addChatMessage(message);
         }
+    }
+
+    private int estimatePromptTokens(List<ChatMessageDTO> messages) {
+        if (CollectionUtils.isEmpty(messages)) {
+            return 0;
+        }
+        int chars = 0;
+        for (ChatMessageDTO msg : messages) {
+            if (msg != null && msg.getContent() != null) {
+                chars += msg.getContent().length();
+            }
+        }
+        return Math.max(1, (int) (chars * 0.7));
+    }
+
+    private int estimateContentTokens(String content) {
+        if (StringUtils.isBlank(content)) {
+            return 0;
+        }
+        return Math.max(1, (int) (content.length() * 0.7));
     }
 
     /**

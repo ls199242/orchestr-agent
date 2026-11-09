@@ -4,6 +4,8 @@ import com.shane.orchestragent.biz.agent.Agent;
 import com.shane.orchestragent.biz.agent.flow.RagAgent;
 import com.shane.orchestragent.biz.context.StrategyContext;
 import com.shane.orchestragent.biz.context.impl.StepStrategyContext;
+import com.shane.orchestragent.biz.eval.model.ExecutionTraceDTO;
+import com.shane.orchestragent.biz.eval.trace.TraceCollector;
 import com.shane.orchestragent.biz.model.agent.AgentResult;
 import com.shane.orchestragent.biz.model.agent.ExpertErrorAgentResult;
 import com.shane.orchestragent.biz.model.flow.*;
@@ -18,7 +20,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -28,7 +29,7 @@ import java.util.stream.Collectors;
  * 职责：
  * <ul>
  *   <li>静态 DAG 拓扑校验与 Kahn 算法环检测 (Fail-Fast 铁律)</li>
- *   <li>基于依赖就绪度的动态分轮并发调度 (单层线程池驱动，杜绝嵌套死锁)</li>
+ *   <li>基于依赖就绪度的动态分轮并发调度 (虚拟线程并发驱动，杜绝平台线程耗尽与嵌套饥饿死锁)</li>
  *   <li>机械化参数求值装配 ($global.x / $s1.output.y)</li>
  *   <li>超时中断守护、失败重试与输出契约校验 (outputKeys)</li>
  *   <li>基于传递闭包 (Closure) 的局部精准重跑与结果复用自愈闭环</li>
@@ -39,12 +40,6 @@ import java.util.stream.Collectors;
 public class DagSupervisorEngine {
 
     private static final Logger log = LoggerFactory.getLogger(DagSupervisorEngine.class);
-
-    /** 默认工作线程池核心参数 */
-    private static final int DEFAULT_CORE_POOL_SIZE = Math.max(4, Runtime.getRuntime().availableProcessors());
-    private static final int DEFAULT_MAX_POOL_SIZE = Math.max(8, Runtime.getRuntime().availableProcessors() * 2);
-    private static final long KEEP_ALIVE_SECONDS = 60L;
-    private static final int QUEUE_CAPACITY = 256;
 
     /** 单步超时看门狗定时调度器 (单守护线程轻量中断，不占用任务线程池资源) */
     private static final ScheduledExecutorService TIMEOUT_SCHEDULER = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -65,20 +60,9 @@ public class DagSupervisorEngine {
             this.executorService = executorService;
             this.internalPool = false;
         } else {
-            AtomicInteger threadIndex = new AtomicInteger(1);
-            this.executorService = new ThreadPoolExecutor(
-                    DEFAULT_CORE_POOL_SIZE,
-                    DEFAULT_MAX_POOL_SIZE,
-                    KEEP_ALIVE_SECONDS,
-                    TimeUnit.SECONDS,
-                    new LinkedBlockingQueue<>(QUEUE_CAPACITY),
-                    r -> {
-                        Thread t = new Thread(r, "dag-supervisor-worker-" + threadIndex.getAndIncrement());
-                        t.setDaemon(true);
-                        return t;
-                    },
-                    new ThreadPoolExecutor.CallerRunsPolicy()
-            );
+            // 采用命名虚拟线程执行器：随用随建、自动卸载、零队列堆积、无平台线程饥饿死锁
+            ThreadFactory factory = Thread.ofVirtual().name("dag-supervisor-worker-", 1).factory();
+            this.executorService = Executors.newThreadPerTaskExecutor(factory);
             this.internalPool = true;
         }
     }
@@ -187,10 +171,13 @@ public class DagSupervisorEngine {
         boolean aborted = false;
         String abortReason = null;
         String flowId = context != null ? context.getFlowId() : "N/A";
+        TraceCollector traceCollector = (context != null && context.getEvalCaseContext() != null)
+                ? context.getEvalCaseContext().getTraceCollector()
+                : null;
 
         while (true) {
             if (isStopped(context) || executorService.isShutdown()) {
-                cancelFutures(activeFutures);
+                cancelFutures(activeFutures, traceCollector);
                 throw BizErrorFactory.getInstance().strategyFlowStopped();
             }
 
@@ -212,6 +199,7 @@ public class DagSupervisorEngine {
                     for (FlowDagStep s : readySteps) {
                         state.getStatus().put(s.getId(), DagStepStatus.RUNNING);
                         running++;
+                        recordStepStartEvents(traceCollector, s);
                         String stepFb = feedback.get(s.getId());
                         try {
                             Future<?> future = executorService.submit(() -> {
@@ -226,7 +214,7 @@ public class DagSupervisorEngine {
                             });
                             activeFutures.put(s.getId(), future);
                         } catch (RejectedExecutionException e) {
-                            cancelFutures(activeFutures);
+                            cancelFutures(activeFutures, traceCollector);
                             throw BizErrorFactory.getInstance().strategyFlowStopped();
                         }
                     }
@@ -243,12 +231,14 @@ public class DagSupervisorEngine {
                 o = done.take();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                cancelFutures(activeFutures);
+                cancelFutures(activeFutures, traceCollector);
                 throw BizErrorFactory.getInstance().strategyFlowStopped();
             }
 
             running--;
             state.getAttempts().merge(o.getStepId(), o.getAttempts(), Integer::sum);
+            FlowDagStep completedStep = byId.get(o.getStepId());
+            String agentName = completedStep != null ? completedStep.getAgent() : o.getStepId();
 
             if (o.getError() == null) {
                 if (o.getOutput() != null) {
@@ -258,10 +248,10 @@ public class DagSupervisorEngine {
                     state.getRawOutputs().put(o.getStepId(), o.getRawOutput());
                 }
                 state.getStatus().put(o.getStepId(), DagStepStatus.SUCCEEDED);
-                FlowDagStep completedStep = byId.get(o.getStepId());
-                String agentName = completedStep != null ? completedStep.getAgent() : o.getStepId();
                 log.info("[Flow: {}][SUPERVISOR] 步骤 [{}] ({}) 执行完成 (尝试次数: {})",
                         flowId, o.getStepId(), agentName, o.getAttempts());
+
+                recordStepSuccessTrace(traceCollector, completedStep, agentName, o, context);
             } else {
                 state.getErrors().put(o.getStepId(), o.getError());
                 FlowDagStep step = byId.get(o.getStepId());
@@ -269,13 +259,19 @@ public class DagSupervisorEngine {
                     state.getStatus().put(o.getStepId(), DagStepStatus.SKIPPED);
                     log.warn("[Flow: {}][SUPERVISOR] 步骤 [{}] ({}) 失败但策略为 SKIP，已跳过: {}",
                             flowId, o.getStepId(), step.getAgent(), o.getError());
+                    recordStepSkippedTrace(traceCollector, step, o, context);
                 } else {
                     state.getStatus().put(o.getStepId(), DagStepStatus.FAILED);
                     aborted = true;
                     abortReason = o.getError();
-                    cancelFutures(activeFutures);
+                    if (traceCollector != null) {
+                        traceCollector.recordCancelRequested("必要节点失败触发级联取消: " + o.getError());
+                    }
+                    cancelFutures(activeFutures, traceCollector);
                     log.error("[Flow: {}][SUPERVISOR] 步骤 [{}] ({}) 失败导致 DAG 中止: {}",
                             flowId, o.getStepId(), step != null ? step.getAgent() : "", o.getError());
+
+                    recordStepFailedTrace(traceCollector, step, o, context);
                 }
             }
         }
@@ -639,6 +635,10 @@ public class DagSupervisorEngine {
             idx = 2;
         } else {
             String stepId = parts[0];
+            // 评测规范: 若上游步骤被 SKIP (如非必要偏好分析失败)，下游输入占位符解析为 [MISSING: <stepId>]，使下游显式感知偏好缺失并按无偏好兜底处理
+            if (st.getStatus().get(stepId) == DagStepStatus.SKIPPED) {
+                return "[MISSING: " + stepId + "]";
+            }
             cur = st.getOutputs().get(stepId);
             if (cur == null) {
                 cur = st.getRawOutputs().get(stepId);
@@ -758,12 +758,104 @@ public class DagSupervisorEngine {
     }
 
     private void cancelFutures(Map<String, Future<?>> futures) {
-        for (Future<?> f : futures.values()) {
+        cancelFutures(futures, null);
+    }
+
+    private void cancelFutures(Map<String, Future<?>> futures, TraceCollector traceCollector) {
+        long cancelStart = System.currentTimeMillis();
+        for (Map.Entry<String, Future<?>> entry : futures.entrySet()) {
+            String stepId = entry.getKey();
+            Future<?> f = entry.getValue();
             if (f != null && !f.isDone()) {
                 f.cancel(true);
+                if (traceCollector != null) {
+                    long ackLatency = System.currentTimeMillis() - cancelStart;
+                    traceCollector.recordCancelAck(stepId, ackLatency);
+                    traceCollector.recordSchedEvent(stepId, "unknown", "cancel", "cancelled", "已收到中断取消信号");
+                }
             }
         }
         futures.clear();
+    }
+
+    private static void recordStepStartEvents(TraceCollector traceCollector, FlowDagStep s) {
+        if (traceCollector != null) {
+            traceCollector.recordSchedEvent(s.getId(), s.getAgent(), "ready", "running", "依赖就绪");
+            traceCollector.recordSchedEvent(s.getId(), s.getAgent(), "start", "running", "提交线程池并发执行");
+        }
+    }
+
+    private static void recordStepSuccessTrace(TraceCollector traceCollector, FlowDagStep completedStep,
+                                               String agentName, DagOutcome o, StrategyContext context) {
+        if (traceCollector == null) {
+            return;
+        }
+        traceCollector.recordSchedEvent(o.getStepId(), agentName, "end", "success", "执行成功");
+
+        Number lat = (Number) context.getProperty("_lastLatencyMs_" + agentName);
+        Number tIn = (Number) context.getProperty("_lastTokensIn_" + agentName);
+        Number tOut = (Number) context.getProperty("_lastTokensOut_" + agentName);
+
+        ExecutionTraceDTO.NodeTrace nodeTrace = ExecutionTraceDTO.NodeTrace.builder()
+                .nodeId(o.getStepId())
+                .agent(agentName)
+                .status("success")
+                .required(completedStep != null && completedStep.getOnFailure() != OnFailureAction.SKIP)
+                .attempt(o.getAttempts())
+                .loopRound(context.getEvaluationRetryCount())
+                .stitchedInput(o.getOutput() != null ? String.valueOf(o.getOutput()) : "")
+                .output(o.getRawOutput())
+                .latencyMs(lat != null ? lat.longValue() : 0L)
+                .tokensIn(tIn != null ? tIn.intValue() : 0)
+                .tokensOut(tOut != null ? tOut.intValue() : 0)
+                .build();
+        traceCollector.recordNodeExecution(nodeTrace);
+    }
+
+    private static void recordStepSkippedTrace(TraceCollector traceCollector, FlowDagStep step,
+                                               DagOutcome o, StrategyContext context) {
+        if (traceCollector == null) {
+            return;
+        }
+        String agentName = step != null ? step.getAgent() : "";
+        traceCollector.recordSchedEvent(o.getStepId(), agentName, "skip", "skipped", "非必要失败跳过: " + o.getError());
+
+        ExecutionTraceDTO.NodeTrace nodeTrace = ExecutionTraceDTO.NodeTrace.builder()
+                .nodeId(o.getStepId())
+                .agent(agentName)
+                .status("skipped")
+                .required(false)
+                .attempt(o.getAttempts())
+                .loopRound(context.getEvaluationRetryCount())
+                .output(o.getError())
+                .latencyMs(0L)
+                .tokensIn(0)
+                .tokensOut(0)
+                .build();
+        traceCollector.recordNodeExecution(nodeTrace);
+    }
+
+    private static void recordStepFailedTrace(TraceCollector traceCollector, FlowDagStep step,
+                                              DagOutcome o, StrategyContext context) {
+        if (traceCollector == null) {
+            return;
+        }
+        String agentName = step != null ? step.getAgent() : "";
+        traceCollector.recordSchedEvent(o.getStepId(), agentName, "fail", "failed", o.getError());
+
+        ExecutionTraceDTO.NodeTrace nodeTrace = ExecutionTraceDTO.NodeTrace.builder()
+                .nodeId(o.getStepId())
+                .agent(agentName)
+                .status("failed")
+                .required(true)
+                .attempt(o.getAttempts())
+                .loopRound(context.getEvaluationRetryCount())
+                .output(o.getError())
+                .latencyMs(0L)
+                .tokensIn(0)
+                .tokensOut(0)
+                .build();
+        traceCollector.recordNodeExecution(nodeTrace);
     }
 
     public void shutdown() {

@@ -2,6 +2,7 @@ package com.shane.orchestragent.biz.agent.flow;
 
 import com.shane.orchestragent.biz.agent.base.BaseAgent;
 import com.shane.orchestragent.biz.context.StrategyContext;
+import com.shane.orchestragent.biz.eval.context.EvalCaseContext;
 import com.shane.orchestragent.biz.model.agent.AgentResult;
 import com.shane.orchestragent.biz.model.agent.RagAgentResult;
 import com.shane.orchestragent.biz.model.flow.FlowAgentMessage;
@@ -45,21 +46,58 @@ public class RagAgent extends BaseAgent<StrategyContext> {
     @Override
     protected AgentResult doExecute(StrategyContext context) throws BizException {
         String target = context.getStrategyTarget();
-        String ragResult = retrieveKnowledge(target, context);
+        EvalCaseContext evalCtx = context.getEvalCaseContext();
+
+        String ragResult = (evalCtx != null)
+                ? retrieveWithEvalMock(target, evalCtx)
+                : retrieveKnowledge(target, context);
 
         context.setProperties(PropertyKeys.KEY_RAG_RESULT, ragResult);
 
+        long nowTs = (evalCtx != null && evalCtx.getTimeProvider() != null)
+                ? evalCtx.getTimeProvider().currentTimeMillis()
+                : System.currentTimeMillis();
         FlowAgentMessage message = FlowAgentMessage.builder()
                 .agentType(AgentTypeEnum.RAG)
                 .agentName(getName())
                 .output(ragResult)
-                .timestamp(System.currentTimeMillis())
+                .timestamp(nowTs)
                 .build();
         context.addChatMessage(message);
 
         return new RagAgentResult(ragResult, null, Collections.emptyMap());
     }
 
+    /**
+     * 评测模式下的 Mock 知识库检索逻辑
+     */
+    private String retrieveWithEvalMock(String target, EvalCaseContext evalCtx) throws BizException {
+        evalCtx.getFaultInjector().checkAndTriggerFault(getName());
+
+        long startTs = System.currentTimeMillis();
+        try {
+            String ragResult = evalCtx.getMockEngine().matchRagMock(getName(), target);
+            long latency = Math.max(0, System.currentTimeMillis() - startTs);
+            if (evalCtx.getTraceCollector() != null) {
+                evalCtx.getTraceCollector().recordToolCall(getName(), Collections.singletonMap("query", target), ragResult, null, latency);
+            }
+            return ragResult;
+        } catch (BizException be) {
+            long latency = Math.max(0, System.currentTimeMillis() - startTs);
+            if (evalCtx.getTraceCollector() != null) {
+                evalCtx.getTraceCollector().recordToolCall(getName(), Collections.singletonMap("query", target), null, be.getMessage(), latency);
+            }
+            throw be;
+        }
+    }
+
+    /**
+     * 执行本地知识检索（真实生产模式下的本地降级或默认匹配检索实现）
+     *
+     * @param query   检索意图与关键词
+     * @param context 策略上下文
+     * @return 检索到的知识文本
+     */
     protected String retrieveKnowledge(String query, StrategyContext context) {
         String dsInfo = CollectionUtils.isNotEmpty(datasets) ? String.join(",", datasets) : "无指定知识库";
         return "【知识库匹配内容(库: " + dsInfo + ")】针对用户诉求 [" + query + "] 的业务规范与参考信息已成功检索。";

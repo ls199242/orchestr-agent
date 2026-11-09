@@ -50,6 +50,10 @@ public final class JsonUtils {
         }
     }
 
+    public static String toJson(Object obj) {
+        return toJsonString(obj);
+    }
+
     public static <T> T parseObject(String json, Class<T> clazz) {
         if (json == null || json.trim().isEmpty()) {
             return null;

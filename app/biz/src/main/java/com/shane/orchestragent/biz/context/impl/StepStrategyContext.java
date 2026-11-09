@@ -232,4 +232,24 @@ public class StepStrategyContext implements StrategyContext {
     public Object getAgentRequest() {
         return stepInputs;
     }
+
+    @Override
+    public com.shane.orchestragent.biz.eval.context.EvalCaseContext getEvalCaseContext() {
+        return delegate.getEvalCaseContext();
+    }
+
+    @Override
+    public void setEvalCaseContext(com.shane.orchestragent.biz.eval.context.EvalCaseContext evalCaseContext) {
+        delegate.setEvalCaseContext(evalCaseContext);
+    }
+
+    @Override
+    public com.shane.orchestragent.common.time.TimeProvider getTimeProvider() {
+        return delegate.getTimeProvider();
+    }
+
+    @Override
+    public void setTimeProvider(com.shane.orchestragent.common.time.TimeProvider timeProvider) {
+        delegate.setTimeProvider(timeProvider);
+    }
 }

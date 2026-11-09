@@ -164,4 +164,24 @@ public interface StrategyContext extends AgentContext {
      * 获取用户诉求/策略目标
      */
     String getStrategyTarget();
+
+    /**
+     * 获取评测请求级隔离上下文 (若非评测模式则返回 null)
+     */
+    com.shane.orchestragent.biz.eval.context.EvalCaseContext getEvalCaseContext();
+
+    /**
+     * 设置评测请求级隔离上下文
+     */
+    void setEvalCaseContext(com.shane.orchestragent.biz.eval.context.EvalCaseContext evalCaseContext);
+
+    /**
+     * 获取当前上下文的时间提供者
+     */
+    com.shane.orchestragent.common.time.TimeProvider getTimeProvider();
+
+    /**
+     * 设置当前上下文的时间提供者
+     */
+    void setTimeProvider(com.shane.orchestragent.common.time.TimeProvider timeProvider);
 }

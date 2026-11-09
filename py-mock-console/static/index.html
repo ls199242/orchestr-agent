@@ -185,7 +185,7 @@
     </div>
 
     <!-- 底部状态小卡片 -->
-    <div class="p-3 border-t border-slate-800/90 bg-slate-900/80 space-y-2">
+    <div class="p-3 border-t border-slate-800/90 bg-slate-900/80">
       <div class="flex items-center justify-between text-xs px-1">
         <span class="text-slate-400 flex items-center space-x-1.5">
           <span class="w-2 h-2 rounded-full pulse-dot" :class="javaHealthy ? 'bg-emerald-400' : 'bg-rose-400'"></span>
@@ -195,11 +195,6 @@
           <i class="fa-solid fa-rotate-right" :class="refreshing ? 'fa-spin' : ''"></i>
         </button>
       </div>
-      <button @click="triggerJavaReload()"
-              class="w-full py-1.5 px-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-lg text-xs font-medium transition flex items-center justify-center space-x-1.5 shadow-md shadow-indigo-600/20">
-        <i class="fa-solid fa-bolt text-xs"></i>
-        <span>全量热重载配置</span>
-      </button>
     </div>
   </aside>
 
@@ -322,89 +317,166 @@
           </div>
         </div>
 
-        <!-- 2. 接口速览 (系统核心 HTTP / SSE API 矩阵) -->
-        <div class="space-y-4">
-          <div class="flex items-center space-x-2.5 border-b border-slate-800 pb-3">
-            <div class="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20 text-xs">
-              <i class="fa-solid fa-code"></i>
+        <!-- 2. 接口速览 (按业务模块划分) -->
+        <div class="space-y-5">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-3 gap-2">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20 text-xs">
+                <i class="fa-solid fa-code"></i>
+              </div>
+              <div>
+                <h2 class="text-sm font-bold text-slate-100">接口速览 (三大核心模块)</h2>
+                <p class="text-xs text-slate-400 mt-0.5">涵盖 Agent 核心业务、Eval 评测套件与后台运维仿真端点</p>
+              </div>
             </div>
-            <div>
-              <h2 class="text-sm font-bold text-slate-100">接口速览</h2>
-              <p class="text-xs text-slate-400 mt-0.5">系统核心 HTTP / SSE 接口清单与功能定义</p>
+            <button @click="switchView('eng-api', null, 'all')"
+                    class="self-start sm:self-auto px-3 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-indigo-200 rounded-lg text-xs font-medium transition flex items-center space-x-1 border border-slate-700 shadow-sm">
+              <span>查看完整 API 字典 (24)</span>
+              <i class="fa-solid fa-arrow-right text-[10px]"></i>
+            </button>
+          </div>
+
+          <!-- 模块 1: Agent 核心交互接口卡片 -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs px-1">
+              <span class="text-indigo-300 font-semibold flex items-center space-x-1.5">
+                <i class="fa-solid fa-robot text-xs"></i>
+                <span>Agent 核心交互模块 (业务客户端调用)</span>
+              </span>
+              <button @click="switchView('eng-api', null, 'agent')" class="text-[11px] text-slate-500 hover:text-indigo-300 transition">查看模块详情 &rarr;</button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              <div class="bg-slate-900 rounded-2xl p-3.5 border border-indigo-500/20 space-y-1 shadow-md">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-[10px] text-sky-400 font-mono bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">POST</span>
+                  <span class="text-[10px] text-indigo-400 font-mono">SSE Stream</span>
+                </div>
+                <code class="text-slate-100 font-mono text-xs font-semibold block pt-0.5 truncate">/api/agent/chat</code>
+                <p class="text-[11px] text-slate-400 leading-relaxed line-clamp-2">SSE 流式交互会话，多智能体协同打字机输出</p>
+              </div>
+
+              <div class="bg-slate-900 rounded-2xl p-3.5 border border-indigo-500/20 space-y-1 shadow-md">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-[10px] text-sky-400 font-mono bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">POST</span>
+                  <span class="text-[10px] text-indigo-400 font-mono">Async</span>
+                </div>
+                <code class="text-slate-100 font-mono text-xs font-semibold block pt-0.5 truncate">/api/agent/invoke</code>
+                <p class="text-[11px] text-slate-400 leading-relaxed line-clamp-2">异步触发策略流程，立即返回 flowId 句柄</p>
+              </div>
+
+              <div class="bg-slate-900 rounded-2xl p-3.5 border border-indigo-500/20 space-y-1 shadow-md">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">GET</span>
+                  <span class="text-[10px] text-indigo-400 font-mono">Status</span>
+                </div>
+                <code class="text-slate-100 font-mono text-xs font-semibold block pt-0.5 truncate">/api/agent/flow/{id}</code>
+                <p class="text-[11px] text-slate-400 leading-relaxed line-clamp-2">轮询查询流程状态机与上下文全生命周期</p>
+              </div>
+
+              <div class="bg-slate-900 rounded-2xl p-3.5 border border-indigo-500/20 space-y-1 shadow-md">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">GET</span>
+                  <span class="text-[10px] text-indigo-400 font-mono">Logs</span>
+                </div>
+                <code class="text-slate-100 font-mono text-xs font-semibold block pt-0.5 truncate">/flow/{id}/logs</code>
+                <p class="text-[11px] text-slate-400 leading-relaxed line-clamp-2">按 flowId 检索流程生命周期全量历史日志</p>
+              </div>
+
+              <div class="bg-slate-900 rounded-2xl p-3.5 border border-indigo-500/20 space-y-1 shadow-md">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-[10px] text-rose-400 font-mono bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">POST</span>
+                  <span class="text-[10px] text-rose-400 font-mono">Control</span>
+                </div>
+                <code class="text-slate-100 font-mono text-xs font-semibold block pt-0.5 truncate">/api/agent/stop/{id}</code>
+                <p class="text-[11px] text-slate-400 leading-relaxed line-clamp-2">主动安全中断并终止正在运行中的流程实例</p>
+              </div>
             </div>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-            <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-1.5 shadow-md">
-              <div class="flex items-center justify-between">
-                <span class="font-bold text-xs text-sky-400 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">POST</span>
-                <span class="text-[10px] text-slate-500 font-mono">SSE Stream</span>
-              </div>
-              <code class="text-slate-100 font-mono text-xs font-semibold block pt-1">/api/agent/chat</code>
-              <p class="text-[11px] text-slate-400 leading-relaxed">SSE 流式交互会话，多智能体协同思考打字机</p>
+          <!-- 模块 2: Eval 评测系统对接接口卡片 -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs px-1">
+              <span class="text-amber-300 font-semibold flex items-center space-x-1.5">
+                <i class="fa-solid fa-vial-circle-check text-xs"></i>
+                <span>Eval 评测系统对接模块 (自动化评测与基准)</span>
+              </span>
+              <button @click="switchView('eng-api', null, 'eval')" class="text-[11px] text-slate-500 hover:text-amber-300 transition">查看模块详情 &rarr;</button>
             </div>
-
-            <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-1.5 shadow-md">
-              <div class="flex items-center justify-between">
-                <span class="font-bold text-xs text-sky-400 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">POST</span>
-                <span class="text-[10px] text-slate-500 font-mono">Async</span>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div class="bg-slate-900 rounded-2xl p-3.5 border border-amber-500/20 space-y-1 shadow-md">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-[10px] text-sky-400 font-mono bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">POST</span>
+                  <span class="text-[10px] text-amber-400 font-mono">E2E Trace</span>
+                </div>
+                <code class="text-slate-100 font-mono text-xs font-semibold block pt-0.5">/eval/run</code>
+                <p class="text-[11px] text-slate-400 leading-relaxed">端到端评测用例执行，隔离加载 MockBundle 同步产出 M3 规范 Trace</p>
               </div>
-              <code class="text-slate-100 font-mono text-xs font-semibold block pt-1">/api/agent/invoke</code>
-              <p class="text-[11px] text-slate-400 leading-relaxed">异步触发策略流程，立即返回 flowId 实例句柄</p>
+
+              <div class="bg-slate-900 rounded-2xl p-3.5 border border-amber-500/20 space-y-1 shadow-md">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-[10px] text-sky-400 font-mono bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">POST</span>
+                  <span class="text-[10px] text-amber-400 font-mono">Micro-Run</span>
+                </div>
+                <code class="text-slate-100 font-mono text-xs font-semibold block pt-0.5">/eval/node/{role}</code>
+                <p class="text-[11px] text-slate-400 leading-relaxed">角色级微运行 (coordinator / planner / expert / evaluator / reporter)</p>
+              </div>
+
+              <div class="bg-slate-900 rounded-2xl p-3.5 border border-amber-500/20 space-y-1 shadow-md">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">GET</span>
+                  <span class="text-[10px] text-amber-400 font-mono">Metadata</span>
+                </div>
+                <code class="text-slate-100 font-mono text-xs font-semibold block pt-0.5">/eval/metadata</code>
+                <p class="text-[11px] text-slate-400 leading-relaxed">策略与拓扑全景元数据导出，供外部评测系统自动派生规则合规池</p>
+              </div>
             </div>
+          </div>
 
-            <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-1.5 shadow-md">
-              <div class="flex items-center justify-between">
-                <span class="font-bold text-xs text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span>
-                <span class="text-[10px] text-slate-500 font-mono">Query</span>
-              </div>
-              <code class="text-slate-100 font-mono text-xs font-semibold block pt-1">/api/agent/flow/{flowId}</code>
-              <p class="text-[11px] text-slate-400 leading-relaxed">轮询查询流程节点状态机与上下文全生命周期</p>
+          <!-- 模块 3: 后台控制台与仿真运维接口卡片 -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs px-1">
+              <span class="text-emerald-300 font-semibold flex items-center space-x-1.5">
+                <i class="fa-solid fa-sliders text-xs"></i>
+                <span>后台运维与仿真模块 (控制台管理 / 本地 Mock)</span>
+              </span>
+              <button @click="switchView('eng-api', null, 'console')" class="text-[11px] text-slate-500 hover:text-emerald-300 transition">查看模块详情 &rarr;</button>
             </div>
-
-            <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-1.5 shadow-md">
-              <div class="flex items-center justify-between">
-                <span class="font-bold text-xs text-rose-400 font-mono bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">POST</span>
-                <span class="text-[10px] text-slate-500 font-mono">Control</span>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div class="bg-slate-900 rounded-2xl p-3.5 border border-slate-800 space-y-1 shadow-md">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">GET</span>
+                  <span class="text-[10px] text-emerald-400 font-mono">Overview</span>
+                </div>
+                <code class="text-slate-100 font-mono text-xs font-semibold block pt-0.5 truncate">/api/agent/config/overview</code>
+                <p class="text-[11px] text-slate-400 leading-relaxed">巡检 5 大仓储健康状态、配置条目数与同步时间</p>
               </div>
-              <code class="text-slate-100 font-mono text-xs font-semibold block pt-1">/api/agent/stop/{flowId}</code>
-              <p class="text-[11px] text-slate-400 leading-relaxed">主动安全中断并终止正在执行中的流程实例</p>
-            </div>
 
-            <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-1.5 shadow-md">
-              <div class="flex items-center justify-between">
-                <span class="font-bold text-xs text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span>
-                <span class="text-[10px] text-slate-500 font-mono">Overview</span>
+              <div class="bg-slate-900 rounded-2xl p-3.5 border border-slate-800 space-y-1 shadow-md">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">GET</span>
+                  <span class="text-[10px] text-emerald-400 font-mono">Snapshot</span>
+                </div>
+                <code class="text-slate-100 font-mono text-xs font-semibold block pt-0.5 truncate">/api/agent/config/all</code>
+                <p class="text-[11px] text-slate-400 leading-relaxed">获取 Java 核心引擎内存中的全量配置快照 JSON</p>
               </div>
-              <code class="text-slate-100 font-mono text-xs font-semibold block pt-1">/api/agent/config/overview</code>
-              <p class="text-[11px] text-slate-400 leading-relaxed">查询核心仓储健康状态、配置条目数与同步时间</p>
-            </div>
 
-            <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-1.5 shadow-md">
-              <div class="flex items-center justify-between">
-                <span class="font-bold text-xs text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span>
-                <span class="text-[10px] text-slate-500 font-mono">Snapshot</span>
+              <div class="bg-slate-900 rounded-2xl p-3.5 border border-slate-800 space-y-1 shadow-md">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-[10px] text-amber-400 font-mono bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">POST</span>
+                  <span class="text-[10px] text-amber-400 font-mono">Hot Reload</span>
+                </div>
+                <code class="text-slate-100 font-mono text-xs font-semibold block pt-0.5 truncate">/api/agent/config/reload</code>
+                <p class="text-[11px] text-slate-400 leading-relaxed">通知 Java 核心引擎立即执行全量配置热重载</p>
               </div>
-              <code class="text-slate-100 font-mono text-xs font-semibold block pt-1">/api/agent/config/all</code>
-              <p class="text-[11px] text-slate-400 leading-relaxed">获取 Java 核心引擎内存中的全量配置快照 JSON</p>
-            </div>
 
-            <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-1.5 shadow-md">
-              <div class="flex items-center justify-between">
-                <span class="font-bold text-xs text-amber-400 font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">POST</span>
-                <span class="text-[10px] text-slate-500 font-mono">Hot Reload</span>
+              <div class="bg-slate-900 rounded-2xl p-3.5 border border-slate-800 space-y-1 shadow-md">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">GET</span>
+                  <span class="text-[10px] text-emerald-400 font-mono">Log Stream</span>
+                </div>
+                <code class="text-slate-100 font-mono text-xs font-semibold block pt-0.5 truncate">/api/agent/logs/stream</code>
+                <p class="text-[11px] text-slate-400 leading-relaxed">SSE 实时流式日志文件监听，支持多级标签过滤</p>
               </div>
-              <code class="text-slate-100 font-mono text-xs font-semibold block pt-1">/api/agent/config/reload</code>
-              <p class="text-[11px] text-slate-400 leading-relaxed">通知 Java 核心引擎立即执行全量配置热重载</p>
-            </div>
-
-            <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-1.5 shadow-md">
-              <div class="flex items-center justify-between">
-                <span class="font-bold text-xs text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span>
-                <span class="text-[10px] text-slate-500 font-mono">Log Stream</span>
-              </div>
-              <code class="text-slate-100 font-mono text-xs font-semibold block pt-1">/api/agent/logs/stream</code>
-              <p class="text-[11px] text-slate-400 leading-relaxed">SSE 实时流式日志文件监听，支持多级标签过滤</p>
             </div>
           </div>
         </div>
@@ -1933,129 +2005,319 @@
       <!-- View 8: 系统核心 API 接口速查字典 (API Reference) -->
       <!-- ============================================== -->
       <div x-show="currentView === 'eng-api'" class="space-y-6">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-800 pb-3 gap-2">
           <div>
             <h2 class="text-base font-bold text-slate-200 flex items-center space-x-2">
               <i class="fa-solid fa-code text-indigo-400"></i>
               <span>OrchestrAgent 核心 API 接口速查字典</span>
             </h2>
-            <p class="text-xs text-slate-400">Java 核心引擎 (8080) 与 Python Mock 控制中心 (8000) 提供的所有标准接口端点与参数速查</p>
+            <p class="text-xs text-slate-400 mt-0.5">按业务场景划分为三大核心模块：Agent 核心业务交互、Eval 评测系统对接、后台控制台与仿真运维</p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-slate-300 border border-slate-700">
+              共 24 个标准接口端点
+            </span>
           </div>
         </div>
 
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs text-slate-300">
-              <thead class="text-slate-400 bg-slate-950/70 border-b border-slate-800">
-                <tr>
-                  <th class="py-3 px-4 font-semibold">请求方式</th>
-                  <th class="py-3 px-4 font-semibold">接口路径 (Endpoint)</th>
-                  <th class="py-3 px-4 font-semibold">服务归属</th>
-                  <th class="py-3 px-4 font-semibold">功能职责说明</th>
-                  <th class="py-3 px-4 font-semibold">典型入参 / 返回</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-800/70">
-                <tr class="hover:bg-slate-800/40 transition">
-                  <td class="py-3 px-4 font-mono font-bold text-sky-400">POST</td>
-                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/chat</td>
-                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
-                  <td class="py-3 px-4">SSE 实时流式会话交互</td>
-                  <td class="py-3 px-4 text-slate-400">JSON: {strategyCode, message, sessionId, userId}</td>
-                </tr>
-                <tr class="hover:bg-slate-800/40 transition">
-                  <td class="py-3 px-4 font-mono font-bold text-sky-400">POST</td>
-                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/invoke</td>
-                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
-                  <td class="py-3 px-4">异步启动多智能体策略编排工作流</td>
-                  <td class="py-3 px-4 text-slate-400">返回 {flowId, state: "RUNNING"}</td>
-                </tr>
-                <tr class="hover:bg-slate-800/40 transition">
-                  <td class="py-3 px-4 font-mono font-bold text-emerald-400">GET</td>
-                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/flow/{flowId}</td>
-                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
-                  <td class="py-3 px-4">根据 flowId 查询流程执行状态、上下文与各节点输出</td>
-                  <td class="py-3 px-4 text-slate-400">返回 {flowId, state, steps, result}</td>
-                </tr>
-                <tr class="hover:bg-slate-800/40 transition">
-                  <td class="py-3 px-4 font-mono font-bold text-emerald-400">GET</td>
-                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/flow/{flowId}/logs</td>
-                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
-                  <td class="py-3 px-4">检索指定 flowId 的全量执行日志行列表</td>
-                  <td class="py-3 px-4 text-slate-400">返回 List&lt;String&gt; 日志行</td>
-                </tr>
-                <tr class="hover:bg-slate-800/40 transition">
-                  <td class="py-3 px-4 font-mono font-bold text-rose-400">POST</td>
-                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/stop/{flowId}</td>
-                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
-                  <td class="py-3 px-4">主动中断/取消正在运行的工作流实例</td>
-                  <td class="py-3 px-4 text-slate-400">置终态为 STOPPED，返回 Boolean</td>
-                </tr>
-                <tr class="hover:bg-slate-800/40 transition">
-                  <td class="py-3 px-4 font-mono font-bold text-emerald-400">GET</td>
-                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/config/overview</td>
-                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
-                  <td class="py-3 px-4">获取 7 大仓储健康状态、条目数与刷新时间</td>
-                  <td class="py-3 px-4 text-slate-400">返回 7 仓储的健康指标数组</td>
-                </tr>
-                <tr class="hover:bg-slate-800/40 transition">
-                  <td class="py-3 px-4 font-mono font-bold text-emerald-400">GET</td>
-                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/config/all</td>
-                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
-                  <td class="py-3 px-4">获取 Java 内存中 7 大仓储的全量快照结构</td>
-                  <td class="py-3 px-4 text-slate-400">返回完整 JSON 实体对象</td>
-                </tr>
-                <tr class="hover:bg-slate-800/40 transition">
-                  <td class="py-3 px-4 font-mono font-bold text-amber-400">POST</td>
-                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/config/reload</td>
-                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
-                  <td class="py-3 px-4">通知 Java 核心引擎立即触发全量配置热重载</td>
-                  <td class="py-3 px-4 text-slate-400">可选参数 repoName，返回重载结果</td>
-                </tr>
-                <tr class="hover:bg-slate-800/40 transition">
-                  <td class="py-3 px-4 font-mono font-bold text-emerald-400">GET</td>
-                  <td class="py-3 px-4 font-mono text-slate-100">/api/agent/logs/stream</td>
-                  <td class="py-3 px-4 text-indigo-300">Java :8080</td>
-                  <td class="py-3 px-4">SSE 实时流式日志文件监听推送</td>
-                  <td class="py-3 px-4 text-slate-400">参数 ?tail=100&filter=xxx</td>
-                </tr>
-                <tr class="hover:bg-slate-800/40 transition">
-                  <td class="py-3 px-4 font-mono font-bold text-emerald-400">GET</td>
-                  <td class="py-3 px-4 font-mono text-slate-100">/admin/configs</td>
-                  <td class="py-3 px-4 text-cyan-300">Python :8000</td>
-                  <td class="py-3 px-4">拉取 Python Mock 控制台持久化的全部配置数据</td>
-                  <td class="py-3 px-4 text-slate-400">strategies, agents, tools, models, dict</td>
-                </tr>
-                <tr class="hover:bg-slate-800/40 transition">
-                  <td class="py-3 px-4 font-mono font-bold text-sky-400">POST</td>
-                  <td class="py-3 px-4 font-mono text-slate-100">/admin/configs</td>
-                  <td class="py-3 px-4 text-cyan-300">Python :8000</td>
-                  <td class="py-3 px-4">保存/更新单项配置数据并持久化到 JSON 文件</td>
-                  <td class="py-3 px-4 text-slate-400">{category, item}</td>
-                </tr>
-                <tr class="hover:bg-slate-800/40 transition">
-                  <td class="py-3 px-4 font-mono font-bold text-emerald-400">GET</td>
-                  <td class="py-3 px-4 font-mono text-slate-100">/admin/mocks</td>
-                  <td class="py-3 px-4 text-cyan-300">Python :8000</td>
-                  <td class="py-3 px-4">获取所有自定义动态 Mock 规则列表</td>
-                  <td class="py-3 px-4 text-slate-400">规则数组，包含 matchParams 与 responseData</td>
-                </tr>
-                <tr class="hover:bg-slate-800/40 transition">
-                  <td class="py-3 px-4 font-mono font-bold text-sky-400">POST</td>
-                  <td class="py-3 px-4 font-mono text-slate-100">/mock/tools/{toolCode}</td>
-                  <td class="py-3 px-4 text-cyan-300">Python :8000</td>
-                  <td class="py-3 px-4">业务工具仿真 Mock 端点 (天气、画像、周边服务等)</td>
-                  <td class="py-3 px-4 text-slate-400">根据入参动态匹配命中规则并返回 Mock 响应</td>
-                </tr>
-                <tr class="hover:bg-slate-800/40 transition">
-                  <td class="py-3 px-4 font-mono font-bold text-sky-400">POST</td>
-                  <td class="py-3 px-4 font-mono text-slate-100">/mock/llm/v1/chat/completions</td>
-                  <td class="py-3 px-4 text-cyan-300">Python :8000</td>
-                  <td class="py-3 px-4">OpenAI 兼容协议的大模型仿真 Mock 端点</td>
-                  <td class="py-3 px-4 text-slate-400">返回标准 choices / delta / message 结构</td>
-                </tr>
-              </tbody>
-            </table>
+        <!-- 模块筛选 Tabs 与快速统计 -->
+        <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-900/70 p-2 rounded-2xl border border-slate-800">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button @click="apiModuleFilter = 'all'"
+                    :class="apiModuleFilter === 'all' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20 font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'"
+                    class="px-3 py-1.5 rounded-xl text-xs transition flex items-center space-x-1.5">
+              <i class="fa-solid fa-layer-group text-xs"></i>
+              <span>全量接口 (全部 24 项)</span>
+            </button>
+            <button @click="apiModuleFilter = 'agent'"
+                    :class="apiModuleFilter === 'agent' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20 font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'"
+                    class="px-3 py-1.5 rounded-xl text-xs transition flex items-center space-x-1.5">
+              <i class="fa-solid fa-robot text-xs text-indigo-400"></i>
+              <span>Agent 核心交互接口 (5)</span>
+            </button>
+            <button @click="apiModuleFilter = 'eval'"
+                    :class="apiModuleFilter === 'eval' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20 font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'"
+                    class="px-3 py-1.5 rounded-xl text-xs transition flex items-center space-x-1.5">
+              <i class="fa-solid fa-vial-circle-check text-xs text-amber-400"></i>
+              <span>Eval 评测系统专用接口 (7)</span>
+            </button>
+            <button @click="apiModuleFilter = 'console'"
+                    :class="apiModuleFilter === 'console' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20 font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'"
+                    class="px-3 py-1.5 rounded-xl text-xs transition flex items-center space-x-1.5">
+              <i class="fa-solid fa-sliders text-xs text-emerald-400"></i>
+              <span>后台控制与仿真运维接口 (12)</span>
+            </button>
+          </div>
+          <div class="text-[11px] text-slate-500 px-2 flex items-center space-x-3">
+            <span class="flex items-center space-x-1"><span class="w-2 h-2 rounded-full bg-indigo-400"></span><span>Java: 8080</span></span>
+            <span class="flex items-center space-x-1"><span class="w-2 h-2 rounded-full bg-cyan-400"></span><span>Python: 8000</span></span>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 模块 1: Agent 核心交互接口 (Core Agent APIs) -->
+        <!-- ========================================== -->
+        <div x-show="apiModuleFilter === 'all' || apiModuleFilter === 'agent'" class="space-y-3">
+          <div class="flex items-center justify-between px-1">
+            <div class="flex items-center space-x-2">
+              <div class="w-6 h-6 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20 text-xs">
+                <i class="fa-solid fa-robot"></i>
+              </div>
+              <h3 class="text-sm font-bold text-slate-100">模块一：Agent 核心交互接口 (Core Agent APIs)</h3>
+              <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">客户端 / 业务主链路</span>
+            </div>
+            <span class="text-xs text-slate-400">共 5 个端点 (Java: 8080)</span>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs text-slate-300">
+                <thead class="text-slate-400 bg-slate-950/70 border-b border-slate-800">
+                  <tr>
+                    <th class="py-3 px-4 font-semibold w-24">请求方式</th>
+                    <th class="py-3 px-4 font-semibold w-56">接口路径 (Endpoint)</th>
+                    <th class="py-3 px-4 font-semibold w-28">服务归属</th>
+                    <th class="py-3 px-4 font-semibold">功能职责说明</th>
+                    <th class="py-3 px-4 font-semibold">典型入参 / 返回契约</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/70">
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-sky-400"><span class="bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">POST</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/api/agent/chat</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">SSE 实时流式会话交互，驱动意图分流决策与多智能体打字机流式输出</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">JSON: {strategyCode, message, sessionId, userId} &rarr; text/event-stream</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-sky-400"><span class="bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">POST</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/api/agent/invoke</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">异步启动多智能体策略编排工作流，虚拟线程后台驱动，立即返回 flowId 实例句柄</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">JSON: {strategyCode, inputParams, sessionId, userId} &rarr; {flowId, state: "RUNNING"}</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-emerald-400"><span class="bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/api/agent/flow/{flowId}</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">根据 flowId 轮询查询工作流节点状态机、步骤明细、自愈质检审查与最终交付产物</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">Path: flowId &rarr; BaseResult&lt;AgentInvokeResponseDTO&gt; (state, steps, result)</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-emerald-400"><span class="bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/api/agent/flow/{flowId}/logs</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">按流程唯一标识检索该工作流全生命周期内按时序排序的全部执行日志行</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">Path: flowId &rarr; BaseResult&lt;List&lt;String&gt;&gt; 全量日志行数组</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-rose-400"><span class="bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">POST</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/api/agent/stop/{flowId}</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">主动安全中断并终止正在执行中的工作流实例，级联停止所有智能体并置终态为 STOPPED</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">Path: flowId &rarr; BaseResult&lt;Boolean&gt;</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 模块 2: Eval 评测系统对接接口 (Eval Suite APIs) -->
+        <!-- ========================================== -->
+        <div x-show="apiModuleFilter === 'all' || apiModuleFilter === 'eval'" class="space-y-3">
+          <div class="flex items-center justify-between px-1">
+            <div class="flex items-center space-x-2">
+              <div class="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20 text-xs">
+                <i class="fa-solid fa-vial-circle-check"></i>
+              </div>
+              <h3 class="text-sm font-bold text-slate-100">模块二：Eval 评测系统专用接口 (Eval Suite APIs)</h3>
+              <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">自动化评测 / 基准 Benchmark</span>
+            </div>
+            <span class="text-xs text-slate-400">共 7 个端点 (Java: 8080)</span>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs text-slate-300">
+                <thead class="text-slate-400 bg-slate-950/70 border-b border-slate-800">
+                  <tr>
+                    <th class="py-3 px-4 font-semibold w-24">请求方式</th>
+                    <th class="py-3 px-4 font-semibold w-56">接口路径 (Endpoint)</th>
+                    <th class="py-3 px-4 font-semibold w-28">服务归属</th>
+                    <th class="py-3 px-4 font-semibold">功能职责说明</th>
+                    <th class="py-3 px-4 font-semibold">典型入参 / 返回契约</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/70">
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-sky-400"><span class="bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">POST</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/eval/run</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">端到端用例同步评测入口：隔离拉取 MockBundle 并执行流程，输出符合 M3 规范的完整结构化 Trace</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">JSON: {caseId, mockUrl, options} &rarr; BaseResult&lt;ExecutionTraceDTO&gt;</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-sky-400"><span class="bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">POST</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/eval/node/coordinator</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">角色级评测微运行：单跑 Coordinator 意图理解、策略分流匹配与参数槽位提取</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">JSON: {message, caseId} &rarr; BaseResult&lt;{action, strategyCode, params, latencyMs}&gt;</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-sky-400"><span class="bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">POST</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/eval/node/planner</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">角色级评测微运行：单跑 Planner 战略规划拆解与动态依赖 DAG 执行图拓扑生成</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">JSON: {strategyCode, target, caseId} &rarr; BaseResult&lt;{dag, steps, latencyMs}&gt;</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-sky-400"><span class="bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">POST</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/eval/node/expert</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">角色级评测微运行：单跑业务专精 Expert 专家执行与结构化产出验证</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">JSON: {expertCode, stitchedInput, caseId} &rarr; BaseResult&lt;{output, rawContent, latencyMs}&gt;</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-sky-400"><span class="bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">POST</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/eval/node/evaluator</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">角色级评测微运行：单跑 Evaluator 质检验收审查、质量打分与缺陷归因定位</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">JSON: {strategyCode, summary, caseId} &rarr; BaseResult&lt;{verdict, score, critique, blamedStepIds}&gt;</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-sky-400"><span class="bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">POST</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/eval/node/reporter</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">角色级评测微运行：单跑 Reporter 交付成果最终汇总与专业排版汇报文案生成</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">JSON: {strategyCode, summary, caseId} &rarr; BaseResult&lt;{finalAnswer, latencyMs}&gt;</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-emerald-400"><span class="bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/eval/metadata</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">策略与拓扑全景元数据导出：供外部 eval 查询全量策略、绑定 Expert、Tool 池与入参规范</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">无入参 &rarr; BaseResult&lt;StrategyMetadataDTO&gt; (全量策略、Expert、工具池拓扑)</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 模块 3: 后台控制台与仿真运维接口 (Console & Mock APIs) -->
+        <!-- ========================================== -->
+        <div x-show="apiModuleFilter === 'all' || apiModuleFilter === 'console'" class="space-y-3">
+          <div class="flex items-center justify-between px-1">
+            <div class="flex items-center space-x-2">
+              <div class="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20 text-xs">
+                <i class="fa-solid fa-sliders"></i>
+              </div>
+              <h3 class="text-sm font-bold text-slate-100">模块三：后台控制与仿真运维接口 (Console & Mock APIs)</h3>
+              <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">运维管控 / 本地仿真 / Mock 支撑</span>
+            </div>
+            <span class="text-xs text-slate-400">共 12 个端点 (Java: 8080 / Python: 8000)</span>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs text-slate-300">
+                <thead class="text-slate-400 bg-slate-950/70 border-b border-slate-800">
+                  <tr>
+                    <th class="py-3 px-4 font-semibold w-24">请求方式</th>
+                    <th class="py-3 px-4 font-semibold w-56">接口路径 (Endpoint)</th>
+                    <th class="py-3 px-4 font-semibold w-28">服务归属</th>
+                    <th class="py-3 px-4 font-semibold">功能职责说明</th>
+                    <th class="py-3 px-4 font-semibold">典型入参 / 返回契约</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/70">
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-emerald-400"><span class="bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/api/agent/config/overview</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">巡检 5 大核心配置仓储健康状态、配置条目数与最后同步刷新时间</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">无入参 &rarr; BaseResult&lt;List&lt;RepoOverview&gt;&gt;</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-emerald-400"><span class="bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/api/agent/config/all</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">导出 Java 核心引擎内存中 5 大仓储的全量配置快照实体数据</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">无入参 &rarr; BaseResult&lt;{strategies, agents, tools, models, dict}&gt;</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-emerald-400"><span class="bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/api/agent/config/{repoName}</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">查询指定单项仓储（strategy, agent, tool, model, dict）的当前内存数据</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">Path: repoName &rarr; BaseResult&lt;Object&gt;</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-amber-400"><span class="bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">POST</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/api/agent/config/reload</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">通知 Java 核心引擎立即触发全量或指定仓储的配置热重载</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">Query: ?repoName=all (可选) &rarr; BaseResult&lt;Map&gt;</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-emerald-400"><span class="bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/api/agent/logs/stream</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">SSE 实时流式读取底层系统日志，支持初始 tail 行数与关键词过滤推送</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">Query: ?tail=100&filter=xxx &rarr; text/event-stream</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-emerald-400"><span class="bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/api/agent/logs/recent</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">拉取当前系统最新的历史日志行列表（非流式一次性返回）</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">Query: ?tail=100 &rarr; BaseResult&lt;List&lt;String&gt;&gt;</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-rose-400"><span class="bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">POST</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/api/agent/logs/clear</td>
+                    <td class="py-3 px-4 text-indigo-300">Java :8080</td>
+                    <td class="py-3 px-4 text-slate-200">清空当前系统 active 的日志文件内容，便于快速开始新的联调追踪</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">无入参 &rarr; BaseResult&lt;String&gt;</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-emerald-400"><span class="bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/admin/configs</td>
+                    <td class="py-3 px-4 text-cyan-300">Python :8000</td>
+                    <td class="py-3 px-4 text-slate-200">拉取 Python Mock 控制台持久化的全部配置数据（JSON 仓储基线）</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">无入参 &rarr; {strategies, agents, tools, models, dict}</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-sky-400"><span class="bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">POST</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/admin/configs</td>
+                    <td class="py-3 px-4 text-cyan-300">Python :8000</td>
+                    <td class="py-3 px-4 text-slate-200">保存或更新单项配置数据，并自动持久化刷盘到本地 JSON 文件</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">JSON: {category, item} &rarr; {status: "ok"}</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-emerald-400"><span class="bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/admin/mocks</td>
+                    <td class="py-3 px-4 text-cyan-300">Python :8000</td>
+                    <td class="py-3 px-4 text-slate-200">获取后台配置的所有自定义动态 Mock 规则列表</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">无入参 &rarr; 规则数组 [{id, target, matchParams, ...}]</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-sky-400"><span class="bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">POST</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/mock/tools/{toolCode}</td>
+                    <td class="py-3 px-4 text-cyan-300">Python :8000</td>
+                    <td class="py-3 px-4 text-slate-200">业务外部工具仿真 Mock 端点（天气、用户画像等），按参数动态匹配响应</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">JSON: Tool 入参 &rarr; 仿真响应数据</td>
+                  </tr>
+                  <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4 font-mono font-bold text-sky-400"><span class="bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">POST</span></td>
+                    <td class="py-3 px-4 font-mono text-slate-100 font-semibold">/mock/llm/v1/chat/completions</td>
+                    <td class="py-3 px-4 text-cyan-300">Python :8000</td>
+                    <td class="py-3 px-4 text-slate-200">OpenAI 兼容协议的大模型仿真 Mock 端点，模拟 LLM 输出或按规则命中</td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">JSON: 标准 OpenAI ChatCompletion 载荷 &rarr; choices/message</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -2696,12 +2958,16 @@
         dashFlowIdInput: '',
         dashFlowResult: null,
         isDashFlowQuerying: false,
+        apiModuleFilter: 'all', // 'all' | 'agent' | 'eval' | 'console'
 
         // 视图与菜单切换
-        switchView(view, category = null) {
+        switchView(view, category = null, apiModule = null) {
           this.currentView = view;
           if (category) {
             this.configCategory = category;
+          }
+          if (apiModule) {
+            this.apiModuleFilter = apiModule;
           }
           if (view === 'eng-logs') {
             if (!this.logEventSource) this.initLogStream();

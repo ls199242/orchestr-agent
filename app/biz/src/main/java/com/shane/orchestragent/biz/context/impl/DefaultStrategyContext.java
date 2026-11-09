@@ -7,7 +7,9 @@ import com.shane.orchestragent.biz.model.flow.EvaluatorResult;
 import com.shane.orchestragent.biz.model.flow.FlowAgentMessage;
 import com.shane.orchestragent.biz.model.flow.PlanResult;
 import com.shane.orchestragent.biz.model.request.RecommendRequestVO;
+import com.shane.orchestragent.biz.eval.context.EvalCaseContext;
 import com.shane.orchestragent.common.constant.PropertyKeys;
+import com.shane.orchestragent.common.time.TimeProvider;
 import com.shane.orchestragent.common.utils.JsonUtils;
 import com.shane.orchestragent.memory.context.MemoryContext;
 import com.shane.orchestragent.repository.model.StrategyConfigDO;
@@ -48,6 +50,9 @@ public class DefaultStrategyContext implements StrategyContext {
     private String recommendResult;
     private String lastAgentResult;
     private Map<String, Object> nextAgentRequest;
+
+    private EvalCaseContext evalCaseContext;
+    private TimeProvider timeProvider = TimeProvider.system();
 
     public DefaultStrategyContext(StrategyConfigDO config, String flowId, String sessionId, RecommendRequestVO request) {
         this.config = config;
@@ -154,5 +159,28 @@ public class DefaultStrategyContext implements StrategyContext {
         if (agent != null && agent.getName() != null) {
             agents.put(agent.getName(), agent);
         }
+    }
+
+    @Override
+    public EvalCaseContext getEvalCaseContext() {
+        return evalCaseContext;
+    }
+
+    @Override
+    public void setEvalCaseContext(EvalCaseContext evalCaseContext) {
+        this.evalCaseContext = evalCaseContext;
+        if (evalCaseContext != null && evalCaseContext.getTimeProvider() != null) {
+            this.timeProvider = evalCaseContext.getTimeProvider();
+        }
+    }
+
+    @Override
+    public TimeProvider getTimeProvider() {
+        return timeProvider != null ? timeProvider : TimeProvider.system();
+    }
+
+    @Override
+    public void setTimeProvider(TimeProvider timeProvider) {
+        this.timeProvider = timeProvider;
     }
 }

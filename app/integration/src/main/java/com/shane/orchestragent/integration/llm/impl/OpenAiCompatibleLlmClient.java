@@ -286,14 +286,48 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         if (map == null) {
             return ChatResponseVO.ofSingle("", null);
         }
+
+        Integer promptTokens = null;
+        Integer completionTokens = null;
+        Integer totalTokens = null;
+        Object usageObj = map.get("usage");
+        if (usageObj instanceof Map<?, ?> usageMap) {
+            if (usageMap.get("prompt_tokens") instanceof Number n) {
+                promptTokens = n.intValue();
+            }
+            if (usageMap.get("completion_tokens") instanceof Number n) {
+                completionTokens = n.intValue();
+            }
+            if (usageMap.get("total_tokens") instanceof Number n) {
+                totalTokens = n.intValue();
+            }
+        }
+
+        String content = "";
+        String reasoning = null;
         List<Map<String, Object>> choices = (List<Map<String, Object>>) map.get("choices");
         if (choices != null && !choices.isEmpty()) {
             Map<String, Object> choice = choices.get(0);
             Map<String, Object> message = (Map<String, Object>) choice.get("message");
-            String content = message != null ? (String) message.get("content") : "";
-            String reasoning = message != null ? (String) message.get("reasoning_content") : null;
-            return ChatResponseVO.ofSingle(content, reasoning);
+            if (message != null) {
+                content = message.get("content") != null ? (String) message.get("content") : "";
+                reasoning = (String) message.get("reasoning_content");
+            }
         }
-        return ChatResponseVO.ofSingle("", null);
+
+        ChatMessageVO chatMessage = ChatMessageVO.builder()
+                .role("assistant")
+                .content(content)
+                .reasoningContent(reasoning)
+                .build();
+
+        return ChatResponseVO.builder()
+                .id(map.get("id") != null ? String.valueOf(map.get("id")) : null)
+                .model(map.get("model") != null ? String.valueOf(map.get("model")) : null)
+                .chatMessages(Collections.singletonList(chatMessage))
+                .promptTokens(promptTokens)
+                .completionTokens(completionTokens)
+                .totalTokens(totalTokens)
+                .build();
     }
 }

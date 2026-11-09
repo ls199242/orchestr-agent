@@ -24,6 +24,15 @@ public class ChatResponseVO implements Serializable {
     private String model;
     private List<ChatMessageVO> chatMessages;
 
+    /** 输入提示词消耗 Token 数 */
+    private Integer promptTokens;
+
+    /** 补全输出消耗 Token 数 */
+    private Integer completionTokens;
+
+    /** 消耗总 Token 数 */
+    private Integer totalTokens;
+
     public ChatMessageVO getFirstMessage() {
         if (chatMessages != null && !chatMessages.isEmpty()) {
             return chatMessages.get(0);

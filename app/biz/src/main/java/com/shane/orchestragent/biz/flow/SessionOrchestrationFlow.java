@@ -81,11 +81,38 @@ public class SessionOrchestrationFlow extends BaseStrategyFlow {
         log.info("[Flow: {}][FLOW_COORDINATOR] 意图决策完成: action={}, strategyCode={}, params={}",
                 getFlowId(), result.getAction(), result.getStrategyCode(), result.getParams());
 
+        // 评测模式埋点: 记录 Coordinator 决策产出与 Token 消耗
+        recordCoordinatorTrace(result);
+
         // 4. 分发执行
         return switch (result.getAction()) {
             case DIRECT_REPLY -> directReply(result);
             case COLLECT, EXECUTE -> handleStrategyDecision(result);
         };
+    }
+
+    /**
+     * 评测模式下记录 Coordinator 决策详情
+     */
+    private void recordCoordinatorTrace(CoordinatorResult result) {
+        if (getContext().getEvalCaseContext() != null && getContext().getEvalCaseContext().getTraceCollector() != null) {
+            Map<String, Object> outputMap = new LinkedHashMap<>();
+            outputMap.put("action", result.getAction().name());
+            outputMap.put("strategyCode", result.getStrategyCode());
+            outputMap.put("params", result.getParams());
+            outputMap.put("reply", result.getReply());
+
+            Number lat = (Number) getContext().getProperty("_lastLatencyMs_COORDINATOR");
+            Number tIn = (Number) getContext().getProperty("_lastTokensIn_COORDINATOR");
+            Number tOut = (Number) getContext().getProperty("_lastTokensOut_COORDINATOR");
+
+            getContext().getEvalCaseContext().getTraceCollector().recordCoordinator(
+                    outputMap,
+                    tIn != null ? tIn.intValue() : 0,
+                    tOut != null ? tOut.intValue() : 0,
+                    lat != null ? lat.longValue() : 0L
+            );
+        }
     }
 
     /**
@@ -313,6 +340,10 @@ public class SessionOrchestrationFlow extends BaseStrategyFlow {
         streamListeners.forEach(delegate::addStreamListener);
         stateChangeListeners.forEach(delegate::addStateChangeListener);
         agentEventListeners.forEach(delegate::addAgentEventListener);
+        if (delegate.getContext() != null) {
+            delegate.getContext().setEvalCaseContext(getContext().getEvalCaseContext());
+            delegate.getContext().setTimeProvider(getContext().getTimeProvider());
+        }
     }
 
     /**

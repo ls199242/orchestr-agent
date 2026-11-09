@@ -18,6 +18,7 @@ import com.shane.orchestragent.common.exception.BizException;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -77,10 +78,58 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
         if (!checkStep()) {
             throw BizErrorFactory.getInstance().handleMaxStepLimitExceeded();
         }
+
+        // 评测模式支持: 优先检查是否有外部注入的固定 DAG
+        PlanResult pinnedPlan = getPinnedPlanIfPresent();
+        if (pinnedPlan != null) {
+            return pinnedPlan;
+        }
+
         PlanResult planResult = (PlanResult) executeStep(plannerAgent, PlanResult.class);
         validPlanResult(planResult);
         getContext().setPlanResult(planResult);
+
+        recordPlannerTrace(planResult);
+
         return planResult;
+    }
+
+    /**
+     * 评测固定 DAG 检查与 Trace 记录
+     */
+    private PlanResult getPinnedPlanIfPresent() {
+        Object pinned = getContext().getProperty("pinnedDag");
+        if (pinned instanceof PlanResult pinnedPlan && CollectionUtils.isNotEmpty(pinnedPlan.getSteps())) {
+            log.info("[Flow: {}] 评测模式检测到固定 DAG (pinnedDag)，跳过 Planner 规划", getFlowId());
+            getContext().setPlanResult(pinnedPlan);
+            if (getContext().getEvalCaseContext() != null && getContext().getEvalCaseContext().getTraceCollector() != null) {
+                getContext().getEvalCaseContext().getTraceCollector().recordPlannerAttempt(
+                        1, pinnedPlan, true, Collections.emptyList(), 0L, 0, 0
+                );
+            }
+            return pinnedPlan;
+        }
+        return null;
+    }
+
+    /**
+     * 记录 Planner 规划产出到 Trace
+     */
+    private void recordPlannerTrace(PlanResult planResult) {
+        if (getContext().getEvalCaseContext() != null && getContext().getEvalCaseContext().getTraceCollector() != null) {
+            Number lat = (Number) getContext().getProperty("_lastLatencyMs_PLANNER");
+            Number tIn = (Number) getContext().getProperty("_lastTokensIn_PLANNER");
+            Number tOut = (Number) getContext().getProperty("_lastTokensOut_PLANNER");
+            getContext().getEvalCaseContext().getTraceCollector().recordPlannerAttempt(
+                    1,
+                    planResult,
+                    true,
+                    Collections.emptyList(),
+                    lat != null ? lat.longValue() : 0L,
+                    tIn != null ? tIn.intValue() : 0,
+                    tOut != null ? tOut.intValue() : 0
+            );
+        }
     }
 
     private void validPlanResult(PlanResult planResult) throws BizException {
@@ -121,7 +170,7 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
     private void evaluateAndSelfCorrect(PlanResult planResult, DagExecutionState dagState) throws BizException {
         int evalRetry = 0;
         while (checkStep()) {
-            EvaluatorResult evalResult = evaluate();
+            EvaluatorResult evalResult = evaluate(evalRetry);
 
             // 验收通过
             if (evalResult.isPass()) {
@@ -149,13 +198,38 @@ public class ReActStrategyFlow extends BaseStrategyFlow {
     /**
      * 执行战略验收
      */
-    private EvaluatorResult evaluate() throws BizException {
+    private EvaluatorResult evaluate(int evalRetry) throws BizException {
         EvaluatorResult evalResult = (EvaluatorResult) executeStep(evaluatorAgent, EvaluatorResult.class);
         if (evalResult == null) {
             throw new BizException("EVALUATOR_PARSE_ERROR", "战略目标审查智能体返回内容为空");
         }
         getContext().setLastEvaluatorResult(evalResult);
+
+        recordEvaluatorTrace(evalResult, evalRetry);
+
         return evalResult;
+    }
+
+    /**
+     * 记录 Evaluator 评估轮次到 Trace
+     */
+    private void recordEvaluatorTrace(EvaluatorResult evalResult, int evalRetry) {
+        if (getContext().getEvalCaseContext() != null && getContext().getEvalCaseContext().getTraceCollector() != null) {
+            Number lat = (Number) getContext().getProperty("_lastLatencyMs_EVALUATOR");
+            Number tIn = (Number) getContext().getProperty("_lastTokensIn_EVALUATOR");
+            Number tOut = (Number) getContext().getProperty("_lastTokensOut_EVALUATOR");
+            getContext().getEvalCaseContext().getTraceCollector().recordEvaluatorRound(
+                    evalRetry,
+                    evalResult.isPass() ? "pass" : "insufficient",
+                    evalResult.getScore(),
+                    evalResult.getCritique(),
+                    evalResult.getBlamedStepIds(),
+                    evalResult.getSuggestedRemedy(),
+                    lat != null ? lat.longValue() : 0L,
+                    tIn != null ? tIn.intValue() : 0,
+                    tOut != null ? tOut.intValue() : 0
+            );
+        }
     }
 
     /**
